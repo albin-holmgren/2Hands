@@ -1,9 +1,27 @@
 # gitleaks fingerprint allowlist.
 #
 # This repository was published with a fresh history (the pre-release
-# development history, which contained leaked env files, lives in the
-# private 2Hands-old repository and its credentials are being rotated).
-# This file is intentionally empty of fingerprints.
+# development history lives in the private 2Hands-old repository and its
+# credentials are being rotated).
 #
-# NEVER add a fingerprint to silence a fresh leak — rotate the credential
+# The fingerprints below are TRIAGED NON-SECRETS, kept so CI fails only on
+# genuinely new leaks:
+#   - apps/mobile/eas.json: Supabase ANON key (role=anon) — public by
+#     design; it ships in every client bundle. RLS is the security boundary.
+#   - env.example files: truncated placeholder JWT header text.
+#   - settings/api-keys page: documentation placeholder (avt_your_key...).
+#   - v3-shell.tsx: a localStorage key NAME, not a credential.
+#   - golden-path-env-check.test.ts: test fixture literals.
+#
+# NEVER add a fingerprint to silence a real leak — rotate the credential
 # and remove it from the commit instead.
+c049671a84af91252ac735338affcbc4494fcf17:apps/mobile/eas.json:jwt:28
+c049671a84af91252ac735338affcbc4494fcf17:apps/mobile/eas.json:jwt:40
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/env.example:generic-api-key:11
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/env.example:generic-api-key:12
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/src/app/(dashboard)/settings/api-keys/page.tsx:curl-auth-header:382
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/src/components/v3/shell/v3-shell.tsx:generic-api-key:91
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/tests/unit/golden-path-env-check.test.ts:generic-api-key:120
+c049671a84af91252ac735338affcbc4494fcf17:apps/web/tests/unit/golden-path-env-check.test.ts:generic-api-key:180
+c049671a84af91252ac735338affcbc4494fcf17:env.example:generic-api-key:11
+c049671a84af91252ac735338affcbc4494fcf17:env.example:generic-api-key:12
