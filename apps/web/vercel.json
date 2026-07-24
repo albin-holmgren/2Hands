@@ -1,0 +1,103 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --force",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/agents/scheduler",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/agents/heartbeat",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/agents/worker",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/agents/session-pool",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/agents/reconciliation",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/outreach",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/eval",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/sandbox",
+      "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/integrations/deliveries/worker",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/credits/reset",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/missions/runner",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/missions/orchestrate",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/reminders/worker",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/confidence/recover",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/confidence/snapshot",
+      "schedule": "*/30 * * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/agents/worker/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/agents/scheduler/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/agents/session-pool/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/agents/heartbeat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/missions/runner/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/missions/orchestrate/route.ts": {
+      "maxDuration": 120
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}

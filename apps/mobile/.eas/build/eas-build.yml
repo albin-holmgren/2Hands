@@ -1,0 +1,23 @@
+build:
+  name: Monorepo iOS Build
+  steps:
+    - eas/checkout
+    - eas/use_npm_token
+    - run:
+        name: Install dependencies (root)
+        command: |
+          corepack enable
+          cd ../..
+          pnpm install
+    - eas/resolve_build_config
+    - eas/prebuild
+    - run:
+        name: Install pods
+        command: pod install
+        working_directory: ios
+    - eas/configure_eas_update
+    - eas/configure_ios_credentials
+    - eas/configure_ios_version
+    - eas/generate_gymfile_from_template
+    - eas/run_fastlane
+    - eas/find_and_upload_build_artifacts

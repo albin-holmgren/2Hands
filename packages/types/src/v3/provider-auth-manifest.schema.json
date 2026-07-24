@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://2hands.ai/schemas/provider-auth-manifest.v1.json",
+  "title": "2Hands Provider Authentication Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "providerId",
+    "displayName",
+    "status",
+    "capabilities",
+    "authModes",
+    "policy",
+    "revocation"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "providerId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "status": {
+      "enum": ["enabled", "beta", "allowlisted", "disabled", "coming_soon"]
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]+$" }
+    },
+    "authModes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/authMode" }
+    },
+    "browser": { "$ref": "#/$defs/browserPolicy" },
+    "emailVerification": { "$ref": "#/$defs/emailVerification" },
+    "terms": { "$ref": "#/$defs/terms" },
+    "payments": { "$ref": "#/$defs/payments" },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostedUse", "selfHostedUse", "lastReviewedAt", "reviewOwner"],
+      "properties": {
+        "hostedUse": { "enum": ["allowed", "restricted", "unknown", "prohibited"] },
+        "selfHostedUse": { "enum": ["allowed", "restricted", "unknown", "prohibited"] },
+        "notes": { "type": "string", "maxLength": 4000 },
+        "sourceUrls": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "maxItems": 20
+        },
+        "lastReviewedAt": { "type": "string", "format": "date-time" },
+        "reviewOwner": { "type": "string", "minLength": 1 },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "method": { "enum": ["api", "oauth_revoke", "browser", "instructions", "none"] },
+        "url": { "type": "string", "format": "uri" },
+        "deleteBrowserContext": { "type": "boolean", "default": true }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "check": { "enum": ["api", "token_introspection", "browser_probe", "manual", "none"] },
+        "intervalSeconds": { "type": "integer", "minimum": 60, "maximum": 2592000 }
+      }
+    }
+  },
+  "$defs": {
+    "authMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "priority", "enabled"],
+      "properties": {
+        "mode": {
+          "enum": [
+            "2hands_managed_api",
+            "user_oauth",
+            "user_api_key",
+            "user_browser_session",
+            "assisted_signup",
+            "enterprise_sso",
+            "unsupported"
+          ]
+        },
+        "priority": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "enabled": { "type": "boolean" },
+        "hosted": { "type": "boolean" },
+        "selfHosted": { "type": "boolean" },
+        "scopes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "requiresUserTakeover": { "type": "boolean" },
+        "requiresExplicitTerms": { "type": "boolean" },
+        "requiresPayment": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "browserPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowedOrigins", "recording", "modelVision", "secretFields"],
+      "properties": {
+        "allowedOrigins": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "format": "uri" }
+        },
+        "allowedRedirectOrigins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "format": "uri" }
+        },
+        "recording": { "const": false },
+        "modelVision": { "enum": ["disabled", "redacted_only"] },
+        "persistentContext": { "type": "boolean" },
+        "secretFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["semantic", "allowedSecretKinds"],
+            "properties": {
+              "semantic": {
+                "enum": ["username", "email", "password", "otp", "recovery_code", "api_key"]
+              },
+              "allowedSecretKinds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "enum": ["username", "email", "password", "otp", "magic_link", "api_key"]
+                }
+              },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "autocomplete": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "blockedPageKinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "password_reset",
+              "account_recovery",
+              "disable_mfa",
+              "show_recovery_codes",
+              "bank_verification",
+              "identity_document_upload"
+            ]
+          }
+        }
+      }
+    },
+    "emailVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "defaultMode"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "defaultMode": { "enum": ["manual", "ask_each_time", "automatic_if_policy_allows"] },
+        "senderDomains": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "subjectHints": { "type": "array", "items": { "type": "string" } },
+        "types": {
+          "type": "array",
+          "items": { "enum": ["otp", "magic_link"] },
+          "uniqueItems": true
+        },
+        "maximumAgeSeconds": { "type": "integer", "minimum": 30, "maximum": 3600 }
+      }
+    },
+    "terms": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "boolean" },
+        "termsUrl": { "type": "string", "format": "uri" },
+        "privacyUrl": { "type": "string", "format": "uri" },
+        "versionDetection": { "enum": ["configured", "page_hash", "provider_api", "unknown"] }
+      }
+    },
+    "payments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "supported": { "type": "boolean" },
+        "entryMode": { "enum": ["provider_hosted_checkout", "user_takeover", "unsupported"] },
+        "rawPaymentDataTo2Hands": { "const": false },
+        "recurring": { "type": "boolean" }
+      }
+    }
+  }
+}

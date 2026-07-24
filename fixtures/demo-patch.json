@@ -1,0 +1,34 @@
+{
+  "description": "Deterministic patch the Demo Codex adapter applies to fixtures/demo-repo to fix the failing onboarding test.",
+  "edits": [
+    {
+      "file": "src/onboarding.js",
+      "find": "  return 'Welcome, ' + undefined + '!'",
+      "replace": "  return 'Welcome, ' + name + '!'"
+    }
+  ],
+  "review": {
+    "reviewer": "demo-claude",
+    "findings": [
+      {
+        "severity": "important",
+        "file": "src/onboarding.js",
+        "summary": "welcomeMessage should validate that name is a non-empty string before interpolating.",
+        "suggestion": "Guard: if (typeof name !== 'string' || !name) throw new TypeError('name required')"
+      },
+      {
+        "severity": "minor",
+        "file": "src/onboarding.js",
+        "summary": "Prefer a template literal over string concatenation.",
+        "suggestion": "return `Welcome, ${name}!`"
+      }
+    ]
+  },
+  "fix_after_review": [
+    {
+      "file": "src/onboarding.js",
+      "find": "function welcomeMessage(name) {\n  return 'Welcome, ' + name + '!'\n}",
+      "replace": "function welcomeMessage(name) {\n  if (typeof name !== 'string' || name.length === 0) {\n    throw new TypeError('name required')\n  }\n  return `Welcome, ${name}!`\n}"
+    }
+  ]
+}

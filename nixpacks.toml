@@ -1,0 +1,13 @@
+[phases.build]
+cmds = [
+  "corepack enable",
+  "corepack prepare pnpm@9.15.0 --activate",
+  "export PATH=\"$HOME/.local/share/pnpm:$PATH\"",
+  "pnpm install --frozen-lockfile"
+]
+
+[phases.setup]
+nixPkgs = ['nodejs_22']
+
+[start]
+cmd = "export PATH=\"$HOME/.local/share/pnpm:$PATH\" && pnpm --filter @2hands/integration-runtime start"

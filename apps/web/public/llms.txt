@@ -1,0 +1,66 @@
+# 2Hands - AI Agent Management Platform
+
+> 2Hands is an AI-powered agent management platform that enables users to delegate complex computer tasks to autonomous AI agents running on virtual machines.
+
+## Overview
+
+2Hands provides a conversational AI Manager interface powered by Claude that orchestrates specialized AI agents. These agents can perform web research, email management, data entry, form filling, and other computer-based workflows autonomously.
+
+## Key Features
+
+- **AI Manager Chat**: Conversational interface for task delegation
+- **Autonomous Agents**: Self-running AI workers on virtual machines
+- **Web Research**: Automated data collection and analysis
+- **Email Automation**: Read, compose, and send emails
+- **Form Filling**: Complete forms and data entry tasks
+- **Screenshot & Reports**: Visual documentation of agent actions
+- **Secure Credentials**: Encrypted vault for service authentication
+- **Scheduling**: One-time, recurring, or continuous agent execution
+
+## Use Cases
+
+- Lead generation and prospecting
+- Competitor monitoring and market research
+- Email management and responses
+- Data entry and form processing
+- Content gathering and summarization
+- Social media monitoring
+- Document processing workflows
+
+## Security
+
+- AES-256-GCM encrypted credential storage
+- Human-in-the-loop approval for sensitive actions
+- Isolated virtual machine environments per agent
+- Enterprise-grade data protection
+- No persistent credential storage on VMs
+
+## Pricing
+
+- Free tier available
+- Starter, Pro, and Business plans
+- Credit-based execution model
+- No credit card required to start
+
+## Technical Details
+
+- Web-based platform (SaaS)
+- Mobile apps for iOS and Android
+- API access for developers
+- Integration with Slack, Gmail, and other services
+- Real-time streaming updates
+
+## Contact
+
+- Website: https://2hands.ai
+- Support: support@2hands.ai
+
+## Documentation
+
+- Getting Started: https://2hands.ai/docs/getting-started
+- API Documentation: https://2hands.ai/docs/api
+- Security: https://2hands.ai/security
+
+---
+
+Last updated: 2026-02-11

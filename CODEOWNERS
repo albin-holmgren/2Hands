@@ -1,0 +1,13 @@
+# Default owner
+* @albin-holmgren
+
+# Security-critical paths — changes here require explicit owner review and
+# a green canary gate (pnpm test:integration:canary).
+/packages/secret-broker/ @albin-holmgren
+/packages/browser/ @albin-holmgren
+/packages/runner-protocol/ @albin-holmgren
+/packages/account-broker/ @albin-holmgren
+/apps/web/src/lib/v3/secure-input.ts @albin-holmgren
+/apps/web/src/lib/v3/auth-orchestrator.ts @albin-holmgren
+/apps/web/src/lib/v3/email-verification.ts @albin-holmgren
+/supabase/migrations/ @albin-holmgren

@@ -1,0 +1,9 @@
+# gitleaks fingerprint allowlist.
+#
+# This repository was published with a fresh history (the pre-release
+# development history, which contained leaked env files, lives in the
+# private 2Hands-old repository and its credentials are being rotated).
+# This file is intentionally empty of fingerprints.
+#
+# NEVER add a fingerprint to silence a fresh leak — rotate the credential
+# and remove it from the commit instead.

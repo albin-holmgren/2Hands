@@ -1,0 +1,17 @@
+{
+  "name": "@2hands/integration-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "lint": "echo 'no lint configured'",
+    "typecheck": "echo 'no typecheck configured'",
+    "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea
+title: "[feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the outcome you want, not just the mechanism.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: contracts
+    attributes:
+      label: Frozen contracts
+      options:
+        - label: I checked docs/v3/IMPLEMENTATION_MAP.md §3 and this doesn't require changing a frozen contract (or I'll open an RFC first per GOVERNANCE.md).

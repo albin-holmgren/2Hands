@@ -1,0 +1,72 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": [
+    "NODE_ENV",
+    "AI_GATEWAY_API_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_APP_URL",
+    "EXPO_PUBLIC_SUPABASE_URL",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+    "EXPO_PUBLIC_API_URL",
+    "CRON_SECRET",
+    "GATEWAY_SECRET",
+    "INTERNAL_API_SECRET",
+    "PAPERSPACE_API_KEY",
+    "NVIDIA_API_KEY",
+    "STRIPE_PRICE_BUSINESS_T1_MONTHLY",
+    "STRIPE_PRICE_BUSINESS_T1_YEARLY",
+    "STRIPE_PRICE_BUSINESS_T2_MONTHLY",
+    "STRIPE_PRICE_BUSINESS_T2_YEARLY",
+    "STRIPE_PRICE_BUSINESS_T3_MONTHLY",
+    "STRIPE_PRICE_BUSINESS_T3_YEARLY",
+    "STRIPE_PRICE_CREDITS_LARGE",
+    "STRIPE_PRICE_CREDITS_MEDIUM",
+    "STRIPE_PRICE_CREDITS_SMALL",
+    "STRIPE_PRICE_CREDITS_XLARGE",
+    "STRIPE_PRICE_PRO_T1_MONTHLY",
+    "STRIPE_PRICE_PRO_T1_YEARLY",
+    "STRIPE_PRICE_PRO_T2_MONTHLY",
+    "STRIPE_PRICE_PRO_T2_YEARLY",
+    "STRIPE_PRICE_PRO_T3_MONTHLY",
+    "STRIPE_PRICE_PRO_T3_YEARLY",
+    "STRIPE_PRICE_STARTER_T1_MONTHLY",
+    "STRIPE_PRICE_STARTER_T1_YEARLY",
+    "STRIPE_PRICE_STARTER_T2_MONTHLY",
+    "STRIPE_PRICE_STARTER_T2_YEARLY",
+    "STRIPE_PRICE_STARTER_T3_MONTHLY",
+    "STRIPE_PRICE_STARTER_T3_YEARLY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "CREDENTIAL_ENCRYPTION_KEY",
+    "VM_SECRET",
+    "SHARED_VM_IP",
+    "SENTRY_AUTH_TOKEN",
+    "TEST_VM_IP",
+    "PAPERSPACE_MOCK_MODE"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

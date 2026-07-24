@@ -1,0 +1,70 @@
+{
+  "name": "2Hands Brand Tokens v3",
+  "source": "Current 2hands.ai repository audit, 2026-07-24",
+  "color": {
+    "brand": {
+      "black": "#34322D",
+      "terracotta": "#D97757",
+      "terracottaHover": "#C86647",
+      "terracottaLight": "#E88768",
+      "beige": "#F5F3F0",
+      "white": "#FFFFFF",
+      "darkCanvas": "#1A1918",
+      "darkSurface": "#2C2B27"
+    },
+    "light": {
+      "backgroundPrimary": "#FFFFFF",
+      "backgroundSecondary": "#F5F3F0",
+      "backgroundTertiary": "#FAFAFA",
+      "surfaceHover": "#F5F3F0",
+      "surfaceActive": "#EEECE9",
+      "surfaceSelected": "#E5E3E0",
+      "textPrimary": "#34322D",
+      "textSecondary": "#75736F",
+      "textTertiary": "#9E9C99",
+      "borderDefault": "#E5E3E0",
+      "borderMedium": "#C8C6C3",
+      "focus": "#34322D"
+    },
+    "dark": {
+      "backgroundPrimary": "#1A1918",
+      "backgroundSecondary": "#2C2B27",
+      "surfaceHover": "#3A3833",
+      "surfaceActive": "#434139",
+      "surfaceSelected": "#6B5F57",
+      "textPrimary": "#F5F3F0",
+      "textSecondary": "#C8C6C3",
+      "textTertiary": "#9E9C99",
+      "borderDefault": "#3A3833",
+      "borderMedium": "#4A4843",
+      "focus": "#D97757"
+    }
+  },
+  "font": {
+    "ui": ["DM Sans", "system-ui", "sans-serif"],
+    "display": ["Newsreader", "Georgia", "serif"],
+    "editorial": ["Playfair Display", "Georgia", "serif"],
+    "mono": ["Geist Mono", "ui-monospace", "monospace"],
+    "weight": {"regular": 400, "medium": 500, "semibold": 600, "bold": 700},
+    "sizePx": {"caption": 11, "small": 13, "compact": 14, "body": 16, "lead": 18, "title": 24, "displaySmall": 32, "display": 40, "heroDesktop": 60}
+  },
+  "spacePx": {"1": 4, "2": 8, "4": 16, "6": 24, "8": 32, "12": 48, "16": 64},
+  "radiusPx": {"small": 4, "control": 8, "base": 12, "card": 16, "sheet": 24, "media": 30, "large": 32, "full": 9999},
+  "durationMs": {"fast": 150, "normal": 200, "slow": 300, "viewTransition": 220, "fadeIn": 500},
+  "shadow": {
+    "small": "0 1px 2px rgba(52, 50, 45, 0.05)",
+    "medium": "0 4px 6px rgba(52, 50, 45, 0.07)",
+    "large": "0 10px 15px rgba(52, 50, 45, 0.10)",
+    "popover": "0 8px 40px -8px rgba(0,0,0,0.12), 0 2px 8px -2px rgba(0,0,0,0.06)"
+  },
+  "layout": {
+    "marketingMaxWidthPx": 1440,
+    "marketingGutterMobilePx": 34,
+    "marketingGutterDesktopPx": 60,
+    "conversationMaxWidthPx": 800,
+    "productGutterMobilePx": 16,
+    "productGutterTabletPx": 24,
+    "productGutterDesktopPx": 32,
+    "minimumTouchTargetPx": 44
+  }
+}

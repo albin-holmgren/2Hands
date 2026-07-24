@@ -1,0 +1,504 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *, [data-theme="dark"] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-dm-sans);
+  --font-serif: var(--font-playfair);
+  --font-display: var(--font-newsreader);
+  --font-mono: var(--font-geist-mono);
+  --font-family-display: var(--font-newsreader);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+/* Custom font utilities */
+@utility font-display {
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+
+/* Global pointer cursor for all interactive elements */
+a, button, [role="button"], [role="link"], [role="menuitem"], [role="option"],
+[role="tab"], [role="checkbox"], [role="radio"], [role="switch"],
+label[for], select, summary, [tabindex]:not([tabindex="-1"]) {
+  cursor: pointer;
+}
+
+:root {
+  color-scheme: light;
+  --radius: 0.75rem;
+
+  /* Brand primitives */
+  --color-brand-black: #34322D;
+  --color-brand-terracotta: #D97757;
+  --color-brand-terracotta-dark: #C86647;
+  --color-brand-beige: #F5F3F0;
+  --color-pure-white: #FFFFFF;
+  --color-pure-black: #000000;
+
+  /* Functional states */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #D97757;
+
+  /* Semantic design system tokens (light) */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F3F0;
+  --bg-tertiary: #FAFAFA;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(52, 50, 45, 0.8);
+
+  --surface-default: #FFFFFF;
+  --surface-hover: #F5F3F0;
+  --surface-active: #EEECE9;
+  --surface-selected: #E5E3E0;
+  --surface-disabled: #FAFAFA;
+
+  --input-bg: #F5F3F0;
+  --input-bg-hover: #EEECE9;
+  --input-bg-focus: #FFFFFF;
+  --input-bg-disabled: #FAFAFA;
+  --input-border: #E5E3E0;
+  --input-border-hover: #C8C6C3;
+  --input-border-focus: #34322D;
+
+  --text-primary: #34322D;
+  --text-secondary: #75736F;
+  --text-tertiary: #9E9C99;
+  --text-placeholder: #C8C6C3;
+  --text-disabled: #C8C6C3;
+  --text-inverse: #FFFFFF;
+  --text-link: #D97757;
+  --text-link-hover: #C86647;
+
+  --border-subtle: #F5F3F0;
+  --border-default: #E5E3E0;
+  --border-medium: #C8C6C3;
+  --border-strong: #75736F;
+  --border-focus: #34322D;
+
+  --hover-overlay: rgba(52, 50, 45, 0.04);
+  --active-overlay: rgba(52, 50, 45, 0.08);
+  --selected-overlay: rgba(217, 119, 87, 0.1);
+
+  /* Legacy aliases kept for gradual migration */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--surface-default);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--color-brand-terracotta);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--bg-secondary);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--color-error);
+  --border: var(--border-default);
+  --input: var(--input-bg);
+  --ring: var(--border-focus);
+  --chart-1: #8b5cf6;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #D97757;
+  --sidebar: var(--bg-secondary);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--color-brand-terracotta);
+  --sidebar-primary-foreground: var(--text-inverse);
+  --sidebar-accent: var(--surface-selected);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--border-focus);
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #1A1918;
+  --bg-secondary: #2C2B27;
+  --bg-tertiary: #2C2B27;
+  --bg-elevated: #2C2B27;
+  --bg-overlay: rgba(0, 0, 0, 0.8);
+
+  --surface-default: #2C2B27;
+  --surface-hover: #3A3833;
+  --surface-active: #434139;
+  --surface-selected: #6B5F57;
+  --surface-disabled: #24232E;
+
+  --input-bg: #2C2B27;
+  --input-bg-hover: #3A3833;
+  --input-bg-focus: #24232E;
+  --input-bg-disabled: #24232E;
+  --input-border: #57504A;
+  --input-border-hover: #6B5F57;
+  --input-border-focus: #D97757;
+
+  --text-primary: #F5F3F0;
+  --text-secondary: #C8C6C3;
+  --text-tertiary: #9E9C99;
+  --text-placeholder: #75736F;
+  --text-disabled: #57554F;
+  --text-inverse: #1A1918;
+  --text-link: #E88768;
+  --text-link-hover: #D97757;
+
+  --border-subtle: #2C2B27;
+  --border-default: #3A3833;
+  --border-medium: #4A4843;
+  --border-strong: #75736F;
+  --border-focus: #D97757;
+
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+  --active-overlay: rgba(255, 255, 255, 0.08);
+  --selected-overlay: rgba(217, 119, 87, 0.15);
+
+  /* Legacy aliases for dark mode */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--surface-default);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--color-brand-terracotta);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--bg-secondary);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--color-error);
+  --border: var(--border-default);
+  --input: var(--input-bg);
+  --ring: var(--border-focus);
+
+  --sidebar: var(--bg-secondary);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--color-brand-terracotta);
+  --sidebar-primary-foreground: var(--text-inverse);
+  --sidebar-accent: var(--surface-selected);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--border-focus);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a,
+  label,
+  select,
+  summary,
+  [type="button"],
+  [type="submit"],
+  [type="reset"] {
+    cursor: pointer !important;
+  }
+  html {
+    font-size: 16px; /* Standard browser default */
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  img {
+    width: auto;
+    height: auto;
+  }
+
+  /*
+   * Theme transitions: scoped to theme-aware surfaces only
+   * Avoids blanket * selector for better performance and fewer surprises.
+   */
+  html,
+  body,
+  [data-theme-transition] {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 300ms;
+    transition-timing-function: ease-out;
+    transition-delay: 0s;
+  }
+
+  /* Faster feedback on active elements */
+  button:active,
+  a:active,
+  [role="button"]:active {
+    transition-duration: 100ms;
+  }
+
+  /*
+   * Layout animations (width, height, transform) stay snappy.
+   * These should NOT be caught by the theme fade.
+   */
+  .motion-safe-layout {
+    transition-property: width, height, transform;
+    transition-duration: 300ms;
+  }
+
+  /* Disabled items cursor */
+  [disabled],
+  .disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed !important;
+  }
+
+  /* Vercel Guidelines: Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+      transition-duration: 0.01ms;
+      scroll-behavior: auto;
+    }
+  }
+
+  /* Vercel Guidelines: Tabular numbers for numeric comparisons */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Vercel Guidelines: Scroll margin for anchored headings */
+  h1, h2, h3, h4, h5, h6 {
+    scroll-margin-top: 80px;
+  }
+
+  /* Vercel Guidelines: Overscroll containment for modals/drawers */
+  [data-radix-dialog-content],
+  [data-radix-popover-content],
+  [data-radix-dropdown-menu-content],
+  [role="dialog"],
+  .modal-content,
+  .drawer-content {
+    overscroll-behavior: contain;
+  }
+
+  /* Vercel Guidelines: Prevent double-tap zoom on interactive elements */
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  /* Vercel Guidelines: Mobile input size >= 16px to prevent iOS zoom */
+  @media (max-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  /* Vercel Guidelines: Minimum hit target size on mobile */
+  @media (max-width: 640px) {
+    button,
+    [role="button"],
+    a {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Exception for inline text links */
+    p a,
+    span a,
+    li a {
+      min-height: auto;
+      min-width: auto;
+    }
+  }
+}
+
+/* Force prose text to near-white in dark mode */
+.dark .prose,
+[data-theme="dark"] .prose {
+  --tw-prose-body: #E8E8E8;
+  --tw-prose-headings: #E8E8E8;
+  --tw-prose-lead: #E8E8E8;
+  --tw-prose-links: #E8E8E8;
+  --tw-prose-bold: #FFFFFF;
+  --tw-prose-counters: #E8E8E8;
+  --tw-prose-bullets: #8A8A8A;
+  --tw-prose-hr: rgba(255, 255, 255, 0.06);
+  --tw-prose-quotes: #E8E8E8;
+  --tw-prose-quote-borders: rgba(255, 255, 255, 0.1);
+  --tw-prose-captions: #8A8A8A;
+  --tw-prose-code: #E8E8E8;
+  --tw-prose-th-borders: rgba(255, 255, 255, 0.1);
+  --tw-prose-td-borders: rgba(255, 255, 255, 0.06);
+}
+
+/*
+ * Marketing pages: dark mode color overrides
+ * Scoped to .marketing-page — does not affect the dashboard.
+ * Footer (bg-neutral-900) stays black in both modes.
+ * Uses !important to guarantee unlayered CSS beats Tailwind utility layers.
+ */
+
+/* ── Section backgrounds ─────────────────────────────────────── */
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-stone-50  { background-color: #1A1918 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-white      { background-color: #2C2B27 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-neutral-50 { background-color: #3A3833 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-stone-100  { background-color: #3A3833 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-stone-200  { background-color: #3A3833 !important; }
+
+/* Restore light backgrounds inside code-editor / terminal UI panels */
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-stone-900 .bg-stone-50,
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-zinc-800  .bg-stone-50 { background-color: #fafaf9 !important; }
+
+/* ── Text colors ─────────────────────────────────────────────── */
+:is(.dark, [data-theme="dark"]) .marketing-page .text-neutral-900 { color: #F5F3F0 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-neutral-800 { color: #F5F3F0 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-neutral-700 { color: #C8C6C3 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-zinc-600    { color: #C8C6C3 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-zinc-500    { color: #9E9C99 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-zinc-400    { color: #75736F !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-zinc-800    { color: #F5F3F0 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-neutral-500 { color: #9E9C99 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-neutral-600 { color: #C8C6C3 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .text-stone-300   { color: #57554F !important; }
+
+/* Headings without an explicit text color utility */
+:is(.dark, [data-theme="dark"]) .marketing-page main h1,
+:is(.dark, [data-theme="dark"]) .marketing-page main h2,
+:is(.dark, [data-theme="dark"]) .marketing-page main h3 { color: #F5F3F0 !important; }
+
+/* Bold / strong text */
+:is(.dark, [data-theme="dark"]) .marketing-page main strong { color: #F5F3F0 !important; }
+
+/* srgb inline-color values used in pricing/team/enterprise card text */
+:is(.dark, [data-theme="dark"]) .marketing-page .text-\[color\(srgb_0\.0784314_0\.0784314_0\.0745098_\/_0\.7\)\] { color: #9E9C99 !important; }
+
+/* Restore default dark text inside the code-editor panel (already dark bg) */
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-stone-900 .text-neutral-900,
+:is(.dark, [data-theme="dark"]) .marketing-page .bg-zinc-800  .text-neutral-900 { color: #fafaf9 !important; }
+
+/* ── Borders & dividers ───────────────────────────────────────── */
+:is(.dark, [data-theme="dark"]) .marketing-page .border-stone-200  { border-color: #3A3833 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .border-b-stone-200 { border-bottom-color: #3A3833 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .border-t-neutral-700 { border-top-color: #4A4843 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page .h-px.bg-stone-200  { background-color: #3A3833 !important; }
+
+/* ── Hover states ────────────────────────────────────────────── */
+:is(.dark, [data-theme="dark"]) .marketing-page .hover\:bg-stone-50:hover { background-color: #2C2B27 !important; }
+
+/* ── Footer: always dark in both modes ───────────────────────── */
+.marketing-page footer { background-color: #171717 !important; }
+:is(.dark, [data-theme="dark"]) .marketing-page footer .text-neutral-500 { color: #9E9C99 !important; }
+
+/* ── Mobile: prevent horizontal overflow ────────────────────── */
+.marketing-page { overflow-x: clip; }
+
+/* ── Theme switch: single GPU-accelerated cross-fade ────────── *
+ * Uses the View Transitions API (Chrome 111+ / Safari 18+).    *
+ * Falls back to instant switch in Firefox.                      */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: ease;
+  mix-blend-mode: normal;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out both;
+}
+
+@keyframes progress-glow {
+  0% { transform: translateX(-100%); opacity: 0.3; }
+  50% { opacity: 0.7; }
+  100% { transform: translateX(200%); opacity: 0.3; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0; }
+}
+
+.animate-progress-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-progress-glow::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: progress-glow 2s infinite linear;
+}

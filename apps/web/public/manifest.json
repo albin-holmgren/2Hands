@@ -1,0 +1,26 @@
+{
+  "name": "2Hands - AI Agent Manager",
+  "short_name": "2Hands",
+  "description": "Delegate complex computer tasks to autonomous AI agents that work 24/7.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FCFBF8",
+  "theme_color": "#181818",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/appicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "demo-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fixture repository for the 2Hands demo computer: one failing onboarding test and a deterministic fix.",
+  "scripts": {
+    "test": "node test/onboarding.test.js"
+  }
+}
