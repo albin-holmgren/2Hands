@@ -95,8 +95,9 @@ jobs:
     name: Readiness Gate
     runs-on: ubuntu-latest
     needs: [test]
-    # Only block production promotions — runs on main after tests pass
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Only block production promotions — runs on main after tests pass,
+    # and only when the deployment readiness endpoint is configured.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
 
     steps:
       - name: Checkout repo

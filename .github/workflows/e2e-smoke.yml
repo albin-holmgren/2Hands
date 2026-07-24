@@ -17,6 +17,8 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Skip cleanly on repos without app secrets (forks, fresh clones).
+    if: ${{ vars.E2E_ENABLED == 'true' }}
 
     steps:
       - name: Checkout repository

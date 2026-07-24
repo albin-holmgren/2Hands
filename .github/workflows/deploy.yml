@@ -8,10 +8,12 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    
+    # Skip cleanly on repos without deploy credentials (forks, fresh clones).
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+
     # Only deploy after CI passes
     needs: []
-    
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
