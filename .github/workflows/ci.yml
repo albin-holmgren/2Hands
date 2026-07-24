@@ -24,7 +24,7 @@ jobs:
       # on NEW leaks. Never silence a fresh leak with a fingerprint; rotate
       # the credential instead.
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
