@@ -25,7 +25,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A1918"
       },
-      "package": "com.twohands.app"
+      "package": "com.twohands.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -64,6 +68,9 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "5b23f30b-eb71-40e7-9cea-c4648449ffe5"
       }
     },
     "owner": "hellstrom64"

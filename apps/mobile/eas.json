@@ -45,13 +45,11 @@
   "submit": {
     "preview": {
       "ios": {
-        "appleId": "albin.holmgren97@gmail.com",
         "ascAppId": "6758272078"
       }
     },
     "production": {
       "ios": {
-        "appleId": "albin.holmgren97@gmail.com",
         "ascAppId": "6758272078"
       },
       "android": {
