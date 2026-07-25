@@ -176,7 +176,9 @@ CREATE TABLE IF NOT EXISTS public.approvals (
   estimated_max_cost_credits NUMERIC,
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'approved', 'denied', 'expired', 'cancelled', 'consumed')),
-  challenge TEXT NOT NULL DEFAULT encode(gen_random_bytes(24), 'hex'),
+  -- 256 bits of CSPRNG entropy without depending on pgcrypto's search_path
+  -- (hosted Supabase installs it into `extensions`, not `public`).
+  challenge TEXT NOT NULL DEFAULT replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
   responded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   responded_at TIMESTAMPTZ,
   response_idempotency_key TEXT,
