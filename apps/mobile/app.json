@@ -33,7 +33,18 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-build-properties",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "2Hands uses the microphone so you can speak your requests instead of typing them."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "2Hands accesses your photos so you can attach images to a task."
+        }
+      ],
       "expo-router",
       "expo-font",
       "expo-secure-store",
@@ -44,7 +55,8 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
@@ -52,11 +64,8 @@
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "8d18977f-cb5c-497d-bd77-5b78b9421051"
       }
     },
-    "owner": "2hands"
+    "owner": "hellstrom64"
   }
 }
