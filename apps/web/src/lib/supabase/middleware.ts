@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// The application home. v3 cutover: 2hands.ai IS the app — signing in and
+// hitting the root both land here (legacy dashboard: /app/legacy).
+const APP_HOME = '/app/v3'
+
 // Allowlist of valid redirect paths (must start with /)
 const ALLOWED_REDIRECT_PREFIXES = [
   '/app',
@@ -13,24 +17,25 @@ const ALLOWED_REDIRECT_PREFIXES = [
  * Only allows relative paths that are in the allowlist
  */
 function validateRedirectPath(path: string | null): string {
-  // Default to /app if no path provided
-  if (!path) return '/app'
+  // v3 cutover: the voice-first surface is the application, so it is the
+  // default landing target (the legacy dashboard lives at /app/legacy).
+  if (!path) return APP_HOME
   
   // Must be a relative path (starts with /)
-  if (!path.startsWith('/')) return '/app'
+  if (!path.startsWith('/')) return APP_HOME
   
   // Block any absolute URLs or protocol-relative URLs
-  if (path.startsWith('//') || path.includes('://')) return '/app'
+  if (path.startsWith('//') || path.includes('://')) return APP_HOME
   
   // Block paths with encoded characters that could bypass checks
-  if (path.includes('%') || path.includes('\\')) return '/app'
+  if (path.includes('%') || path.includes('\\')) return APP_HOME
   
   // Check if path starts with an allowed prefix
   const isAllowed = ALLOWED_REDIRECT_PREFIXES.some(allowed => 
     path === allowed || path.startsWith(`${allowed}/`) || path.startsWith(`${allowed}?`)
   )
   
-  return isAllowed ? path : '/app'
+  return isAllowed ? path : APP_HOME
 }
 
 export async function updateSession(request: NextRequest) {

@@ -1,10 +1,15 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-// v3 cutover: 2hands.ai IS the application. No marketing landing —
-// authenticated users land in the voice-first surface, everyone else at
-// sign-in. (The previous landing page is archived, unrouted, at
+// v3 cutover: 2hands.ai IS the application — there is no marketing landing.
+// Signed-in visitors are sent to the app by middleware before this renders;
+// this server fallback keeps the same contract, and signed-out visitors are
+// handed to sign-in with the app as their post-login destination so they
+// always end up inside the product, never on a dead-end page.
+// (The previous landing page is archived, unrouted, at
 // components/marketing/landing-page.tsx.unused.)
+const APP_HOME = '/app/v3'
+
 export default async function Home({
   searchParams,
 }: {
@@ -25,5 +30,5 @@ export default async function Home({
     data: { user },
   } = await supabase.auth.getUser()
 
-  redirect(user ? '/app/v3' : '/sign-in')
+  redirect(user ? APP_HOME : `/sign-in?next=${encodeURIComponent(APP_HOME)}`)
 }
