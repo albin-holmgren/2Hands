@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "2hands",
+    "scheme": "twohands",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A1918"
       },
-      "package": "com.2hands.app"
+      "package": "com.twohands.app"
     },
     "web": {
       "bundler": "metro",

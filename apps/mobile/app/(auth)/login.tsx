@@ -66,7 +66,16 @@ export default function LoginScreen() {
 
   const handleOAuth = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await signInWithOAuth('google')
+    setError(null)
+    try {
+      await signInWithOAuth('google')
+    } catch (e) {
+      // signInWithOAuth throws on provider errors and on a failed code
+      // exchange. Unhandled, those become a silent no-op: the browser sheet
+      // closes and the user is still sitting on the login screen.
+      setError(e instanceof Error ? e.message : 'Could not sign in with Google')
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+    }
   }, [signInWithOAuth])
 
   const handleEmailSubmit = useCallback(async () => {

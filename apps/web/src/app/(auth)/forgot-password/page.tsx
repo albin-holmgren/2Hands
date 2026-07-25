@@ -20,7 +20,11 @@ export default function ForgotPasswordPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        // /auth/confirm verifies `token_hash` server-side, so the link still
+        // works when the mail is opened on a different device than the one
+        // that requested it. It falls back to PKCE `code` exchange when the
+        // email template emits {{ .ConfirmationURL }}.
+        redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
       })
 
       if (error) {

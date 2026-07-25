@@ -5,9 +5,8 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useWorkspaceStore, getPersistedWorkspaceId } from '@/store/workspace-store'
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
+import { persistLastPath } from '@/lib/auth/last-path'
 
-const LAST_PATH_KEY = '2hands_last_path'
-const ALLOWED_LAST_PATH_PREFIXES = ['/app', '/settings']
 const INIT_TIMEOUT_MS = 10_000
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
@@ -25,13 +24,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     retryCountRef.current = 0
   }, [user?.id])
 
-  // Persist the last visited dashboard path so sign-in can restore it
+  // Persist the last visited dashboard path so sign-in can restore it.
+  // persistLastPath() excludes /app/legacy — otherwise one visit to the legacy
+  // dashboard permanently hijacks the post-login landing page.
   useEffect(() => {
     if (!pathname) return
-    const shouldPersist = ALLOWED_LAST_PATH_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))
-    if (shouldPersist) {
-      try { localStorage.setItem(LAST_PATH_KEY, pathname) } catch {}
-    }
+    persistLastPath(pathname)
   }, [pathname])
 
   useEffect(() => {

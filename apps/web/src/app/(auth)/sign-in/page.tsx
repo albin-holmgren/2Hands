@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { createClient } from '@/lib/supabase/client'
+import { readLastPath } from '@/lib/auth/last-path'
+import { APP_HOME } from '@/lib/auth/redirect-paths'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -33,32 +35,52 @@ function AuthForm() {
   const searchParams = useSearchParams()
   const referralCode = searchParams.get('ref')
   const nextParam = searchParams.get('next')
+  const errorParam = searchParams.get('error')
+  const reportedErrorRef = useRef<string | null>(null)
+
+  // /auth/callback and /auth/confirm redirect here with ?error=… on failure
+  // (denied consent, expired link, missing PKCE verifier). Without this the
+  // user just sees a fresh sign-in form and no explanation at all.
+  useEffect(() => {
+    if (!errorParam) return
+    if (reportedErrorRef.current === errorParam) return
+    reportedErrorRef.current = errorParam
+    toast.error(errorParam)
+  }, [errorParam])
 
   function getPostLoginPath(): string {
     // 1. Use ?next= param set by middleware (user was on a protected page)
     if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) return nextParam
-    // 2. Fall back to last visited path stored in localStorage
-    try {
-      const stored = localStorage.getItem('2hands_last_path')
-      if (stored && stored.startsWith('/app')) return stored
-    } catch {}
-    return '/app'
+    // 2. Fall back to last visited path stored in localStorage.
+    //    readLastPath() re-validates, so a stale '/app/legacy' from before the
+    //    v3 cutover is rejected instead of becoming a permanent landing page.
+    const stored = readLastPath()
+    if (stored) return stored
+    return APP_HOME
   }
   const supabase = createClient()
 
   const handleOAuth = useCallback(async () => {
     try {
+      // Carry ?next= and ?ref= through the provider round-trip: without them a
+      // deep link is lost on the way back, and referral attribution never runs
+      // (the callback reads `ref` from its own URL).
+      const callbackUrl = new URL('/auth/callback', window.location.origin)
+      callbackUrl.searchParams.set('next', getPostLoginPath())
+      if (referralCode) callbackUrl.searchParams.set('ref', referralCode)
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: callbackUrl.toString(),
         },
       })
       if (error) toast.error(error.message)
     } catch {
       toast.error('An error occurred. Please try again.')
     }
-  }, [supabase.auth])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase.auth, nextParam, referralCode])
 
   const handleEmailSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()

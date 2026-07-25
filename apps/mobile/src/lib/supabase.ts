@@ -47,6 +47,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: StorageAdapter,
     autoRefreshToken: true,
     persistSession: true,
+    // React Native has no URL to read the session from — we handle the deep
+    // link ourselves in auth-context.tsx.
     detectSessionInUrl: false,
+    // auth-js defaults to 'implicit', which returns credentials in the URL
+    // *fragment* and never issues a `?code=`. Our OAuth return leg calls
+    // exchangeCodeForSession, which only works under PKCE (it also requires
+    // the stored code verifier that only PKCE writes).
+    flowType: 'pkce',
   },
 })

@@ -24,6 +24,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+/** Deep-link query params can arrive as a string or a repeated-key array. */
+function firstParam(value: string | string[] | undefined): string | null {
+  const single = Array.isArray(value) ? value[0] : value
+  return typeof single === 'string' && single.length > 0 ? single : null
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
@@ -79,6 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider,
       options: {
         redirectTo,
+        // Without this, auth-js navigates the page itself on the Expo web
+        // target (app.json declares one) while openAuthSessionAsync also
+        // fires — a double navigation. Harmless but required on native too,
+        // since we always drive the browser ourselves.
+        skipBrowserRedirect: true,
       },
     })
 
@@ -86,8 +97,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error
     }
 
-    if (data?.url) {
-      await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+    if (!data?.url) return
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+
+    // On iOS, ASWebAuthenticationSession intercepts the redirect and hands it
+    // back here as `result.url` — no deep link is delivered to the app, so
+    // app/auth/callback.tsx never runs. Discarding this result meant Google
+    // sign-in could never complete on iOS. Android does fire a real deep link;
+    // the callback screen remains the fallback for that path.
+    if (result.type !== 'success' || !result.url) return
+
+    const { queryParams } = Linking.parse(result.url)
+
+    const returnedError = firstParam(queryParams?.error)
+    if (returnedError) {
+      throw new Error(firstParam(queryParams?.error_description) || returnedError)
+    }
+
+    const code = firstParam(queryParams?.code)
+    if (!code) return
+
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    if (exchangeError) {
+      throw exchangeError
     }
   }
 

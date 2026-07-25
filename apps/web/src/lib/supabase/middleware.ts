@@ -1,41 +1,24 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-
-// The application home. v3 cutover: 2hands.ai IS the app — signing in and
-// hitting the root both land here (legacy dashboard: /app/legacy).
-const APP_HOME = '/app/v3'
-
-// Allowlist of valid redirect paths (must start with /)
-const ALLOWED_REDIRECT_PREFIXES = [
-  '/app',
-  '/settings',
-  '/pricing',
-]
+import { validateRedirectPath } from '@/lib/auth/redirect-paths'
 
 /**
- * Validate redirect URL to prevent open redirect attacks
- * Only allows relative paths that are in the allowlist
+ * Build a redirect response that carries over any auth cookies Supabase set on
+ * `sourceResponse`.
+ *
+ * `supabase.auth.getUser()` can rotate the refresh token; when it does, the
+ * `setAll` cookie handler rebuilds `supabaseResponse` with the new
+ * `sb-*-auth-token` cookies. Returning a bare `NextResponse.redirect()` would
+ * discard them — Supabase has already consumed the old refresh token
+ * server-side, so the browser would be left holding a dead one and the user
+ * gets silently signed out on the next request.
  */
-function validateRedirectPath(path: string | null): string {
-  // v3 cutover: the voice-first surface is the application, so it is the
-  // default landing target (the legacy dashboard lives at /app/legacy).
-  if (!path) return APP_HOME
-  
-  // Must be a relative path (starts with /)
-  if (!path.startsWith('/')) return APP_HOME
-  
-  // Block any absolute URLs or protocol-relative URLs
-  if (path.startsWith('//') || path.includes('://')) return APP_HOME
-  
-  // Block paths with encoded characters that could bypass checks
-  if (path.includes('%') || path.includes('\\')) return APP_HOME
-  
-  // Check if path starts with an allowed prefix
-  const isAllowed = ALLOWED_REDIRECT_PREFIXES.some(allowed => 
-    path === allowed || path.startsWith(`${allowed}/`) || path.startsWith(`${allowed}?`)
-  )
-  
-  return isAllowed ? path : APP_HOME
+function redirectPreservingCookies(url: URL, sourceResponse: NextResponse): NextResponse {
+  const response = NextResponse.redirect(url)
+  sourceResponse.cookies.getAll().forEach((cookie) => {
+    response.cookies.set(cookie)
+  })
+  return response
 }
 
 export async function updateSession(request: NextRequest) {
@@ -140,7 +123,9 @@ export async function updateSession(request: NextRequest) {
     const returnTo = pathname + request.nextUrl.search
     url.pathname = '/sign-in'
     url.searchParams.set('next', returnTo)
-    return NextResponse.redirect(url)
+    // Carry cookies over: a failed refresh clears the stale auth cookies, and
+    // those deletions must reach the browser.
+    return redirectPreservingCookies(url, supabaseResponse)
   }
 
   // Redirect authenticated users away from auth pages and landing page
@@ -150,7 +135,9 @@ export async function updateSession(request: NextRequest) {
     const nextParam = request.nextUrl.searchParams.get('next')
     url.pathname = validateRedirectPath(nextParam)
     url.search = '' // Clear search params after extracting next
-    return NextResponse.redirect(url)
+    // getUser() above may have rotated the refresh token — the new cookies
+    // must ride along on this redirect or the session silently dies.
+    return redirectPreservingCookies(url, supabaseResponse)
   }
 
   return supabaseResponse

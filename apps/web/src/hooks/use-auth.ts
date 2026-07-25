@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuthStore } from '@/store/auth-store'
 import { useWorkspaceStore } from '@/store/workspace-store'
+import { clearLastPath } from '@/lib/auth/last-path'
 
 // Single supabase instance (singleton from client.ts)
 const supabase = createClient()
@@ -160,6 +161,9 @@ export function useAuth() {
       } catch {
         // Ignore localStorage errors
       }
+      // Don't leak the previous user's last page to whoever signs in next on
+      // this browser (shared machines), and don't restore it after sign-out.
+      clearLastPath()
 
       // supabase.auth.signOut() fires onAuthStateChange(SIGNED_OUT) which
       // calls setUser(null) and workspace reset — no need to duplicate here
