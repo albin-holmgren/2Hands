@@ -27,7 +27,7 @@ import type { OrbState } from '@2hands/types/v3'
 import { useAuth } from '@/hooks/use-auth'
 import { useWorkspaceStore } from '@/store/workspace-store'
 import { cn } from '@/lib/utils'
-import { APP_HOME } from '@/lib/auth/redirect-paths'
+import { AuthDialog } from '@/components/v3/auth/auth-dialog'
 import { Orb } from '@/components/v3/orb/orb'
 import { Composer } from '@/components/v3/composer/composer'
 import { EmptyState } from '@/components/v3/empty-state'
@@ -92,6 +92,15 @@ const TERMINAL_TASK_STATUSES = ['completed', 'failed', 'cancelled'] as const
 const VOICE_REPLIES_STORAGE_KEY = '2hands_v3_voice_replies'
 /** Active-task persistence so a reload resumes the stream from cursor 0. */
 const ACTIVE_TASK_STORAGE_KEY = '2hands_v3_active_task'
+
+/**
+ * A goal typed before signing in waits here rather than being thrown away.
+ *
+ * sessionStorage rather than component state because "Continue with Google"
+ * leaves the page entirely and comes back through /auth/callback — state would
+ * not survive that, and re-typing the goal you already typed is a poor welcome.
+ */
+const PENDING_GOAL_STORAGE_KEY = '2hands_v3_pending_goal'
 
 interface ApiResult<T> {
   ok: boolean
@@ -179,9 +188,32 @@ export function V3Shell() {
   // behind an action that checks `user` first.
   const isGuest = !authLoading && !user
 
-  const goToSignIn = React.useCallback(() => {
-    router.push(`/sign-in?next=${encodeURIComponent(APP_HOME)}`)
-  }, [router])
+  // Signing in happens over the shell, not on another page: a visitor who just
+  // typed a goal keeps it, and closing the dialog puts them back exactly where
+  // they were.
+  const [authOpen, setAuthOpen] = React.useState(false)
+  const [authReason, setAuthReason] = React.useState<string | undefined>(undefined)
+
+  const signedInRef = React.useRef(false)
+
+  const requireAuth = React.useCallback((reason?: string) => {
+    signedInRef.current = false
+    setAuthReason(reason)
+    setAuthOpen(true)
+  }, [])
+
+  const handleAuthOpenChange = React.useCallback((open: boolean) => {
+    setAuthOpen(open)
+    // Dismissed rather than completed: drop the parked goal, so it cannot fire
+    // out of nowhere the next time this person signs in.
+    if (!open && !signedInRef.current) {
+      try {
+        window.sessionStorage.removeItem(PENDING_GOAL_STORAGE_KEY)
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }, [])
 
   // `isSpeechSupported()` answers false on the server and true in the browser,
   // so reading it during render made the server and client HTML disagree and
@@ -338,10 +370,16 @@ export function V3Shell() {
   const handleSend = React.useCallback(
     async (text: string) => {
       // The gate for the whole surface: browsing is free, acting needs an
-      // account. Returning to APP_HOME afterwards keeps the visitor where they
-      // were instead of dropping them on a dashboard they did not ask for.
+      // account. The composer clears itself on send, so park the goal and run
+      // it the moment a session exists — signing in finishes the thing they
+      // asked for instead of dumping them back at an empty prompt.
       if (!user) {
-        goToSignIn()
+        try {
+          window.sessionStorage.setItem(PENDING_GOAL_STORAGE_KEY, text)
+        } catch {
+          /* storage unavailable */
+        }
+        requireAuth('Sign in to send your first task')
         return
       }
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
@@ -366,8 +404,26 @@ export function V3Shell() {
         void runDemoPipeline(taskId, text)
       }
     },
-    [user, goToSignIn, note, stream, demoComputerEnabled, runDemoPipeline],
+    [user, requireAuth, note, stream, demoComputerEnabled, runDemoPipeline],
   )
+
+  // Send whatever the visitor typed before they had an account, once they do.
+  const pendingGoalFlushedRef = React.useRef(false)
+  React.useEffect(() => {
+    if (authLoading || !user || pendingGoalFlushedRef.current) return
+
+    let goal: string | null = null
+    try {
+      goal = window.sessionStorage.getItem(PENDING_GOAL_STORAGE_KEY)
+      if (goal) window.sessionStorage.removeItem(PENDING_GOAL_STORAGE_KEY)
+    } catch {
+      /* storage unavailable */
+    }
+    if (!goal) return
+
+    pendingGoalFlushedRef.current = true
+    void handleSend(goal)
+  }, [authLoading, user, handleSend])
 
   const handleGoldenPath = React.useCallback(() => {
     void handleSend(DEMO_GOAL)
@@ -626,7 +682,7 @@ export function V3Shell() {
             <button
               type="button"
               data-slot="guest-sign-in"
-              onClick={goToSignIn}
+              onClick={() => requireAuth()}
               className={cn(
                 'flex h-11 shrink-0 items-center rounded-full px-5',
                 'bg-[#D97757] text-[15px] leading-[20px] font-medium text-white',
@@ -745,6 +801,15 @@ export function V3Shell() {
         onOpenChange={setMarketplaceOpen}
         connectedApps={DEMO_CONNECTED_APPS}
         computers={DEMO_COMPUTERS}
+      />
+
+      <AuthDialog
+        open={authOpen}
+        onOpenChange={handleAuthOpenChange}
+        reason={authReason}
+        onSignedIn={() => {
+          signedInRef.current = true
+        }}
       />
     </div>
   )
