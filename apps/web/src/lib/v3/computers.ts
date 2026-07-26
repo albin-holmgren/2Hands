@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   FixtureComputerProvider,
+  FlyComputerProvider,
   LocalDockerComputerProvider,
 } from '@2hands/computer'
 import type { ComputerProvider, ComputerSession, ComputerWorkspace } from '@2hands/types/v3'
@@ -76,10 +77,29 @@ export interface ComputerCheckpointRow {
 // ---------------------------------------------------------------------------
 // Configuration + provider cache
 
-export function selectedProviderId(): 'fixture' | 'local-docker' {
+export function selectedProviderId(): 'fixture' | 'local-docker' | 'fly' {
   const raw = (process.env.COMPUTER_PROVIDER ?? 'fixture').trim()
   if (raw === 'local-docker') return 'local-docker'
+  if (raw === 'fly') return 'fly'
   return 'fixture'
+}
+
+/**
+ * Fly settings. The token is read per call rather than captured at module load
+ * so a rotated secret takes effect on the next request instead of the next
+ * deploy.
+ */
+export function flyOptions() {
+  const apiToken = process.env.FLY_API_TOKEN?.trim()
+  if (!apiToken) {
+    throw new Error('COMPUTER_PROVIDER=fly requires FLY_API_TOKEN')
+  }
+  return {
+    apiToken,
+    appName: process.env.FLY_COMPUTERS_APP?.trim() || '2hands-computers',
+    region: process.env.FLY_REGION?.trim() || 'arn',
+    monthlyBudgetUsd: Number(process.env.FLY_MONTHLY_BUDGET_USD ?? 50),
+  }
 }
 
 export function fixtureBaseDir(): string {
@@ -124,6 +144,8 @@ function getProviderInstance(providerId: string): ComputerProvider {
     provider = new FixtureComputerProvider({ baseDir: fixtureBaseDir() })
   } else if (providerId === 'local-docker') {
     provider = new LocalDockerComputerProvider()
+  } else if (providerId === 'fly') {
+    provider = new FlyComputerProvider(flyOptions())
   } else {
     throw new Error(`Unsupported computer provider: ${providerId}`)
   }

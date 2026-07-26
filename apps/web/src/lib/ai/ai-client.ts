@@ -3,9 +3,20 @@ import Anthropic from '@anthropic-ai/sdk'
 // AI Gateway is the ONLY supported transport.
 // All models are accessed via Vercel AI Gateway using provider/model format.
 
-// Default model — Gemini 2.5 Flash via AI Gateway (fast, strong tools)
-export const DEFAULT_MODEL = 'google/gemini-2.5-flash'
-export const DEFAULT_FALLBACK_MODELS = ['google/gemini-2.5-pro', 'anthropic/claude-3.5-haiku']
+/**
+ * Default model — Grok 4.5 via AI Gateway.
+ *
+ * Read from the environment so switching models is a config change, not a
+ * deploy: the model we want is expected to move faster than the code around
+ * it. `AI_DEFAULT_MODEL` and `AI_FALLBACK_MODELS` (comma-separated) override
+ * these, and the values must be gateway `provider/model` ids.
+ */
+export const DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL?.trim() || 'xai/grok-4.5'
+export const DEFAULT_FALLBACK_MODELS = (
+  process.env.AI_FALLBACK_MODELS?.split(',').map((m) => m.trim()).filter(Boolean) ?? []
+).length
+  ? process.env.AI_FALLBACK_MODELS!.split(',').map((m) => m.trim()).filter(Boolean)
+  : ['google/gemini-2.5-pro', 'anthropic/claude-3.5-haiku']
 
 type CreateMessageParams = Parameters<Anthropic['messages']['create']>[0]
 
@@ -96,6 +107,9 @@ const GATEWAY_MODEL_MAP: Record<string, string> = {
   'openai/gpt-5.4': 'openai/gpt-5.4',
   // Perplexity models
   'perplexity/sonar': 'perplexity/sonar',
+  // xAI Grok (already in gateway format)
+  'xai/grok-4.5': 'xai/grok-4.5',
+  'xai/grok-4': 'xai/grok-4',
 }
 
 export function normalizeModelForTransport(model: string): string {

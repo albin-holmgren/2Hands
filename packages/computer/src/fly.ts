@@ -73,6 +73,37 @@ const COMPUTE_USD_PER_HOUR: Record<number, number> = {
 const VOLUME_USD_PER_GB_MONTH = 0.15
 const HOURS_PER_MONTH = 730
 
+/**
+ * What a computer gets on each 2Hands plan.
+ *
+ * Sized so the worst case — the machine never stopping for a whole month —
+ * stays a modest fraction of what the plan charges. Real usage is a fraction of
+ * that again, because a computer only runs while a task does.
+ *
+ *   free     $0    512MB / 1GB    up to  $3.34/mo
+ *   pro      $20     1GB / 5GB    up to  $6.45/mo
+ *   pro_5x   $100    2GB / 20GB   up to $13.70/mo
+ *   pro_20x  $200    2GB / 50GB   up to $18.20/mo
+ *
+ * 2GB is the ceiling here only because it is the largest guest we have a
+ * published rate for; the budget guard refuses sizes it cannot price, which is
+ * the point. Add the rate to COMPUTE_USD_PER_HOUR before offering a bigger one.
+ */
+export type PlanId = 'free' | 'pro' | 'pro_5x' | 'pro_20x'
+
+export interface PlanMachineSpec {
+  cpus: number
+  memoryMb: number
+  volumeGb: number
+}
+
+export const PLAN_MACHINE_SPECS: Record<PlanId, PlanMachineSpec> = {
+  free: { cpus: 1, memoryMb: 512, volumeGb: 1 },
+  pro: { cpus: 1, memoryMb: 1024, volumeGb: 5 },
+  pro_5x: { cpus: 2, memoryMb: 2048, volumeGb: 20 },
+  pro_20x: { cpus: 2, memoryMb: 2048, volumeGb: 50 },
+}
+
 /** Worst case for one computer: running every hour of the month. */
 export function worstCaseMonthlyUsd(memoryMb: number, volumeGb: number): number {
   const hourly = COMPUTE_USD_PER_HOUR[memoryMb]
@@ -396,6 +427,70 @@ export class FlyComputerProvider implements ComputerProvider {
       providerWorkspaceRef: `${machine.id}:${restored.id}`,
       state: toComputerState(machine.state),
       lastCheckpointId: input.checkpointId,
+      updatedAt: this.opts.now().toISOString(),
+    }
+  }
+
+  /**
+   * Move a computer onto another plan's hardware without losing anything.
+   *
+   * This is why the design puts user data on a volume rather than in the
+   * machine's own filesystem: CPU and RAM live in the machine config, the data
+   * lives in the volume, and the two resize independently.
+   *
+   *   more CPU/RAM → update the machine config in place; the same volume is
+   *                  remounted, so /workspace is untouched
+   *   more disk    → extend the volume, which grows the filesystem live
+   *
+   * Downgrades shrink CPU and RAM but never the volume: Fly volumes cannot
+   * shrink, and silently discarding a user's files to fit a smaller plan would
+   * be the worst possible reading of "downgrade". They keep the disk they had.
+   */
+  async applyPlan(input: {
+    computer: ComputerWorkspace
+    plan: PlanId
+  }): Promise<ComputerWorkspace> {
+    const spec = PLAN_MACHINE_SPECS[input.plan]
+    if (!spec) throw new Error(`Unknown plan ${input.plan}`)
+
+    const [machineId, volumeId] = (input.computer.providerWorkspaceRef ?? '').split(':')
+    if (!machineId) throw new Error(`Computer ${input.computer.id} has no machine ref`)
+
+    // Disk first. Growing before the machine restarts means the larger
+    // filesystem is already there when it comes back up.
+    if (volumeId) {
+      const volume = await this.api<FlyVolume>(
+        'GET',
+        `/apps/${this.opts.appName}/volumes/${volumeId}`,
+      )
+      if (spec.volumeGb > volume.size_gb) {
+        await this.api('PUT', `/apps/${this.opts.appName}/volumes/${volumeId}/extend`, {
+          size_gb: spec.volumeGb,
+        })
+      }
+    }
+
+    // Fly replaces the whole config on update, so read the current one and
+    // change only the guest — dropping the mounts here would detach the
+    // volume, which is precisely the data loss this method exists to avoid.
+    const machine = await this.api<FlyMachine>(
+      'GET',
+      `/apps/${this.opts.appName}/machines/${machineId}`,
+    )
+    const config = { ...(machine.config ?? {}) } as Record<string, unknown>
+    config.guest = { cpu_kind: 'shared', cpus: spec.cpus, memory_mb: spec.memoryMb }
+
+    const wasStopped = toComputerState(machine.state) === 'stopped'
+    const updated = await this.api<FlyMachine>(
+      'POST',
+      `/apps/${this.opts.appName}/machines/${machineId}`,
+      { config, skip_launch: wasStopped },
+    )
+
+    return {
+      ...input.computer,
+      state: toComputerState(updated.state),
+      storageBytes: spec.volumeGb * 1024 * 1024 * 1024,
       updatedAt: this.opts.now().toISOString(),
     }
   }

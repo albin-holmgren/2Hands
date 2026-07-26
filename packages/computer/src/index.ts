@@ -10,8 +10,11 @@ export { LocalDockerComputerProvider, type DockerProviderOptions } from './local
 export {
   FlyComputerProvider,
   worstCaseMonthlyUsd,
+  PLAN_MACHINE_SPECS,
   WORKSPACE_MOUNT,
   type FlyProviderOptions,
+  type PlanId,
+  type PlanMachineSpec,
 } from './fly'
 export { RunnerHost, type RunnerHostOptions } from './runner-host'
 export {
