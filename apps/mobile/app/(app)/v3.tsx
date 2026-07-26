@@ -17,6 +17,7 @@ import type { Approval, OrbState, SecureInputRequest } from '@2hands/types/v3'
 import { colors as brand } from '@2hands/tailwind-config'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme } from '@/lib/theme-context'
+import { requestAssistantReply, type ChatTurn } from '@/lib/v3-chat'
 import { Orb, ORB_STATE_LABELS } from '@/components/v3/orb'
 import { Composer } from '@/components/v3/composer'
 import { EmptyState } from '@/components/v3/empty-state'
@@ -54,17 +55,16 @@ const EXAMPLES = [
   'Book a table for two on Friday evening',
 ]
 
-/** Deterministic demo rows — same content contract as the web sheet, always labeled Demo. */
-const DEMO_MARKETPLACE_SECTIONS: Partial<Record<MarketplaceSectionId, ProviderRow[]>> = {
+/**
+ * Marketplace rows.
+ *
+ * Only real integrations, with their true status. The fabricated "Demo Gmail",
+ * "Demo Codex", "Demo Claude" and "Managed Computer" rows are gone: showing a
+ * provider as connected when nothing is connected teaches the user something
+ * false about their own account.
+ */
+const MARKETPLACE_SECTIONS: Partial<Record<MarketplaceSectionId, ProviderRow[]>> = {
   connected_apps: [
-    {
-      id: 'demo-gmail',
-      name: 'Demo Gmail',
-      capability: 'Read, draft and send email',
-      owner: 'user',
-      status: 'connected',
-      demo: true,
-    },
     {
       id: 'github',
       name: 'GitHub',
@@ -80,37 +80,9 @@ const DEMO_MARKETPLACE_SECTIONS: Partial<Record<MarketplaceSectionId, ProviderRo
       status: 'coming_soon',
     },
   ],
-  specialist_agents: [
-    {
-      id: 'demo-codex',
-      name: 'Demo Codex',
-      capability: 'Coding agent for repo work',
-      owner: '2hands',
-      status: 'connected',
-      demo: true,
-    },
-    {
-      id: 'demo-claude',
-      name: 'Demo Claude',
-      capability: 'Research, writing and review',
-      owner: '2hands',
-      status: 'connected',
-      demo: true,
-    },
-  ],
-  computers: [
-    {
-      id: 'demo-computer',
-      name: 'Managed Computer',
-      capability: 'Isolated workspace with browser and shell',
-      owner: '2hands',
-      status: 'connected',
-      demo: true,
-    },
-  ],
   mcp: [
     {
-      id: 'demo-mcp-filesystem',
+      id: 'mcp-filesystem',
       name: 'Filesystem MCP',
       capability: 'Read and write workspace files',
       owner: 'workspace',
@@ -125,12 +97,9 @@ const DEMO_MARKETPLACE_SECTIONS: Partial<Record<MarketplaceSectionId, ProviderRo
       owner: 'user',
       status: 'connected',
       action: 'manage',
-      demo: true,
     },
   ],
 }
-
-const THINK_MS = 1600
 
 function buildDemoApproval(): Approval {
   const now = Date.now()
@@ -223,7 +192,6 @@ export default function V3Screen() {
   const [voiceReplies, setVoiceReplies] = useState(false)
   const [voiceBanner, setVoiceBanner] = useState<string | null>(null)
 
-  const thinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const listRef = useRef<FlatList<LocalMessage>>(null)
   const nextId = useRef(0)
   const voiceRepliesRef = useRef(voiceReplies)
@@ -244,13 +212,6 @@ export default function V3Screen() {
       )
     },
   })
-
-  useEffect(
-    () => () => {
-      if (thinkTimer.current) clearTimeout(thinkTimer.current)
-    },
-    []
-  )
 
   const demoApproval = useMemo(() => (showDevCards ? buildDemoApproval() : null), [showDevCards])
   const demoSecureRequest = useMemo(
@@ -310,17 +271,35 @@ export default function V3Screen() {
         : orbState
 
   const handleSend = (text: string) => {
-    if (thinkTimer.current) clearTimeout(thinkTimer.current)
     appendMessage('user', text)
     setOrbState('thinking')
-    thinkTimer.current = setTimeout(() => {
-      appendMessage(
-        'assistant',
-        'Got it. Task orchestration lands in the next slice — for now this shell shows the conversation surface end to end.'
-      )
-      setOrbState('idle')
-      thinkTimer.current = null
-    }, THINK_MS)
+
+    // The conversation so far, so the assistant has context rather than
+    // answering each message in isolation.
+    const history: ChatTurn[] = [
+      ...messages.map((message) => ({
+        role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: message.text,
+      })),
+      { role: 'user' as const, content: text },
+    ]
+
+    void requestAssistantReply({ messages: history })
+      .then((reply) => {
+        appendMessage(
+          'assistant',
+          reply || 'The assistant returned an empty reply. Please try again.'
+        )
+      })
+      .catch((error: unknown) => {
+        // Surface the failure. Substituting a friendly canned line here is how
+        // the shell ended up looking finished while doing nothing at all.
+        appendMessage(
+          'assistant',
+          error instanceof Error ? error.message : 'Could not reach the assistant.'
+        )
+      })
+      .finally(() => setOrbState('idle'))
   }
   handleSendRef.current = handleSend
 
@@ -336,7 +315,10 @@ export default function V3Screen() {
     action: ProviderRowActionKind
   ) => {
     setMarketplaceOpen(false)
-    appendMessage('assistant', `Demo marketplace: “${action}” for ${row.name} is wired in a later slice.`)
+    appendMessage(
+      'assistant',
+      `Connecting ${row.name} isn't available yet — “${action}” has no handler behind it.`
+    )
   }
 
   const hasContent = messages.length > 0 || showDevCards
@@ -509,7 +491,7 @@ export default function V3Screen() {
       <MarketplaceSheet
         visible={marketplaceOpen}
         onClose={() => setMarketplaceOpen(false)}
-        sections={DEMO_MARKETPLACE_SECTIONS}
+        sections={MARKETPLACE_SECTIONS}
         onRowAction={handleMarketplaceRowAction}
       />
 
