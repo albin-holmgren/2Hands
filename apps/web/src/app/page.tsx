@@ -1,15 +1,22 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 
-// v3 cutover: 2hands.ai IS the application — there is no marketing landing.
-// Signed-in visitors are sent to the app by middleware before this renders;
-// this server fallback keeps the same contract, and signed-out visitors are
-// handed to sign-in with the app as their post-login destination so they
-// always end up inside the product, never on a dead-end page.
-// (The previous landing page is archived, unrouted, at
-// components/marketing/landing-page.tsx.unused.)
-const APP_HOME = '/app/v3'
+import { APP_HOME } from '@/lib/auth/redirect-paths'
 
+/**
+ * v3 cutover: 2hands.ai IS the application — there is no marketing landing.
+ * (The previous landing page is archived, unrouted, at
+ * components/marketing/landing-page.tsx.unused.)
+ *
+ * Everyone lands in the app, signed in or not. The shell is browsable without
+ * a session — you see the real product, and the first action that needs a
+ * backend hands you to sign-in with the app as the return destination.
+ * Bouncing anonymous visitors straight to a login form made the front door
+ * look like a wall.
+ *
+ * Because the destination no longer depends on who is asking, this does not
+ * read the session at all, which spares every root request a Supabase
+ * round-trip.
+ */
 export default async function Home({
   searchParams,
 }: {
@@ -25,10 +32,5 @@ export default async function Home({
     redirect(`/auth/callback?${qs.toString()}`)
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  redirect(user ? APP_HOME : `/sign-in?next=${encodeURIComponent(APP_HOME)}`)
+  redirect(APP_HOME)
 }

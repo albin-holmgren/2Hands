@@ -27,6 +27,7 @@ import type { OrbState } from '@2hands/types/v3'
 import { useAuth } from '@/hooks/use-auth'
 import { useWorkspaceStore } from '@/store/workspace-store'
 import { cn } from '@/lib/utils'
+import { APP_HOME } from '@/lib/auth/redirect-paths'
 import { Orb } from '@/components/v3/orb/orb'
 import { Composer } from '@/components/v3/composer/composer'
 import { EmptyState } from '@/components/v3/empty-state'
@@ -172,11 +173,25 @@ export function V3Shell() {
     (row) => row.id === 'demo-computer' && row.status === 'demo',
   )
 
-  // Defensive client-side guard — the (dashboard) layout already redirects
-  // server-side; this mirrors the existing app page's pattern.
+  // No redirect for signed-out visitors: this surface is browsable without a
+  // session, and the gate sits on the actions instead (see handleSend). The
+  // shell has nothing to leak — it starts empty, and every backend call is
+  // behind an action that checks `user` first.
+  const isGuest = !authLoading && !user
+
+  const goToSignIn = React.useCallback(() => {
+    router.push(`/sign-in?next=${encodeURIComponent(APP_HOME)}`)
+  }, [router])
+
+  // `isSpeechSupported()` answers false on the server and true in the browser,
+  // so reading it during render made the server and client HTML disagree and
+  // React discarded the whole shell on hydration. Resolve it in an effect
+  // instead: both first renders agree the toggle is absent, and it appears
+  // once we actually know.
+  const [speechSupported, setSpeechSupported] = React.useState(false)
   React.useEffect(() => {
-    if (!authLoading && !user) router.push('/sign-in')
-  }, [authLoading, user, router])
+    setSpeechSupported(isSpeechSupported())
+  }, [])
 
   // Keep the latest content in view.
   React.useEffect(() => {
@@ -322,8 +337,11 @@ export function V3Shell() {
 
   const handleSend = React.useCallback(
     async (text: string) => {
+      // The gate for the whole surface: browsing is free, acting needs an
+      // account. Returning to APP_HOME afterwards keeps the visitor where they
+      // were instead of dropping them on a dashboard they did not ask for.
       if (!user) {
-        router.push('/sign-in')
+        goToSignIn()
         return
       }
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
@@ -348,7 +366,7 @@ export function V3Shell() {
         void runDemoPipeline(taskId, text)
       }
     },
-    [user, router, note, stream, demoComputerEnabled, runDemoPipeline],
+    [user, goToSignIn, note, stream, demoComputerEnabled, runDemoPipeline],
   )
 
   const handleGoldenPath = React.useCallback(() => {
@@ -577,7 +595,7 @@ export function V3Shell() {
           </div>
         )}
         <div className="flex items-center gap-2">
-          {isSpeechSupported() && (
+          {speechSupported && (
             <button
               type="button"
               onClick={toggleVoiceReplies}
@@ -595,12 +613,37 @@ export function V3Shell() {
               {voiceReplies ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
             </button>
           )}
-          <AccountButton
-            name={displayName}
-            avatarUrl={profile?.avatar_url ?? undefined}
-            credits={credits}
-            onClick={() => router.push('/settings')}
-          />
+          {authLoading ? (
+            // Auth resolves client-side, so the server HTML cannot know who
+            // this is. Hold the space rather than guessing: rendering the
+            // account button would flash a "?" avatar at signed-out visitors,
+            // and rendering "Sign in" would flash the wrong call to action at
+            // everyone else.
+            <div className="size-11 shrink-0" aria-hidden />
+          ) : isGuest ? (
+            // Signed-out: an avatar with a "?" in it says nothing. Offer the
+            // one thing this visitor can actually do.
+            <button
+              type="button"
+              data-slot="guest-sign-in"
+              onClick={goToSignIn}
+              className={cn(
+                'flex h-11 shrink-0 items-center rounded-full px-5',
+                'bg-[#D97757] text-[15px] leading-[20px] font-medium text-white',
+                'transition-colors duration-150 hover:bg-[#C86647]',
+                'focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none'
+              )}
+            >
+              Sign in
+            </button>
+          ) : (
+            <AccountButton
+              name={displayName}
+              avatarUrl={profile?.avatar_url ?? undefined}
+              credits={credits}
+              onClick={() => router.push('/settings')}
+            />
+          )}
         </div>
       </header>
 

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { validateRedirectPath } from '@/lib/auth/redirect-paths'
+import { APP_HOME, validateRedirectPath } from '@/lib/auth/redirect-paths'
 
 /**
  * Build a redirect response that carries over any auth cookies Supabase set on
@@ -62,6 +62,23 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  // The root is a doorway, not a page — everyone goes to the app.
+  //
+  // Doing this here rather than in app/page.tsx makes it a real 307. The page
+  // reads searchParams, so it renders dynamically and Next streams the
+  // redirect inside the RSC payload: the browser first receives a blank
+  // document and only then navigates. Same destination, one less paint.
+  //
+  // Runs before the Supabase client is built, so the root costs no auth
+  // round-trip; the session is refreshed by this same middleware on the very
+  // next request, for APP_HOME.
+  if (pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = validateRedirectPath(request.nextUrl.searchParams.get('next'))
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 
@@ -91,8 +108,16 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Public routes that don't require auth
-  const isPublicRoute = 
+  const isPublicRoute =
     pathname === '/' ||
+    // The app surface itself is browsable signed-out, the way ChatGPT lets you
+    // see the product before you have an account. Nothing here reads data
+    // without a session: the shell renders its empty state, and the first
+    // action that would touch the backend sends the visitor to sign-in.
+    //
+    // Exact match, deliberately — `/app` and everything else under it (the
+    // legacy dashboard, settings) stays behind the session gate.
+    pathname === APP_HOME ||
     pathname.startsWith('/sign-in') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/forgot-password') ||
