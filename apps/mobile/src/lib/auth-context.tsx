@@ -106,22 +106,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // app/auth/callback.tsx never runs. Discarding this result meant Google
     // sign-in could never complete on iOS. Android does fire a real deep link;
     // the callback screen remains the fallback for that path.
+    // 'cancel'/'dismiss' means the user backed out — not an error worth showing.
     if (result.type !== 'success' || !result.url) return
 
+    // Supabase returns the PKCE code in the query string, but an implicit-flow
+    // response puts tokens in the URL *fragment*, which Linking.parse ignores
+    // entirely. Reading only queryParams meant a fragment response produced no
+    // code, and the function returned silently: browser closes, no error, still
+    // logged out. Parse both.
     const { queryParams } = Linking.parse(result.url)
+    const fragment = result.url.includes('#')
+      ? new URLSearchParams(result.url.slice(result.url.indexOf('#') + 1))
+      : new URLSearchParams()
 
-    const returnedError = firstParam(queryParams?.error)
+    const param = (name: string) => firstParam(queryParams?.[name]) || fragment.get(name) || null
+
+    const returnedError = param('error')
     if (returnedError) {
-      throw new Error(firstParam(queryParams?.error_description) || returnedError)
+      throw new Error(param('error_description') || returnedError)
     }
 
-    const code = firstParam(queryParams?.code)
-    if (!code) return
-
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-    if (exchangeError) {
-      throw exchangeError
+    const code = param('code')
+    if (code) {
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      if (exchangeError) throw exchangeError
+      return
     }
+
+    const accessToken = param('access_token')
+    const refreshToken = param('refresh_token')
+    if (accessToken && refreshToken) {
+      const { error: setError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+      if (setError) throw setError
+      return
+    }
+
+    // Getting here means the provider came back without anything we can turn
+    // into a session. Say so rather than returning quietly — a silent no-op is
+    // indistinguishable from the app being broken.
+    throw new Error('Sign-in returned no credentials. Please try again.')
   }
 
   return (

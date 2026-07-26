@@ -37,7 +37,7 @@ function ArrowLeftIcon({ size = 16, color }: { size?: number; color: string }) {
 }
 
 export default function LoginScreen() {
-  const { isDark, colors } = useTheme()
+  const { colors } = useTheme()
   const { ref } = useLocalSearchParams<{ ref?: string }>()
   
   const { signIn, signUp, signInWithOAuth, resetPassword } = useAuth()
@@ -214,9 +214,11 @@ export default function LoginScreen() {
             <View style={{ flex: 1, paddingHorizontal: 32, paddingBottom: 40, justifyContent: 'flex-end' }}>
               
               <FadeInDownView style={{ alignItems: 'center', marginBottom: 48 }}>
-                <Image 
-                  source={isDark ? require('../../assets/logo-white.png') : require('../../assets/logo-black.png')} 
-                  style={{ width: 40, height: 40 }}
+                {/* Terracotta on transparency, so it reads the same on either
+                    theme — no plate behind it, no light/dark variants. */}
+                <Image
+                  source={require('../../assets/logo-terracotta.png')}
+                  style={{ width: 72, height: 72 }}
                   resizeMode="contain"
                 />
               </FadeInDownView>

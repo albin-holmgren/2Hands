@@ -241,9 +241,9 @@ export default function UpgradeScreen() {
             {/* Header */}
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <FadeInDownView delay={100}>
-                <Image 
-                  source={isDark ? require('../../assets/logo-white.png') : require('../../assets/logo-black.png')} 
-                  style={{ width: 48, height: 48, marginBottom: 16 }}
+                <Image
+                  source={require('../../assets/logo-terracotta.png')}
+                  style={{ width: 72, height: 72, marginBottom: 16 }}
                   resizeMode="contain"
                 />
               </FadeInDownView>

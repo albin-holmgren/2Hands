@@ -23,7 +23,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1A1918"
+        "backgroundColor": "#34322D"
       },
       "package": "com.twohands.app",
       "permissions": [
