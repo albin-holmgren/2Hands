@@ -7,6 +7,12 @@
  */
 export { FixtureComputerProvider, type FixtureProviderOptions } from './fixture'
 export { LocalDockerComputerProvider, type DockerProviderOptions } from './local-docker'
+export {
+  FlyComputerProvider,
+  worstCaseMonthlyUsd,
+  WORKSPACE_MOUNT,
+  type FlyProviderOptions,
+} from './fly'
 export { RunnerHost, type RunnerHostOptions } from './runner-host'
 export {
   isPathAllowed,
