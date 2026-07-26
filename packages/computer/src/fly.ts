@@ -261,12 +261,14 @@ export class FlyComputerProvider implements ComputerProvider {
       encrypted: true,
     })
 
-    // skip_launch: created stopped. A computer costs nothing but its volume
-    // until a task actually needs it.
+    // Deliberately NOT skip_launch. That leaves the machine in state
+    // 'created', which Fly refuses to start ("unable to start machine from
+    // current state: 'created'") — there is no launch endpoint to get out of
+    // it. So let it boot once and stop it below; a few seconds of compute buys
+    // a machine that is actually startable for the rest of its life.
     const machine = await this.api<FlyMachine>('POST', `/apps/${this.opts.appName}/machines`, {
       name: this.machineName(id),
       region,
-      skip_launch: true,
       config: {
         image: input.imageRef || this.opts.defaultImage,
         guest: { cpu_kind: 'shared', cpus: this.opts.cpus, memory_mb: this.opts.memoryMb },
@@ -282,6 +284,20 @@ export class FlyComputerProvider implements ComputerProvider {
       },
     })
 
+    // Park it stopped: an idle computer should bill for its volume and nothing
+    // else. It comes back up on the first session.
+    await this.api(
+      'GET',
+      `/apps/${this.opts.appName}/machines/${machine.id}/wait?state=started&timeout=60`,
+    )
+    await this.api('POST', `/apps/${this.opts.appName}/machines/${machine.id}/stop`)
+    // Stop is asynchronous. Without waiting, this returns while the machine is
+    // still 'stopping', and the very next startSession is rejected with a 412.
+    await this.api(
+      'GET',
+      `/apps/${this.opts.appName}/machines/${machine.id}/wait?state=stopped&timeout=60`,
+    )
+
     const nowIso = this.opts.now().toISOString()
     return {
       id,
@@ -290,7 +306,7 @@ export class FlyComputerProvider implements ComputerProvider {
       provider: this.id,
       providerWorkspaceRef: `${machine.id}:${volume.id}`,
       name: input.name,
-      state: toComputerState(machine.state),
+      state: 'stopped',
       imageRef: input.imageRef || this.opts.defaultImage,
       blueprintVersion: 1,
       storageBytes: this.opts.volumeSizeGb * 1024 * 1024 * 1024,
@@ -334,7 +350,26 @@ export class FlyComputerProvider implements ComputerProvider {
     networkPolicyId: string
   }): Promise<ComputerSession> {
     const machineId = this.machineIdOf(input.computer)
-    await this.api('POST', `/apps/${this.opts.appName}/machines/${machineId}/start`)
+
+    // Fly releases a stopped machine asynchronously: for a short window after
+    // it reports 'stopped' a start is still rejected with 412 ("machine still
+    // active, refusing to start"). That window is normal, not an error, so
+    // retry through it rather than failing a user's task on a race.
+    let lastError: unknown
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        await this.api('POST', `/apps/${this.opts.appName}/machines/${machineId}/start`)
+        lastError = undefined
+        break
+      } catch (error) {
+        lastError = error
+        const message = error instanceof Error ? error.message : String(error)
+        const transient = message.includes('412') || message.includes('still active')
+        if (!transient) throw error
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+      }
+    }
+    if (lastError) throw lastError
 
     // Block until the machine is actually usable, so callers never hand work
     // to a machine that is still booting.
@@ -359,6 +394,14 @@ export class FlyComputerProvider implements ComputerProvider {
     const machineId = session.providerSessionRef
     if (machineId) {
       await this.api('POST', `/apps/${this.opts.appName}/machines/${machineId}/stop`)
+    }
+    if (machineId) {
+      // Same reason as in createWorkspace: leave the machine genuinely stopped,
+      // so the next session can start it instead of hitting a 412.
+      await this.api(
+        'GET',
+        `/apps/${this.opts.appName}/machines/${machineId}/wait?state=stopped&timeout=60`,
+      )
     }
     return {
       ...session,
