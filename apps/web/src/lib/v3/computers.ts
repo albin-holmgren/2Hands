@@ -17,6 +17,7 @@ import {
   FixtureComputerProvider,
   FlyComputerProvider,
   LocalDockerComputerProvider,
+  type PlanId,
 } from '@2hands/computer'
 import type { ComputerProvider, ComputerSession, ComputerWorkspace } from '@2hands/types/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -604,4 +605,59 @@ export async function releaseWriteLease(leaseId: string): Promise<boolean> {
   const { data, error } = await rpc(admin, 'v3_release_write_lease', { p_lease_id: leaseId })
   if (error) throw new Error(`releaseWriteLease failed: ${error.message}`)
   return data === true
+}
+
+// ---------------------------------------------------------------------------
+// Plan changes
+
+/**
+ * Move a user's computers onto the hardware their new plan grants.
+ *
+ * Called from the Stripe webhook, so it must never throw: a resize that fails
+ * is a computer on the wrong size, which is recoverable. A webhook that throws
+ * is a subscription Stripe keeps retrying and a user whose plan never applies,
+ * which is not. Failures are recorded per computer and returned to the caller
+ * to log.
+ *
+ * Only the Fly provider resizes — the fixture and Docker providers have no
+ * notion of plan hardware, and asking them to would be meaningless rather than
+ * harmless.
+ */
+export async function resizeComputersForPlan(
+  ownerUserId: string,
+  plan: PlanId,
+): Promise<{ resized: number; failed: number; errors: string[] }> {
+  const result = { resized: 0, failed: 0, errors: [] as string[] }
+  if (selectedProviderId() !== 'fly') return result
+
+  const supabase = createAdminClient()
+  const { data } = await table(supabase, 'computers')
+    .select('*')
+    .eq('owner_user_id', ownerUserId)
+    .eq('provider', 'fly')
+    .neq('state', 'deleted')
+
+  const rows = (data ?? []) as ComputerRow[]
+
+  for (const row of rows) {
+    try {
+      const provider = providerFor(row) as FlyComputerProvider
+      const updated = await provider.applyPlan({ computer: rowToWorkspace(row), plan })
+      await table(supabase, 'computers')
+        .update({
+          state: updated.state,
+          storage_bytes: updated.storageBytes ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id)
+      result.resized += 1
+    } catch (error) {
+      result.failed += 1
+      result.errors.push(
+        `${row.id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  return result
 }

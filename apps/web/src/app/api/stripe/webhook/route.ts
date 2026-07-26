@@ -12,6 +12,7 @@ import {
 } from '@/lib/stripe/config'
 import Stripe from 'stripe'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit'
+import { resizeComputersForPlan } from '@/lib/v3/computers'
 
 // Lazy initialization to avoid build-time errors
 let _supabaseAdmin: ReturnType<typeof createClient> | null = null
@@ -167,6 +168,28 @@ async function getUserIdFromSubscription(subscription: Stripe.Subscription): Pro
   return data?.id || null
 }
 
+
+/**
+ * Give the user the hardware their plan now grants.
+ *
+ * Never allowed to break the webhook: a computer left on the old size is
+ * recoverable, whereas throwing here makes Stripe retry the event and can
+ * leave the subscription itself unapplied.
+ */
+async function applyPlanToComputers(userId: string, plan: string) {
+  try {
+    const result = await resizeComputersForPlan(userId, plan as never)
+    if (result.resized || result.failed) {
+      console.log(
+        `Computers resized for ${userId} -> ${plan}: ${result.resized} ok, ${result.failed} failed`,
+        result.errors,
+      )
+    }
+  } catch (error) {
+    console.error(`Computer resize failed for ${userId} -> ${plan}:`, error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Rate limiting to prevent flooding
   const rateLimitResponse = await checkRateLimit(request, 'stripe-webhook', RATE_LIMITS.webhook)
@@ -246,6 +269,8 @@ export async function POST(request: NextRequest) {
 
           console.log(`Subscription activated for user ${userId}: ${planDetails.plan} with ${planDetails.credits} credits/mo (cap: ${creditCap}). Balance: ${newBalance}`)
 
+          await applyPlanToComputers(userId, planDetails.plan)
+
         } else if (session.mode === 'payment') {
           // One-time credit pack purchase - get credits from line items
           const lineItems = await stripe.checkout.sessions.listLineItems(session.id)
@@ -305,6 +330,10 @@ export async function POST(request: NextRequest) {
           .eq('id', userId)
 
         console.log(`Subscription updated for user ${userId}: status=${status}, plan=${planDetails?.plan || 'unchanged'}`)
+
+        if (updateData.plan_type) {
+          await applyPlanToComputers(userId, String(updateData.plan_type))
+        }
         break
       }
 
