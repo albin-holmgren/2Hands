@@ -50,6 +50,7 @@ import { processApprovalResponse } from '@/lib/proactive/autonomy-gating'
 import { diagnoseIntegrationError } from '@/lib/execution/execute-first-policy'
 import { getUserMissions, createMission, updateMissionStatus, updateMission, getMission, formatMissionsForPrompt } from '@/lib/missions/mission-service'
 import { deductCredits, deductWorkspaceCredits } from '@/lib/credits'
+import { extractResponseText } from '@/lib/ai/response-text'
 import {
   getConversationState, 
   updateConversationState, 
@@ -5776,7 +5777,7 @@ This format is concise, scannable, and action-oriented. Use it for any multi-ste
                       content: `Summarize this conversation in 2-3 sentences. Focus on key topics, decisions, and any commitments made.\n\n${transcript}`
                     }]
                   })
-                  const summaryText = summaryResp.content[0].type === 'text' ? summaryResp.content[0].text : ''
+                  const summaryText = extractResponseText(summaryResp)
                   if (summaryText.trim()) {
                     await supabase
                       .from('conversations')

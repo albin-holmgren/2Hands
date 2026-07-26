@@ -7,6 +7,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createNonStreamingMessageWithFallback, DEFAULT_MODEL } from '@/lib/ai/ai-client'
+import { extractResponseText } from '@/lib/ai/response-text'
 
 export interface AgentReflection {
   whatWorked: string[]
@@ -63,9 +64,7 @@ Respond in this exact JSON format:
       messages: [{ role: 'user', content: reflectionPrompt }],
     })
     
-    const responseText = response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : ''
+    const responseText = extractResponseText(response)
     
     // Parse JSON response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)

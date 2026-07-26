@@ -19,8 +19,9 @@ import {
   markQuestionAsked,
   type UserPersonalization 
 } from './user-profile'
-import { 
-  selectOutreachStrategy, 
+import { extractResponseText } from '@/lib/ai/response-text'
+import {
+  selectOutreachStrategy,
   recordOutreachOutcome,
   getOutreachPromptModifiers,
   applyContextualAdjustments
@@ -114,9 +115,7 @@ Guidelines:
       messages: [{ role: 'user', content: prompt }],
     })
     
-    return response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : ''
+    return extractResponseText(response)
   } catch (error) {
     console.error('[ProactiveOutreach] Error generating message:', error)
     return getFallbackMessage(context, profile)

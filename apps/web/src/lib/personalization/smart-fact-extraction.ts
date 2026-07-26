@@ -12,6 +12,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { withCache, queueFactExtraction, getPendingExtractions } from '@/lib/ai/llm-cache'
 import { createNonStreamingMessageWithFallback, DEFAULT_MODEL } from '@/lib/ai/ai-client'
+import { extractResponseText } from '@/lib/ai/response-text'
 
 export interface ExtractedFact {
   fact: string
@@ -93,13 +94,13 @@ Be conservative - only extract facts you're reasonably confident about.`
           messages: [{ role: 'user', content: prompt }],
         })
         
-        const content = response.content[0]
-        if (content.type !== 'text') {
+        const text = extractResponseText(response)
+        if (!text) {
           return JSON.stringify({ facts: [], inputTokens: 0, outputTokens: 0 })
         }
-        
+
         return JSON.stringify({
-          text: content.text,
+          text,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
         })

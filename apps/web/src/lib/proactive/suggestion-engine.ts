@@ -13,6 +13,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { createNonStreamingMessageWithFallback, DEFAULT_MODEL } from '@/lib/ai/ai-client'
+import { extractResponseText } from '@/lib/ai/response-text'
 
 export interface ProactiveSuggestion {
   id: string
@@ -109,9 +110,7 @@ Respond with JSON array:
       messages: [{ role: 'user', content: patternPrompt }],
     })
     
-    const responseText = response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : ''
+    const responseText = extractResponseText(response)
     
     const jsonMatch = responseText.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return []

@@ -10,7 +10,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createNonStreamingMessageWithFallback, DEFAULT_MODEL, DEFAULT_FALLBACK_MODELS } from '@/lib/ai/ai-client'
-import { 
+import { extractResponseText } from '@/lib/ai/response-text'
+import {
   getRecentDailyLogs,
   updateMemoryDocument,
   getMemoryDocument,
@@ -98,9 +99,7 @@ Respond in this exact JSON format:
       messages: [{ role: 'user', content: curationPrompt }],
     })
     
-    const responseText = response.content[0].type === 'text' 
-      ? response.content[0].text 
-      : ''
+    const responseText = extractResponseText(response)
     
     // Parse JSON response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/)

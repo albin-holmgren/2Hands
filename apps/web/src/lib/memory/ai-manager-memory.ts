@@ -15,6 +15,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createNonStreamingMessageWithFallback, DEFAULT_MODEL } from '@/lib/ai/ai-client'
+import { extractResponseText } from '@/lib/ai/response-text'
 
 type RpcFn = <T = unknown>(
   fn: string,
@@ -256,7 +257,7 @@ Rules:
       }]
     })
     
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    const text = extractResponseText(response)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     
     if (jsonMatch) {
@@ -312,7 +313,7 @@ Rules:
 - Max 3 memories per turn`
         }]
       })
-      const retryText = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : ''
+      const retryText = extractResponseText(retryResponse)
       const retryMatch = retryText.match(/\{[\s\S]*\}/)
       if (retryMatch) {
         const parsed = JSON.parse(retryMatch[0]) as {
