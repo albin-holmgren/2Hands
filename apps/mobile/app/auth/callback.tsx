@@ -41,7 +41,7 @@ export default function AuthCallback() {
         return
       }
 
-      router.replace('/(app)/(tabs)')
+      router.replace('/(app)/v3')
     }
 
     run()

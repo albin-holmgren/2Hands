@@ -133,7 +133,7 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      router.replace('/(app)/(tabs)')
+      router.replace('/(app)/v3')
     }
 
     setIsLoading(false)

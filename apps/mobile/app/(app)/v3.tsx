@@ -38,7 +38,8 @@ import { usePushToTalk } from '@/components/v3/use-push-to-talk'
  * a local demo state machine (idle → listening → thinking → idle) until
  * the real task event stream lands in Slice 2.
  *
- * Additive route — the existing (tabs) surface is untouched.
+ * The app's home screen. The previous (tabs) surface remains reachable
+ * but is no longer where sign-in lands.
  */
 
 interface LocalMessage {

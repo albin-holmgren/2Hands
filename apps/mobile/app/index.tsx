@@ -13,8 +13,11 @@ export default function Index() {
     )
   }
 
+  // Land in the v3 conversation shell, not the previous tabbed product. The
+  // v3 screen already existed and shipped inside the bundle, but nothing ever
+  // routed to it, so every build opened the old app.
   if (session) {
-    return <Redirect href="/(app)/(tabs)" />
+    return <Redirect href="/(app)/v3" />
   }
 
   return <Redirect href="/(auth)/login" />
