@@ -65,6 +65,21 @@ export async function requestAssistantReply(input: {
   })
 
   if (!response.ok) {
+    // A cross-origin redirect silently drops the Authorization header — the
+    // Fetch spec strips it rather than forwarding credentials to another
+    // origin. www.2hands.ai 307s to the apex domain, so pointing
+    // EXPO_PUBLIC_API_URL at www produced a request that arrived with no
+    // credentials at all and a bare "Unauthorized" that said nothing about
+    // why. Name the actual cause instead of the symptom.
+    if (response.status === 401 && response.redirected) {
+      throw new ChatUnavailableError(
+        `Signed in, but the request was redirected from ${API_URL} to ${response.url}, ` +
+          'which strips the Authorization header. Point EXPO_PUBLIC_API_URL at the ' +
+          'domain that answers directly, with no redirect.',
+        401,
+      )
+    }
+
     const body = await response.text().catch(() => '')
     throw new ChatUnavailableError(
       body.slice(0, 200) || `The assistant is unavailable (HTTP ${response.status}).`,

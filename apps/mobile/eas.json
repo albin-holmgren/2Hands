@@ -23,7 +23,7 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://www.2hands.ai",
+        "EXPO_PUBLIC_API_URL": "https://2hands.ai",
         "EXPO_PUBLIC_SUPABASE_URL": "https://kdckzcxhwparcayxbkqp.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkY2t6Y3hod3BhcmNheXhia3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NjkxODMsImV4cCI6MjA4NDE0NTE4M30.M66719G2qqN6LF83m4T_ulrJOGqc57VkT3cHHVseqpc"
       },
@@ -36,7 +36,7 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://www.2hands.ai",
+        "EXPO_PUBLIC_API_URL": "https://2hands.ai",
         "EXPO_PUBLIC_SUPABASE_URL": "https://kdckzcxhwparcayxbkqp.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkY2t6Y3hod3BhcmNheXhia3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NjkxODMsImV4cCI6MjA4NDE0NTE4M30.M66719G2qqN6LF83m4T_ulrJOGqc57VkT3cHHVseqpc"
       }
