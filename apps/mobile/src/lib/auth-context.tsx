@@ -36,11 +36,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
+    let active = true
+
+    /**
+     * Restore the session, then check the server still accepts it.
+     *
+     * getSession() only reads persisted storage — it will happily return a
+     * token for a user that no longer exists. The app then looks signed in
+     * while every authenticated request comes back 401, which reads as "the
+     * API is broken" rather than "you need to sign in again". getUser() is the
+     * call that actually asks the server.
+     */
+    const restore = async () => {
+      const {
+        data: { session: stored },
+      } = await supabase.auth.getSession()
+
+      if (!active) return
+
+      if (!stored) {
+        setSession(null)
+        setUser(null)
+        setIsLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase.auth.getUser()
+      if (!active) return
+
+      // Only discard the session when the server actively rejects it. A
+      // network blip must not sign someone out — treat unreachable as
+      // "assume valid and carry on", since the next real request will fail
+      // loudly anyway.
+      const rejected =
+        error != null &&
+        typeof (error as { status?: number }).status === 'number' &&
+        [401, 403].includes((error as { status?: number }).status as number)
+
+      if (rejected) {
+        await supabase.auth.signOut().catch(() => undefined)
+        if (!active) return
+        setSession(null)
+        setUser(null)
+        setIsLoading(false)
+        return
+      }
+
+      setSession(stored)
+      setUser(data?.user ?? stored.user ?? null)
       setIsLoading(false)
-    })
+    }
+
+    void restore()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
@@ -48,7 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {

@@ -98,7 +98,7 @@ export default function AgentDetailScreen() {
   // Track collapsed state for thinking messages
   const [collapsedThinking, setCollapsedThinking] = useState<Set<string>>(new Set())
   
-  const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.2hands.ai'
+  const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2hands.ai'
 
   // Settings pan responder for drag-to-close
   const settingsPanResponder = useRef(

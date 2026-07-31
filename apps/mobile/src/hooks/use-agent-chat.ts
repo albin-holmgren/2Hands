@@ -38,7 +38,7 @@ const getApiUrl = () => {
   }
   
   // Default to production
-  return 'https://www.2hands.ai'
+  return 'https://2hands.ai'
 }
 const API_URL = getApiUrl()
 

@@ -80,6 +80,17 @@ export async function requestAssistantReply(input: {
       )
     }
 
+    if (response.status === 401) {
+      // The stored token was refused. It cannot be recovered by retrying, so
+      // clear it: that returns the user to sign-in instead of leaving them in
+      // an app that looks logged in and rejects everything they do.
+      await supabase.auth.signOut().catch(() => undefined)
+      throw new ChatUnavailableError(
+        'Your session is no longer valid. Please sign in again.',
+        401,
+      )
+    }
+
     const body = await response.text().catch(() => '')
     throw new ChatUnavailableError(
       body.slice(0, 200) || `The assistant is unavailable (HTTP ${response.status}).`,

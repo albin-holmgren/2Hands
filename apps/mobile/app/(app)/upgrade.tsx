@@ -131,7 +131,7 @@ export default function UpgradeScreen() {
         return
       }
 
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.2hands.ai'
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2hands.ai'
       const interval = selectedPlan === 'annually' ? 'yearly' : 'monthly'
 
       const res = await fetch(`${API_URL}/api/stripe/checkout`, {
@@ -175,7 +175,7 @@ export default function UpgradeScreen() {
         return
       }
 
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.2hands.ai'
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2hands.ai'
 
       const res = await fetch(`${API_URL}/api/stripe/checkout`, {
         method: 'POST',
