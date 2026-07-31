@@ -170,7 +170,7 @@ export class FlyComputerProvider implements ComputerProvider {
       apiToken: options.apiToken,
       appName: options.appName,
       region: options.region ?? 'arn',
-      defaultImage: options.defaultImage ?? 'ubuntu:24.04',
+      defaultImage: options.defaultImage ?? 'node:22-slim',
       cpus: options.cpus ?? 1,
       memoryMb: options.memoryMb ?? 512,
       volumeSizeGb: options.volumeSizeGb ?? 1,
@@ -565,6 +565,132 @@ export class FlyComputerProvider implements ComputerProvider {
       ...session,
       activeCpuMs: wallMs * this.opts.cpus,
       memoryGbMs: wallMs * (this.opts.memoryMb / 1024),
+    }
+  }
+
+  /**
+   * Run a command inside a started machine and return its output.
+   *
+   * Fly's exec endpoint caps timeouts at about a minute, so this is for
+   * bounded plumbing — writing files, checking status, launching daemons —
+   * not for the agent job itself. Long work runs detached via runAgentJob and
+   * is polled, which is also what keeps a dropped HTTP connection from
+   * killing a half-finished job.
+   */
+  async execCommand(input: {
+    computer: ComputerWorkspace
+    command: string[]
+    timeoutSeconds?: number
+  }): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+    const machineId = this.machineIdOf(input.computer)
+    const result = await this.api<{
+      stdout?: string
+      stderr?: string
+      exit_code?: number
+    }>('POST', `/apps/${this.opts.appName}/machines/${machineId}/exec`, {
+      command: input.command,
+      timeout: Math.min(input.timeoutSeconds ?? 30, 55),
+    })
+    return {
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      exitCode: result.exit_code ?? null,
+    }
+  }
+
+  /**
+   * Launch a Claude Code job in the machine, detached, under /workspace.
+   *
+   * The job script goes over as base64 — shell quoting through two layers of
+   * JSON and sh -c is exactly the kind of thing that corrupts a prompt
+   * containing an apostrophe. Progress lands in /workspace/jobs/<id>/, which
+   * survives restarts because it is on the volume; pollAgentJob reads it back.
+   *
+   * The gateway key is passed into the job's environment inside the VM and is
+   * never written to the volume — job artifacts persist, credentials must not.
+   */
+  async runAgentJob(input: {
+    computer: ComputerWorkspace
+    jobId: string
+    prompt: string
+    gatewayKey: string
+    gatewayBaseUrl?: string
+    model?: string
+    allowedTools?: string
+  }): Promise<void> {
+    const dir = `/workspace/jobs/${input.jobId}`
+    const promptB64 = Buffer.from(input.prompt, 'utf8').toString('base64')
+    const script = [
+      '#!/bin/sh',
+      `mkdir -p ${dir}`,
+      // Claude Code needs a writable HOME for its state; the volume provides
+      // one that persists, which also preserves session context per computer.
+      'export HOME=/workspace',
+      `export ANTHROPIC_BASE_URL="${input.gatewayBaseUrl ?? 'https://ai-gateway.vercel.sh'}"`,
+      `export ANTHROPIC_AUTH_TOKEN="$AGENT_GATEWAY_KEY"`,
+      `export ANTHROPIC_MODEL="${input.model ?? 'anthropic/claude-sonnet-4'}"`,
+      'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
+      'command -v claude >/dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > ' +
+        `${dir}/install.log 2>&1`,
+      'cd /workspace',
+      `claude -p "$(base64 -d < ${dir}/prompt.b64)" ` +
+        `--allowedTools "${input.allowedTools ?? 'Write,Edit,Read,Bash'}" ` +
+        `--output-format json > ${dir}/result.json 2> ${dir}/stderr.log`,
+      `echo $? > ${dir}/exit`,
+    ].join('\n')
+    const scriptB64 = Buffer.from(script, 'utf8').toString('base64')
+
+    await this.execCommand({
+      computer: input.computer,
+      command: [
+        'sh',
+        '-c',
+        `mkdir -p ${dir} && echo ${promptB64} | base64 -d > ${dir}/prompt.b64 && ` +
+          `echo ${scriptB64} | base64 -d > ${dir}/run.sh && chmod +x ${dir}/run.sh`,
+      ],
+    })
+    await this.execCommand({
+      computer: input.computer,
+      command: [
+        'sh',
+        '-c',
+        `AGENT_GATEWAY_KEY='${input.gatewayKey.replace(/'/g, '')}' nohup ${dir}/run.sh > ${dir}/boot.log 2>&1 & echo launched`,
+      ],
+    })
+  }
+
+  /** Read a detached job's state back from the volume. */
+  async pollAgentJob(input: {
+    computer: ComputerWorkspace
+    jobId: string
+  }): Promise<
+    | { done: false }
+    | { done: true; exitCode: number; resultJson: string; stderr: string }
+  > {
+    const dir = `/workspace/jobs/${input.jobId}`
+    const probe = await this.execCommand({
+      computer: input.computer,
+      command: ['sh', '-c', `test -f ${dir}/exit && echo done || echo running`],
+    })
+    if (!probe.stdout.includes('done')) return { done: false }
+
+    const read = await this.execCommand({
+      computer: input.computer,
+      command: [
+        'sh',
+        '-c',
+        `echo "EXIT:$(cat ${dir}/exit)"; echo "---RESULT---"; cat ${dir}/result.json 2>/dev/null; echo; echo "---STDERR---"; tail -c 2000 ${dir}/stderr.log 2>/dev/null`,
+      ],
+      timeoutSeconds: 30,
+    })
+    const exitMatch = read.stdout.match(/EXIT:(\d+)/)
+    const [, rest = ''] = read.stdout.split('---RESULT---')
+    const [resultJson = '', stderr = ''] = rest.split('---STDERR---')
+    return {
+      done: true,
+      exitCode: exitMatch ? Number(exitMatch[1]) : 1,
+      resultJson: resultJson.trim(),
+      stderr: stderr.trim(),
     }
   }
 

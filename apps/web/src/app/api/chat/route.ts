@@ -12,6 +12,7 @@ import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { getV3SystemPrompt } from '@/lib/ai/v3-system-prompt'
+import { runOnComputer, checkComputerJob } from '@/lib/v3/agent-jobs'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveWorkspaceScope } from '@/lib/enterprise/workspace-context'
 import { getAiTransport, getAnthropicSdkClient, normalizeModelForTransport } from '@/lib/ai/ai-client'
@@ -573,6 +574,45 @@ function normalizeAgentName(raw: unknown): string {
   }
   return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
 }
+
+
+/**
+ * The v3 surface's entire toolset. Deliberately tiny: v3 earns capabilities
+ * one verified path at a time instead of inheriting the legacy list, whose
+ * prompt contract (agents, missions, CRM writes) belongs to the old product.
+ */
+const V3_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'run_on_computer',
+    description:
+      "Run a task on the user's persistent hosted computer using a coding agent " +
+      '(Claude Code). Use for anything that needs real execution: writing files, ' +
+      'building or scaffolding projects, running commands, working with code. ' +
+      'Work happens under /workspace and persists between sessions. Returns the ' +
+      "agent's report, or a job id if the work is still running.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description:
+            'Complete instructions for the agent, self-contained — it cannot see this conversation.',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
+  {
+    name: 'check_computer_job',
+    description:
+      'Check whether a previously started computer job has finished, by job id.',
+    input_schema: {
+      type: 'object',
+      properties: { job_id: { type: 'string' } },
+      required: ['job_id'],
+    },
+  },
+]
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -2174,9 +2214,13 @@ The user's name is ${userName}. Be helpful, conversational, and share any releva
           const baseSystemPrompt = surface === 'v3'
             ? getV3SystemPrompt({
                 userName: effectiveUserName,
-                // v3 has no tools attached to this conversation yet, so the
-                // assistant must not claim to have carried work out.
-                executionAvailable: false,
+                // True only when the whole execution chain is configured —
+                // claiming the capability without it would reintroduce the
+                // lying this prompt exists to prevent.
+                executionAvailable:
+                  process.env.COMPUTER_PROVIDER === 'fly' &&
+                  Boolean(process.env.FLY_API_TOKEN) &&
+                  Boolean(process.env.AI_GATEWAY_API_KEY),
                 voiceReplies: false,
               })
             : getSystemPrompt(effectiveAiName, effectiveUserName, agentStatuses, effectiveNeedsName, { profile: voiceProfile, mirroringLevel, preferredStyle })
@@ -2350,6 +2394,10 @@ This format is concise, scannable, and action-oriented. Use it for any multi-ste
           // Only inject when tools are enabled for this turn (baseTools non-empty).
           if (chatIntegrationTypedTools.length > 0 && toolsToUse.length > 0) {
             toolsToUse = [...toolsToUse, ...chatIntegrationTypedTools as any[]]
+          }
+          // v3 replaces the legacy toolset wholesale — see V3_TOOLS.
+          if (surface === 'v3') {
+            toolsToUse = V3_TOOLS
           }
           capturedToolsToUse = toolsToUse
         }
@@ -4079,6 +4127,26 @@ This format is concise, scannable, and action-oriented. Use it for any multi-ste
                 toolResult = JSON.stringify({
                   success: false,
                   error: 'Failed to schedule follow-up',
+                })
+              }
+            } else if (toolCall.name === 'run_on_computer') {
+              try {
+                const outcome = await runOnComputer({ userId: user.id, prompt: String(input.prompt || '') })
+                toolResult = JSON.stringify(outcome)
+              } catch (computerError) {
+                toolResult = JSON.stringify({
+                  status: 'failed',
+                  error: computerError instanceof Error ? computerError.message : 'Computer job failed to start',
+                })
+              }
+            } else if (toolCall.name === 'check_computer_job') {
+              try {
+                const outcome = await checkComputerJob({ userId: user.id, jobId: String(input.job_id || '') })
+                toolResult = JSON.stringify(outcome)
+              } catch (computerError) {
+                toolResult = JSON.stringify({
+                  status: 'failed',
+                  error: computerError instanceof Error ? computerError.message : 'Job check failed',
                 })
               }
             } else if (toolCall.name === 'web_search') {
