@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@2hands/types": "workspace:*",
-    "@supabase/supabase-js": "^2.90.1"
+    "@supabase/supabase-js": "^2.110.9"
   },
   "devDependencies": {
     "typescript": "^5"

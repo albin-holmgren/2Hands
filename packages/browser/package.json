@@ -14,7 +14,7 @@
   "dependencies": {
     "@2hands/secret-broker": "workspace:*",
     "@2hands/types": "workspace:*",
-    "playwright-core": "^1.57.0"
+    "playwright-core": "^1.62.0"
   },
   "devDependencies": {
     "@types/node": "^20",
