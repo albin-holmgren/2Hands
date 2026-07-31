@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { Platform, Pressable, TextInput, View } from 'react-native'
-import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { ArrowUp, Mic } from 'lucide-react-native'
@@ -8,6 +7,7 @@ import type { OrbState } from '@2hands/types/v3'
 import { colors as brand } from '@2hands/tailwind-config'
 import { useTheme } from '@/lib/theme-context'
 import { ScalePressable } from '@/components/ui'
+import { Glass, concentricRadius } from '@/components/v3/glass'
 
 /**
  * Bottom voice/text composer (UX.md §2, BRAND_GUIDELINES §13).
@@ -15,6 +15,9 @@ import { ScalePressable } from '@/components/ui'
  * blur is expensive. Mic is the strongest control (44pt, terracotta);
  * send appears only when text is present. Mobile input text >= 16.
  */
+
+/** Outer radius of the composer shell; inner controls stay concentric with it. */
+const SHELL_RADIUS = 26
 
 interface ComposerProps {
   onSend: (text: string) => void
@@ -37,7 +40,6 @@ export function Composer({
 
   const hasText = text.trim().length > 0
   const isListening = orbState === 'listening'
-  const useBlur = Platform.OS === 'ios'
 
   const handleSend = () => {
     const trimmed = text.trim()
@@ -53,12 +55,6 @@ export function Composer({
     onMicPress()
   }
 
-  const shellStyle = {
-    borderRadius: 24,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.55)',
-  }
 
   const inner = (
     <View
@@ -70,11 +66,9 @@ export function Composer({
         paddingVertical: 6,
         paddingLeft: 16,
         paddingRight: 6,
-        backgroundColor: useBlur
-          ? isDark
-            ? 'rgba(44,43,39,0.55)'
-            : 'rgba(255,255,255,0.6)'
-          : colors.bgSecondary,
+        // Transparent: Glass owns the tint. A second wash here would double up
+        // and turn the blur into flat colour.
+        backgroundColor: 'transparent',
         opacity: disabled ? 0.5 : 1,
       }}
     >
@@ -112,7 +106,7 @@ export function Composer({
           style={{
             width: 44,
             height: 44,
-            borderRadius: 22,
+            borderRadius: concentricRadius(SHELL_RADIUS, 6),
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: brand.brand.terracotta,
@@ -131,7 +125,7 @@ export function Composer({
         style={{
           width: 44,
           height: 44,
-          borderRadius: 22,
+          borderRadius: concentricRadius(SHELL_RADIUS, 6),
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: hasText
@@ -160,13 +154,9 @@ export function Composer({
         paddingBottom: Math.max(insets.bottom, 16),
       }}
     >
-      {useBlur ? (
-        <BlurView intensity={40} tint={isDark ? 'dark' : 'light'} style={shellStyle}>
-          {inner}
-        </BlurView>
-      ) : (
-        <View style={shellStyle}>{inner}</View>
-      )}
+      <Glass elevation="bar" radius={SHELL_RADIUS}>
+        {inner}
+      </Glass>
     </View>
   )
 }

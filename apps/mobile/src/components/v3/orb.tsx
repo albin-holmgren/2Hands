@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { AccessibilityInfo, Pressable, View, ViewStyle } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withTiming,
@@ -15,9 +15,24 @@ import { colors as brand } from '@2hands/tailwind-config'
 import { useTheme } from '@/lib/theme-context'
 
 /**
- * The 2Hands intelligent orb — primary voice control and persistent state
- * indicator. 12 frozen states (IMPLEMENTATION_MAP §3.10); restrained,
- * state-tied motion only. Reduced motion → static fallbacks.
+ * The 2Hands mark, alive.
+ *
+ * This used to be a terracotta sphere with a cream specular highlight — a
+ * generic glossy orb that belonged to no particular product. The brand mark is
+ * six rounded bars in two groups of three, which already reads as a waveform,
+ * so it makes a far better voice-and-state indicator than a globe: the same
+ * shape that identifies the product also shows what it is doing.
+ *
+ * Each state drives the bars differently rather than tinting one blob:
+ *   idle              slow shared breath
+ *   listening         live waveform, bars moving independently
+ *   thinking/planning a travelling wave, left to right
+ *   speaking          faster, shallower waveform
+ *   waiting_approval  synchronised pulse — deliberately harder to ignore
+ *   error             still, tinted, no motion
+ *
+ * Reduced motion collapses every state to the static mark. The bars never
+ * disappear, so the logo is always legible.
  */
 
 export const ORB_SIZES = { hero: 128, compact: 32 } as const
@@ -38,11 +53,24 @@ export const ORB_STATE_LABELS: Record<OrbState, string> = {
 }
 
 const TERRACOTTA = brand.brand.terracotta
-const TERRACOTTA_HOVER = brand.brand['terracotta-dark']
-const TERRACOTTA_LIGHT = brand.brand['terracotta-light']
-const CREAM = brand.brand.beige
-const WARM_BLACK = brand.brand.black
 const ERROR = brand.functional.error
+
+/**
+ * Bar geometry, in the mark's own units (brand_guidelines/logos/icon-*.svg):
+ * six bars spanning x 15..89, y 15..55. `tall` bars are the raised inner pair
+ * of each hand. Kept as ratios so the mark scales exactly at any size.
+ */
+const MARK_W = 74
+const MARK_H = 40
+const BARS = [
+  { x: 0, tall: false },
+  { x: 12, tall: true },
+  { x: 24, tall: false },
+  { x: 42, tall: false },
+  { x: 54, tall: true },
+  { x: 66, tall: false },
+] as const
+const BAR_W = 8
 
 interface OrbProps {
   state: OrbState
@@ -52,6 +80,146 @@ interface OrbProps {
   style?: ViewStyle
 }
 
+/** Per-state motion for one bar. Index gives each bar its own phase. */
+function useBarMotion(state: OrbState, index: number, reduceMotion: boolean) {
+  const scale = useSharedValue(1)
+
+  useEffect(() => {
+    cancelAnimation(scale)
+
+    if (reduceMotion) {
+      scale.value = 1
+      return
+    }
+
+    // Offsets are irregular on purpose: evenly spaced bars read as a machine,
+    // slightly uneven ones read as something alive.
+    const phase = [0, 90, 180, 60, 150, 30][index] ?? 0
+    const ease = Easing.inOut(Easing.quad)
+
+    switch (state) {
+      case 'listening':
+        scale.value = withDelay(
+          phase,
+          withRepeat(
+            withSequence(
+              withTiming(1 + 0.55 * (index % 2 ? 0.7 : 1), { duration: 320, easing: ease }),
+              withTiming(0.72, { duration: 380, easing: ease }),
+            ),
+            -1,
+            true,
+          ),
+        )
+        break
+
+      case 'speaking':
+        scale.value = withDelay(
+          phase / 2,
+          withRepeat(
+            withSequence(
+              withTiming(1.32, { duration: 200, easing: ease }),
+              withTiming(0.85, { duration: 240, easing: ease }),
+            ),
+            -1,
+            true,
+          ),
+        )
+        break
+
+      case 'thinking':
+      case 'planning':
+      case 'agent_working':
+      case 'running_tests':
+      case 'computer_waking':
+      case 'workspace_preparing':
+        // Travelling wave: the delay is what makes it move across the mark.
+        scale.value = withDelay(
+          index * 110,
+          withRepeat(
+            withSequence(
+              withTiming(1.28, { duration: 420, easing: ease }),
+              withTiming(0.88, { duration: 520, easing: ease }),
+            ),
+            -1,
+            true,
+          ),
+        )
+        break
+
+      case 'waiting_approval':
+        // Every bar together — a heartbeat rather than a texture.
+        scale.value = withRepeat(
+          withSequence(
+            withTiming(1.18, { duration: 460, easing: ease }),
+            withTiming(0.94, { duration: 460, easing: ease }),
+          ),
+          -1,
+          true,
+        )
+        break
+
+      case 'error':
+        scale.value = withTiming(1, { duration: 200 })
+        break
+
+      default:
+        // idle / preview_ready — a slow shared breath.
+        scale.value = withDelay(
+          phase * 2,
+          withRepeat(
+            withSequence(
+              withTiming(1.06, { duration: 1600, easing: ease }),
+              withTiming(0.97, { duration: 1600, easing: ease }),
+            ),
+            -1,
+            true,
+          ),
+        )
+    }
+
+    return () => cancelAnimation(scale)
+  }, [state, index, reduceMotion, scale])
+
+  return useAnimatedStyle(() => ({ transform: [{ scaleY: scale.value }] }))
+}
+
+function Bar({
+  index,
+  state,
+  reduceMotion,
+  unit,
+  color,
+}: {
+  index: number
+  state: OrbState
+  reduceMotion: boolean
+  unit: number
+  color: string
+}) {
+  const bar = BARS[index]
+  const animatedStyle = useBarMotion(state, index, reduceMotion)
+  const height = (bar.tall ? 35 : 35) * unit
+  const width = BAR_W * unit
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: bar.x * unit,
+          // The raised pair sits 5 units higher, exactly as in the mark.
+          top: (bar.tall ? 0 : 5) * unit,
+          width,
+          height,
+          borderRadius: width / 2,
+          backgroundColor: color,
+        },
+        animatedStyle,
+      ]}
+    />
+  )
+}
+
 export function Orb({ state, size = 'hero', onPress, style }: OrbProps) {
   const { isDark } = useTheme()
   const px = typeof size === 'number' ? size : ORB_SIZES[size]
@@ -59,190 +227,50 @@ export function Orb({ state, size = 'hero', onPress, style }: OrbProps) {
   const [reduceMotion, setReduceMotion] = useState(false)
 
   useEffect(() => {
-    let mounted = true
+    let active = true
     AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (mounted) setReduceMotion(enabled)
+      if (active) setReduceMotion(enabled)
     })
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled)
+    })
     return () => {
-      mounted = false
-      subscription.remove()
+      active = false
+      sub?.remove?.()
     }
   }, [])
 
-  // Motion primitives — each state drives a small, restrained subset.
-  const breathe = useSharedValue(1) // core scale
-  const rotateA = useSharedValue(0) // arc A, degrees
-  const rotateB = useSharedValue(0) // arc B, degrees
-  const arcOpacity = useSharedValue(0) // arc visibility
-  const glow = useSharedValue(0.3) // cream reflection brightness
-  const halo = useSharedValue(0) // outer halo ring
-  const coreOpacity = useSharedValue(1)
-
-  useEffect(() => {
-    // Reset everything before applying the new state's motion.
-    cancelAnimation(breathe)
-    cancelAnimation(rotateA)
-    cancelAnimation(rotateB)
-    cancelAnimation(arcOpacity)
-    cancelAnimation(glow)
-    cancelAnimation(halo)
-    cancelAnimation(coreOpacity)
-
-    const settle = { duration: 300, easing: Easing.out(Easing.ease) }
-    breathe.value = withTiming(1, settle)
-    rotateA.value = 0
-    rotateB.value = 0
-    arcOpacity.value = withTiming(0, settle)
-    glow.value = withTiming(0.3, settle)
-    halo.value = withTiming(0, settle)
-    coreOpacity.value = withTiming(1, settle)
-
-    const spinA = (durationMs: number) => {
-      rotateA.value = 0
-      rotateA.value = withRepeat(withTiming(360, { duration: durationMs, easing: Easing.linear }), -1, false)
-    }
-    const spinB = (durationMs: number) => {
-      rotateB.value = 0
-      rotateB.value = withRepeat(withTiming(-360, { duration: durationMs, easing: Easing.linear }), -1, false)
-    }
-    const pulseScale = (to: number, durationMs: number) => {
-      breathe.value = withRepeat(
-        withSequence(
-          withTiming(to, { duration: durationMs, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: durationMs, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      )
-    }
-
-    switch (state) {
-      case 'idle':
-        // Slow, barely perceptible breathing.
-        if (!reduceMotion) pulseScale(1.015, 2400)
-        break
-      case 'listening':
-        halo.value = withTiming(0.55, settle)
-        if (!reduceMotion) pulseScale(1.05, 900)
-        break
-      case 'thinking':
-        // Two arcs orbit in opposite directions.
-        arcOpacity.value = withTiming(0.7, settle)
-        if (!reduceMotion) {
-          spinA(3600)
-          spinB(4800)
-        } else {
-          rotateA.value = 30
-          rotateB.value = 210
-        }
-        break
-      case 'planning':
-        // Single slow arc — deliberate, quieter than thinking.
-        arcOpacity.value = withTiming(0.55, settle)
-        if (!reduceMotion) spinA(6000)
-        else rotateA.value = 120
-        break
-      case 'computer_waking':
-        // Center brightens.
-        if (!reduceMotion) {
-          glow.value = withRepeat(
-            withSequence(
-              withTiming(0.7, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-              withTiming(0.4, { duration: 1200, easing: Easing.inOut(Easing.ease) })
-            ),
-            -1,
-            false
-          )
-        } else {
-          glow.value = withTiming(0.6, settle)
-        }
-        break
-      case 'workspace_preparing':
-        glow.value = withTiming(0.55, settle)
-        arcOpacity.value = withTiming(0.45, settle)
-        if (!reduceMotion) spinA(8000)
-        else rotateA.value = 200
-        break
-      case 'agent_working':
-        // Supervisor/worker arcs at different measured speeds.
-        arcOpacity.value = withTiming(0.7, settle)
-        if (!reduceMotion) {
-          spinA(2800)
-          spinB(4400)
-        } else {
-          rotateA.value = 60
-          rotateB.value = 240
-        }
-        break
-      case 'running_tests':
-        // Measured tick pulse on the arcs; no rotation.
-        rotateA.value = 45
-        rotateB.value = 225
-        if (!reduceMotion) {
-          arcOpacity.value = withRepeat(
-            withSequence(
-              withTiming(0.8, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-              withTiming(0.35, { duration: 700, easing: Easing.inOut(Easing.ease) })
-            ),
-            -1,
-            false
-          )
-        } else {
-          arcOpacity.value = withTiming(0.6, settle)
-        }
-        break
-      case 'waiting_approval':
-        // Motion pauses; static halo. Already static — reduced-motion safe.
-        halo.value = withTiming(0.6, settle)
-        break
-      case 'preview_ready':
-        // One soft settle, then steady glow. Single transition, not a loop.
-        glow.value = withTiming(0.6, settle)
-        if (!reduceMotion) {
-          breathe.value = withSequence(
-            withTiming(1.04, { duration: 150, easing: Easing.out(Easing.ease) }),
-            withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) })
-          )
-        }
-        break
-      case 'speaking':
-        if (!reduceMotion) pulseScale(1.03, 800)
-        else glow.value = withTiming(0.5, settle)
-        break
-      case 'error':
-        // Motion stops entirely; core dims.
-        coreOpacity.value = withTiming(0.85, settle)
-        break
-    }
-  }, [state, reduceMotion, breathe, rotateA, rotateB, arcOpacity, glow, halo, coreOpacity])
-
-  const coreAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: breathe.value }],
-    opacity: coreOpacity.value,
-  }))
-  const arcAStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateA.value}deg` }],
-    opacity: arcOpacity.value,
-  }))
-  const arcBStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateB.value}deg` }],
-    opacity: arcOpacity.value,
-  }))
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-  }))
-  const haloStyle = useAnimatedStyle(() => ({
-    opacity: halo.value,
-  }))
-
-  const haloSize = px * 1.25
-  const arcInset = px * 0.09
-  const arcSize = px - arcInset * 2
-  const arcWidth = Math.max(1.5, px * 0.028)
-  const highlightSize = px * 0.42
+  // Fit the mark inside the given box with a little breathing room, and keep
+  // its aspect ratio — the bars must not stretch.
+  const unit = (px * 0.92) / MARK_W
+  const markW = MARK_W * unit
+  const markH = MARK_H * unit
 
   const isError = state === 'error'
+  const color = isError ? ERROR : TERRACOTTA
+
+  // A soft glow behind the mark carries state colour without a plate around it.
+  const glow = useSharedValue(0)
+  useEffect(() => {
+    cancelAnimation(glow)
+    const wants = state === 'listening' || state === 'waiting_approval' || state === 'speaking'
+    if (reduceMotion || !wants) {
+      glow.value = withTiming(wants ? 0.22 : 0, { duration: 240 })
+      return
+    }
+    glow.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.1, { duration: 700, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      true,
+    )
+    return () => cancelAnimation(glow)
+  }, [state, reduceMotion, glow])
+
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }))
+  const glowSize = px * 1.15
 
   const orb = (
     <View
@@ -250,111 +278,40 @@ export function Orb({ state, size = 'hero', onPress, style }: OrbProps) {
       accessible
       accessibilityLabel={`2Hands: ${ORB_STATE_LABELS[state]}`}
     >
-      {/* Halo — listening / waiting_approval */}
       <Animated.View
         pointerEvents="none"
         style={[
           {
             position: 'absolute',
-            width: haloSize,
-            height: haloSize,
-            borderRadius: haloSize / 2,
-            borderWidth: Math.max(1, px * 0.015),
-            borderColor: TERRACOTTA + '66',
+            width: glowSize,
+            height: glowSize,
+            borderRadius: glowSize / 2,
+            backgroundColor: color,
+            // Dark backgrounds swallow a soft glow, so give it a little more.
+            opacity: isDark ? 0.3 : 0.2,
           },
-          haloStyle,
+          glowStyle,
         ]}
       />
 
-      {/* Core — terracotta with warm-black and cream reflection */}
-      <Animated.View
-        style={[
-          {
-            width: px,
-            height: px,
-            borderRadius: px / 2,
-            overflow: 'hidden',
-            borderWidth: isError ? Math.max(1, px * 0.02) : 0,
-            borderColor: isError ? ERROR + '99' : 'transparent',
-          },
-          coreAnimatedStyle,
-        ]}
-      >
-        <LinearGradient
-          colors={[TERRACOTTA_LIGHT, TERRACOTTA, TERRACOTTA_HOVER]}
-          start={{ x: 0.2, y: 0.1 }}
-          end={{ x: 0.8, y: 0.95 }}
-          style={{ width: '100%', height: '100%' }}
-        />
-        {/* Cream reflection, upper left */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: px * 0.12,
-              left: px * 0.14,
-              width: highlightSize,
-              height: highlightSize,
-              borderRadius: highlightSize / 2,
-              backgroundColor: CREAM,
-            },
-            glowStyle,
-          ]}
-        />
-        {/* Warm-black grounding shade, lower edge */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            bottom: -px * 0.28,
-            left: px * 0.1,
-            width: px * 0.8,
-            height: px * 0.55,
-            borderRadius: px * 0.4,
-            backgroundColor: WARM_BLACK,
-            opacity: isDark ? 0.25 : 0.15,
-          }}
-        />
-      </Animated.View>
-
-      {/* Two arcs — the two hands */}
-      <Animated.View
-        pointerEvents="none"
-        style={[{ position: 'absolute', width: arcSize, height: arcSize }, arcAStyle]}
-      >
-        <View
-          style={{
-            width: arcSize,
-            height: arcSize,
-            borderRadius: arcSize / 2,
-            borderWidth: arcWidth,
-            borderColor: 'transparent',
-            borderTopColor: CREAM + 'CC',
-          }}
-        />
-      </Animated.View>
-      <Animated.View
-        pointerEvents="none"
-        style={[{ position: 'absolute', width: arcSize, height: arcSize }, arcBStyle]}
-      >
-        <View
-          style={{
-            width: arcSize,
-            height: arcSize,
-            borderRadius: arcSize / 2,
-            borderWidth: arcWidth,
-            borderColor: 'transparent',
-            borderBottomColor: CREAM + '99',
-          }}
-        />
-      </Animated.View>
+      <View style={{ width: markW, height: markH }}>
+        {BARS.map((_, index) => (
+          <Bar
+            key={index}
+            index={index}
+            state={state}
+            reduceMotion={reduceMotion}
+            unit={unit}
+            color={color}
+          />
+        ))}
+      </View>
     </View>
   )
 
   if (!onPress) return orb
 
-  // Keep touch target >= 44 even for the compact orb.
+  // Keep touch target >= 44 even for the compact mark.
   const slop = Math.max(0, Math.ceil((44 - px) / 2))
   return (
     <Pressable

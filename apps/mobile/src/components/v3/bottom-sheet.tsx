@@ -18,6 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { useTheme } from '@/lib/theme-context'
+import { Glass } from '@/components/v3/glass'
 
 /**
  * Bottom sheet primitive (UX.md §17, BRAND_GUIDELINES §8/§14).
@@ -25,6 +26,9 @@ import { useTheme } from '@/lib/theme-context'
  * (ease-out in / ease-in out). Honors reduced motion. Content is
  * caller-provided; callers supply their own ScrollView when needed.
  */
+
+/** Sheets sit above the composer, so they round harder. */
+const SHEET_RADIUS = 32
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
 const SHEET_DURATION_MS = 200
@@ -146,18 +150,19 @@ export function BottomSheet({
           style={[
             {
               maxHeight: SCREEN_HEIGHT * maxHeightRatio,
-              backgroundColor: colors.bgPrimary,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              borderWidth: 1,
-              borderBottomWidth: 0,
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.borderDefault,
+              // The sheet is glass, so it must not paint an opaque background
+              // — the point is that the conversation stays visible behind it.
+              // A larger radius than the composer reads as sitting closer to
+              // the viewer, which is how the stack conveys depth.
+              borderTopLeftRadius: SHEET_RADIUS,
+              borderTopRightRadius: SHEET_RADIUS,
               paddingBottom: Math.max(insets.bottom, 16),
               overflow: 'hidden',
             },
             sheetStyle,
           ]}
         >
+          <Glass elevation="sheet" radius={SHEET_RADIUS} style={{ flexShrink: 1 }}>
           {/* Drag handle + optional title (pan region) */}
           <View {...panResponder.panHandlers}>
             <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: title ? 4 : 10 }}>
@@ -184,6 +189,7 @@ export function BottomSheet({
           </View>
 
           <View style={[{ flexShrink: 1 }, contentStyle]}>{children}</View>
+          </Glass>
         </Animated.View>
       </View>
     </Modal>
