@@ -81,6 +81,12 @@ export function getV3SystemPrompt(context: V3PromptContext = {}): string {
           `If it returns a running job, say so and check it when asked; report what`,
           `actually happened, including failures, and never describe an outcome you`,
           `have not verified.`,
+          `The agent runs on the person's own Claude account — 2Hands delegates,`,
+          `it never executes on its own credentials. If the tool reports`,
+          `not_connected, explain that they need to connect their Claude account`,
+          `(Marketplace → Specialist agents → Claude Code) using an Anthropic API`,
+          `key or a token from \`claude setup-token\` — and remind them it goes`,
+          `through the secure connect flow, never pasted into this chat.`,
         ].join('\n')
       : [
           `Right now you can think, plan, research and answer — but the execution`,

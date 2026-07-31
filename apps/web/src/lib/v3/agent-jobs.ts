@@ -5,11 +5,11 @@
  * the user asks for something, and it actually runs on their persistent Fly
  * machine, in /workspace, where the results stay when the machine stops.
  *
- * Model access goes through the AI Gateway with our key, so the user needs no
- * Anthropic account and no laptop — which is the product. Proven end to end
- * on 2026-07-31: Claude Code 2.1.220 installed and ran inside a Fly machine
- * against the gateway (request chain verified to the billing gate; with
- * credit, the local run produced the artifact).
+ * The agent runs on the user's own Claude credential, resolved through the
+ * Account Broker at the moment of injection — 2Hands navigates and delegates,
+ * it never executes on its own keys. Mechanics proven end to end on
+ * 2026-07-31: Claude Code 2.1.220 installed and ran inside a Fly machine,
+ * and with a valid credential produced the requested artifact.
  *
  * Jobs are asynchronous by nature: Claude Code takes seconds to minutes. We
  * wait inline for a bounded window so short jobs feel instant, and hand back
@@ -25,6 +25,7 @@ import {
   selectedProviderId,
   type ComputerRow,
 } from '@/lib/v3/computers'
+import { resolveAgentCredential } from '@/lib/v3/agent-connect'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const table = (sb: ReturnType<typeof createAdminClient>, name: string) => (sb as any).from(name)
@@ -38,6 +39,12 @@ export type AgentJobOutcome =
   | { status: 'failed'; error: string; computerName: string }
   | { status: 'running'; jobId: string; computerId: string; computerName: string }
   | { status: 'unavailable'; reason: string }
+  /**
+   * No agent connected. Deliberately its own status rather than 'failed':
+   * the fix is an action the user takes (connect their Claude account), not
+   * a retry, and the assistant should say exactly that.
+   */
+  | { status: 'not_connected'; reason: string }
 
 function rowToWorkspace(row: ComputerRow): ComputerWorkspace {
   return {
@@ -106,9 +113,17 @@ export async function runOnComputer(input: {
         'Hosted computers are not enabled in this environment (COMPUTER_PROVIDER is not fly).',
     }
   }
-  const gatewayKey = process.env.AI_GATEWAY_API_KEY?.trim()
-  if (!gatewayKey) {
-    return { status: 'unavailable', reason: 'AI_GATEWAY_API_KEY is not configured.' }
+  // 2Hands never executes on its own credentials — no fallback to any
+  // 2Hands-owned key, ever. The user's agent, the user's account, their bill.
+  const credential = await resolveAgentCredential(input.userId)
+  if (!credential) {
+    return {
+      status: 'not_connected',
+      reason:
+        'No coding agent is connected. The user needs to connect their Claude ' +
+        'account (an Anthropic API key, or a Claude Code token from ' +
+        '`claude setup-token`) before work can run on their computer.',
+    }
   }
 
   const row = await findOrCreateComputer(input.userId)
@@ -127,8 +142,9 @@ export async function runOnComputer(input: {
     computer,
     jobId,
     prompt: input.prompt,
-    gatewayKey,
-    model: process.env.AI_AGENT_MODEL?.trim() || 'anthropic/claude-sonnet-4',
+    credential: { envName: credential.envName, value: credential.value },
+    // No model override: the agent runs whatever the user's own plan or key
+    // defaults to. Their account, their model choice.
   })
 
   const deadline = Date.now() + INLINE_WAIT_MS

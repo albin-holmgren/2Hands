@@ -613,8 +613,14 @@ export class FlyComputerProvider implements ComputerProvider {
     computer: ComputerWorkspace
     jobId: string
     prompt: string
-    gatewayKey: string
-    gatewayBaseUrl?: string
+    /**
+     * The user's own agent credential — never a 2Hands key. 2Hands delegates;
+     * the agent runs on an account the user owns and pays for, which is the
+     * BILLING.md third-ledger rule made mechanical. envName picks Claude
+     * Code's convention: CLAUDE_CODE_OAUTH_TOKEN for subscription tokens,
+     * ANTHROPIC_API_KEY for API keys.
+     */
+    credential: { envName: string; value: string }
     model?: string
     allowedTools?: string
   }): Promise<void> {
@@ -626,9 +632,8 @@ export class FlyComputerProvider implements ComputerProvider {
       // Claude Code needs a writable HOME for its state; the volume provides
       // one that persists, which also preserves session context per computer.
       'export HOME=/workspace',
-      `export ANTHROPIC_BASE_URL="${input.gatewayBaseUrl ?? 'https://ai-gateway.vercel.sh'}"`,
-      `export ANTHROPIC_AUTH_TOKEN="$AGENT_GATEWAY_KEY"`,
-      `export ANTHROPIC_MODEL="${input.model ?? 'anthropic/claude-sonnet-4'}"`,
+      `export ${input.credential.envName}="$AGENT_CREDENTIAL"`,
+      ...(input.model ? [`export ANTHROPIC_MODEL="${input.model}"`] : []),
       'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
       'command -v claude >/dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > ' +
         `${dir}/install.log 2>&1`,
@@ -654,7 +659,7 @@ export class FlyComputerProvider implements ComputerProvider {
       command: [
         'sh',
         '-c',
-        `AGENT_GATEWAY_KEY='${input.gatewayKey.replace(/'/g, '')}' nohup ${dir}/run.sh > ${dir}/boot.log 2>&1 & echo launched`,
+        `AGENT_CREDENTIAL='${input.credential.value.replace(/'/g, '')}' nohup ${dir}/run.sh > ${dir}/boot.log 2>&1 & echo launched`,
       ],
     })
   }
