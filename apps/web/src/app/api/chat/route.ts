@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { getV3SystemPrompt } from '@/lib/ai/v3-system-prompt'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveWorkspaceScope } from '@/lib/enterprise/workspace-context'
 import { getAiTransport, getAnthropicSdkClient, normalizeModelForTransport } from '@/lib/ai/ai-client'
@@ -1495,7 +1496,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const { messages, conversationId, agentId, model: requestedModel, assistantMsgId } = parsed.data
+    const { messages, conversationId, surface, agentId, model: requestedModel, assistantMsgId } = parsed.data
 
     // Resolve workspace scope from cookie
     const cookies = request.cookies
@@ -2166,8 +2167,19 @@ The user's name is ${userName}. Be helpful, conversational, and share any releva
           )
           capturedToolsToUse = toolsToUse
         } else {
-          // AI Manager system prompt — use smart digest when available, fall back to raw statuses
-          const baseSystemPrompt = getSystemPrompt(effectiveAiName, effectiveUserName, agentStatuses, effectiveNeedsName, { profile: voiceProfile, mirroringLevel, preferredStyle })
+          // AI Manager system prompt — use smart digest when available, fall back to raw statuses.
+          // The v3 surface gets its own identity: the chief-of-staff prompt below
+          // belongs to the previous product and describes capabilities (agent
+          // delegation, CRM writes, lead-finding) that are not what v3 is.
+          const baseSystemPrompt = surface === 'v3'
+            ? getV3SystemPrompt({
+                userName: effectiveUserName,
+                // v3 has no tools attached to this conversation yet, so the
+                // assistant must not claim to have carried work out.
+                executionAvailable: false,
+                voiceReplies: false,
+              })
+            : getSystemPrompt(effectiveAiName, effectiveUserName, agentStatuses, effectiveNeedsName, { profile: voiceProfile, mirroringLevel, preferredStyle })
           const agentContext = digestPromptSection || (agentStatuses ? `\n\nCURRENT AGENTS:\n${agentStatuses}` : '')
           // Only include templates when user has no agents yet (onboarding help)
           const templatesPrompt = agentList.length === 0 ? formatTemplatesForPrompt() : ''

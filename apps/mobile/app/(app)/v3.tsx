@@ -31,6 +31,7 @@ import {
 import { ApprovalCard } from '@/components/v3/approval-card'
 import { SecureInputCard } from '@/components/v3/secure-input-card'
 import { usePushToTalk } from '@/components/v3/use-push-to-talk'
+import { Glass } from '@/components/v3/glass'
 
 /**
  * v3 conversation shell (IMPLEMENTATION_MAP Slice 1, UX.md §2–§5).
@@ -155,25 +156,23 @@ function HeaderButton({
   label: string
   children: React.ReactNode
 }) {
-  const { colors } = useTheme()
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => ({
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.borderDefault,
-        backgroundColor: pressed ? colors.surfaceHover : 'transparent',
-      })}
+      // 44pt is Apple's minimum touch target; the glass circle fills it
+      // exactly rather than being padded out to reach it.
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
-      {children}
+      <Glass
+        elevation="bar"
+        radius={22}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        {children}
+      </Glass>
     </Pressable>
   )
 }

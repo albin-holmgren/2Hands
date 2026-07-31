@@ -225,6 +225,9 @@ export const chatApiRequestSchema = z.object({
     content: z.union([z.string(), z.array(z.unknown())]), // String or array for images
   })).min(1, 'At least one message is required'),
   conversationId: z.string().uuid().optional(),
+  // Which client surface is asking. v3 gets its own identity and guardrails;
+  // the legacy app keeps the chief-of-staff prompt it was built around.
+  surface: z.enum(['v3']).optional(),
   agentId: z.string().uuid().optional(), // When chatting with an agent directly
   model: z.string().optional(), // Model override from user's model selector
   assistantMsgId: z.string().uuid().optional(), // Client-generated UUID for durable manager-turn placeholder

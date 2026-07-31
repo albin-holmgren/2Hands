@@ -60,6 +60,9 @@ export async function requestAssistantReply(input: {
     body: JSON.stringify({
       messages: input.messages,
       conversationId: input.conversationId ?? undefined,
+      // Ask for the v3 identity rather than the previous product's
+      // chief-of-staff prompt.
+      surface: 'v3',
     }),
     signal: input.signal,
   })
