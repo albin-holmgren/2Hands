@@ -205,10 +205,10 @@ const KO_ROSTER: RosterBot[] = [
 
 const HOME_COPY: Record<Locale, HomeCopy> = {
   en: {
-    title: "Rakazo | Open source Grok Bot alternative",
+    title: "2hands | Named bots with a computer and a coding harness",
     description: SITE_DESCRIPTION,
     ogImageAlt:
-      "Rakazo — AI teammates you actually own. Your keys, your model, your machine.",
+      "2hands — named bots, a shared computer, plugins, and Cursor / Claude Code / Codex per bot.",
     availableLanguage: "English",
     skipToContent: "Skip to content",
     starFallback: "Star",
@@ -225,8 +225,8 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     hero: {
       badge: "Apache-2.0",
       pill: "Self-hosted",
-      heading: "AI teammates you actually own",
-      lead: "Rakazo is an open source Grok Bot alternative. Give a bot real work. It signs in to your tools, uses them the way you do, and comes back when it needs you.",
+      heading: "Bots with hands — and a coding harness",
+      lead: "2hands is a hosted Grok Bot alternative. Each bot gets a real computer for browser QA and a coding harness — Cursor, Claude Code, or Codex — when the work is implementation.",
       getStarted: "Get started",
       viewOnGithub: "View on GitHub",
       setupWithAgent: "Set up with your agent",
@@ -236,7 +236,7 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     selfHost: {
       eyebrow: "Self-hosted",
       heading: "The computer is yours",
-      copy: "Run Rakazo on your machine with published images. Local Docker computers work without an E2B account.",
+      copy: "Run the 2hands API on Fly.io with E2B computers. Marketing lives on Vercel. The product is built from Rakazo (Apache 2.0).",
       installTitle: "Install with Docker",
       installHint: "Docker Engine and the Compose plugin required. Default tag is edge (amd64).",
       computersNote:

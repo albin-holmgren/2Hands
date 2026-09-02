@@ -37,7 +37,7 @@ export async function resolveSignupPolicy(
 
 export function createAuth(prisma: PrismaClient, env: AuthEnv) {
   return betterAuth({
-    appName: "Rakazo",
+    appName: "2hands",
     secret: env.secret,
     baseURL: env.baseURL,
     trustedOrigins: [env.webOrigin, env.baseURL, ...(env.extraOrigins ?? [])],
@@ -139,16 +139,16 @@ export function passwordResetEmail(
   const safeUrl = escapeHtml(resetUrl);
   return {
     to: user.email,
-    subject: "Reset your Rakazo password",
+    subject: "Reset your 2hands password",
     text: [
       `Hi ${name},`,
       "",
-      "Reset your Rakazo password using this link:",
+      "Reset your 2hands password using this link:",
       resetUrl,
       "",
       "This link expires in one hour. If you did not request this, you can ignore this email.",
     ].join("\n"),
-    html: `<p>Hi ${safeName},</p><p>Reset your Rakazo password:</p><p><a href="${safeUrl}">Reset password</a></p><p>This link expires in one hour. If you did not request this, you can ignore this email.</p>`,
+    html: `<p>Hi ${safeName},</p><p>Reset your 2hands password:</p><p><a href="${safeUrl}">Reset password</a></p><p>This link expires in one hour. If you did not request this, you can ignore this email.</p>`,
   };
 }
 

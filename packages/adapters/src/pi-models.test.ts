@@ -12,6 +12,9 @@ describe("Pi model catalog", () => {
     const providers = new Set(catalog.map((entry) => entry.provider));
     expect(catalog.length).toBeGreaterThan(20);
     expect(providers.has("openrouter")).toBe(true);
+    expect(catalog.some((entry) => entry.provider === "vercel-gateway" && entry.platform)).toBe(
+      true,
+    );
     expect(providers.size).toBeGreaterThan(5);
     expect(
       catalog.some(

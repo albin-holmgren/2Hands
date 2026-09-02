@@ -10,6 +10,8 @@ import {
   ArtifactSchema,
   ArtifactWithContentSchema,
   AvatarStyleSchema,
+  BillingCheckoutInput,
+  BillingSchema,
   BotMcpServerSchema,
   BotSchema,
   BotSectionSchema,
@@ -639,6 +641,11 @@ export const appContract = {
       .input(z.object({ token: z.string().min(8).max(512) }))
       .output(z.object({ ok: z.literal(true) })),
     unregisterPush: oc.output(z.object({ ok: z.literal(true) })),
+  },
+  billing: {
+    get: oc.output(BillingSchema),
+    checkout: oc.input(BillingCheckoutInput).output(z.object({ url: z.string() })),
+    portal: oc.output(z.object({ url: z.string() })),
   },
   search: {
     query: oc.input(z.object({ q: z.string().max(200) })).output(SearchQueryOutputSchema),

@@ -6,7 +6,7 @@ import {
   type MessageBlock,
   type SpaceBot,
 } from "@rakazo/contracts";
-import { userVisibleMessages } from "@rakazo/core";
+import { parseCodingHarness, userVisibleMessages } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
@@ -41,6 +41,7 @@ function mapBot(
     modelId?: string | null;
     thinkingLevel?: string | null;
     webhookSecretId?: string | null;
+    codingHarness?: string | null;
   },
   preview = "",
   status = "idle",
@@ -74,6 +75,7 @@ function mapBot(
     modelProvider: bot.modelProvider ?? null,
     modelId: bot.modelId ?? null,
     thinkingLevel: (bot.thinkingLevel as Bot["thinkingLevel"]) ?? null,
+    codingHarness: parseCodingHarness(bot.codingHarness),
     webhookConfigured: Boolean(bot.webhookSecretId),
   };
 }
@@ -327,6 +329,7 @@ export function createRepos(prisma: PrismaClient) {
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: string | null;
+        codingHarness?: string | null;
         initialMessage?: {
           role: "user" | "bot" | "system";
           blocks: MessageBlock[];
@@ -344,6 +347,7 @@ export function createRepos(prisma: PrismaClient) {
       let modelProvider = input.modelProvider ?? null;
       let modelId = input.modelId ?? null;
       let thinkingLevel = input.thinkingLevel ?? null;
+      let codingHarness = input.codingHarness ?? null;
       if (input.parentBotId) {
         const parent = await prisma.bot.findFirst({
           where: {
@@ -358,6 +362,7 @@ export function createRepos(prisma: PrismaClient) {
           modelId = parent.modelId ?? null;
         }
         if (thinkingLevel == null) thinkingLevel = parent.thinkingLevel ?? null;
+        if (codingHarness == null) codingHarness = parent.codingHarness ?? null;
       }
       const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
       const envKind = process.env.SANDBOX_PROVIDER ?? "docker";
@@ -391,6 +396,7 @@ export function createRepos(prisma: PrismaClient) {
             modelProvider,
             modelId,
             thinkingLevel,
+            codingHarness,
           },
         });
         const thread = await tx.thread.create({

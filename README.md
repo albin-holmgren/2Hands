@@ -1,30 +1,22 @@
-# Rakazo
+# 2hands
 
-[![GitHub stars](https://img.shields.io/github/stars/elie222/rakazo?labelColor=black&style=for-the-badge&color=2563EB)](https://github.com/elie222/rakazo/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?labelColor=black&style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/RWwKa2Sn7h)
+[![GitHub stars](https://img.shields.io/github/stars/albin-holmgren/2Hands?labelColor=black&style=for-the-badge&color=2563EB)](https://github.com/albin-holmgren/2Hands/stargazers)
 
-![Rakazo — AI teammates you actually own](./docs/readme-hero.png)
+2hands is a hosted Grok Bot alternative: named bots, a shared persistent computer (browser, files, terminal, desktop QA), plugins, and **per-bot model + coding-harness choice** (Cursor, Claude Code, or Codex).
 
-Rakazo is an open-source platform for running persistent AI teammates. It is available on the web,
-as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
-provider, or run the complete stack locally.
+The runtime is [Rakazo](https://github.com/elie222/rakazo) (Apache 2.0). Attribution is in `NOTICE` and `LICENSE`.
 
-Rakazo is in beta. Learn more at [rakazo.com](https://rakazo.com).
+Hosted product: [2hands.ai](https://2hands.ai). Plans: Free / Plus $20 / Pro $60 / Ultra $200.
 
 ## Features
 
 - Persistent bots with their own conversations, memory, routines, and history
-- Voice mode: speak replies, dictate, and call a bot. Bring your own ElevenLabs, OpenAI, or Cartesia key
-- Shared Team Computers and isolated Private computers
-- Browser, terminal, file, and graphical desktop access
-- Bots that can delegate to peer bots or short-lived subagents
-- Bring-your-own model credentials through Pi
-- App integrations through Composio or Pipedream Connect, plus user-installed Treg, remote MCP, and OpenAPI tool sources
-- Docker, E2B, Daytona, Box, and trusted local-computer support
-
-## Demo
-
-https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
+- Shared Team Computers and isolated Private computers (E2B Desktop in production)
+- Browser, terminal, file, and graphical desktop access for QA
+- Coding handoff to Cursor Cloud Agents, Claude Code, or Codex — Pi stays the orchestrator
+- Platform models through Vercel AI Gateway, plus BYOK
+- App integrations through Composio or Pipedream Connect, plus user HTTPS MCP / OpenAPI / Treg
+- Stripe subscriptions with plan gates on bots, harnesses, plugins, and model tiers
 
 ## Stack
 
@@ -32,63 +24,25 @@ https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
 - React 19, Vite, and Tailwind CSS
 - Electron and Expo
 - Hono and oRPC
-- PostgreSQL and Prisma
-- Better Auth
+- PostgreSQL (Prisma + Better Auth) on Supabase
 - Graphile Worker
 - Pi
-- Docker, E2B, Daytona, and Box
-- Composio, Pipedream Connect, MCP, and OpenAPI integrations
-
-## Quick start (published images)
-
-You need Docker Engine, the Compose plugin, curl, and OpenSSL. No clone or Node install.
-
-```bash
-mkdir -p rakazo && cd rakazo &&
-curl -fsSLO https://raw.githubusercontent.com/elie222/rakazo/main/infra/compose/install-images.sh &&
-bash install-images.sh
-```
-
-The installer downloads the Compose files, creates `.env` with random secrets, and starts Rakazo.
-It preserves an existing `.env` when rerun.
-
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173), create an account, and connect a model.
-Local Docker computers are on by default. Optional remote providers: `e2b`, `daytona`, or `box`
-with the matching API key.
-
-Default image tag is `edge` (main builds, `linux/amd64`). Details and tags:
-[self-hosting guide](./docs/self-host.md#published-images-no-checkout).
-
-On restricted networks, override the installer download base (`RAKAZO_DOWNLOAD_BASE`), skip
-existing Compose files (`--local` / `RAKAZO_DOWNLOAD_SKIP_EXISTING`), or mirror the bootstrap
-script URL — see
-[Restricted networks / mirror downloads](./docs/self-host.md#restricted-networks--mirror-downloads).
-
-For an agent-assisted install, use [SETUP_PROMPT.md](./SETUP_PROMPT.md).
+- E2B Desktop (computers), Fly.io (API + worker), Vercel (marketing)
+- Stripe, Vercel AI Gateway
 
 ## Local development (source checkout)
 
 You need Node.js 22+, pnpm 9, and Docker.
 
 ```bash
-git clone https://github.com/elie222/rakazo.git
-cd rakazo
+git clone https://github.com/albin-holmgren/2Hands.git
+cd 2Hands
 cp .env.example .env
 ```
 
 Set `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, and `SCREEN_PROXY_SECRET` in `.env` to independent
-long random values. Docker sandboxes also need a dedicated `SANDBOX_SUPERVISOR_TOKEN`. You can
-also set `OPENROUTER_API_KEY`, or connect a supported model provider during onboarding.
-
-Managed app catalogs are optional. Set `COMPOSIO_API_KEY` for Composio, or the
-`PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, and `PIPEDREAM_PROJECT_ID` trio for Pipedream
-Connect. Users can add an HTTPS MCP server, Treg endpoint, or OpenAPI JSON document from
-**Integrations** without enabling either managed catalog. Connector credentials are encrypted on the
-server and are never returned by the API.
-
-Treg is usage-metered. Self-hosters supply their own Treg token; operators embedding Treg in a
-hosted product should review [Treg's integration terms](https://treg.to/integrate.md), which require
-a written agreement for hosted resale.
+long random values. Docker sandboxes also need a dedicated `SANDBOX_SUPERVISOR_TOKEN`. For hosted
+models set `AI_GATEWAY_API_KEY` and `PI_DEFAULT_PROVIDER=vercel-gateway`.
 
 ```bash
 docker compose --env-file .env -f infra/compose/docker-compose.yml up postgres -d
@@ -99,11 +53,10 @@ pnpm sandbox:build
 pnpm dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173), create an account, connect a model, and create
-your first bot.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173), create an account, and create your first bot.
 
-For deployment, provider selection, backups, and upgrades, see the
-[self-hosting guide](./docs/self-host.md).
+Production layout, secrets, and Stripe prices: [hosting](./docs/2hands-hosting.md).
+Self-hosters can still follow Rakazo's [self-hosting guide](./docs/self-host.md).
 
 ## Desktop and mobile
 
@@ -173,6 +126,7 @@ pnpm test:canary       # live OpenRouter / E2B / Box canaries
 COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
 ```
 
+- [2hands hosting](./docs/2hands-hosting.md)
 - [Self-hosting](./docs/self-host.md)
 - [Computer runtime and isolation](./docs/computer-runtime.md)
 - [Mobile releases](./docs/mobile-release.md)

@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AvatarStyle } from "@rakazo/contracts";
+import type { AvatarStyle, Billing } from "@rakazo/contracts";
 import { BotAvatar } from "@rakazo/ui-web";
 import { ChevronDown } from "lucide-react";
 import {
@@ -18,6 +18,7 @@ import {
 import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
 import { authClient } from "../lib/auth";
 import { getActiveUiLocale, setUiLocale } from "../lib/i18n";
+import { rpc } from "../lib/rpc";
 import { UI_LOCALE_LABELS, UI_LOCALES, type UiLocale } from "../lib/ui-locale";
 
 export function AccountSettingsOverlay({
@@ -54,6 +55,16 @@ export function AccountSettingsOverlay({
   const localeRequestRef = useRef(0);
   const [avatarPending, setAvatarPending] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [billing, setBilling] = useState<Billing | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [billingBusy, setBillingBusy] = useState<"plus" | "pro" | "ultra" | "portal" | null>(null);
+
+  useEffect(() => {
+    void rpc.billing
+      .get()
+      .then(setBilling)
+      .catch(() => setBilling(null));
+  }, []);
 
   useEffect(() => {
     const previousFocus =
@@ -131,6 +142,78 @@ export function AccountSettingsOverlay({
           </h3>
           <p className="mt-3 text-[14px] text-[#C9C9CE]">{name}</p>
           {email ? <p className="mt-1 text-[13px] text-[#7A7A80]">{email}</p> : null}
+        </section>
+
+        <section className="mt-5 rounded-[14px] border border-[#26262A] bg-[#101012] px-4 py-4">
+          <h3 className="text-[15px] font-medium text-[#ECECEE]">
+            <Trans>Plan</Trans>
+          </h3>
+          <p className="mt-3 text-[14px] text-[#C9C9CE]">
+            {billing ? `${billing.planName} · $${billing.priceUsd}/mo` : t`Loading plan…`}
+          </p>
+          {billing ? (
+            <p className="mt-2 text-[13px] text-[#7A7A80]">
+              {t`${billing.tokensUsed.toLocaleString()} / ${billing.monthlyTokens.toLocaleString()} tokens this period`}
+            </p>
+          ) : null}
+          {billingError ? <p className="mt-2 text-[13px] text-[#EF4444]">{billingError}</p> : null}
+          {billing?.checkoutEnabled ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(["plus", "pro", "ultra"] as const).map((plan) => (
+                <button
+                  key={plan}
+                  type="button"
+                  disabled={billingBusy !== null || billing.plan === plan}
+                  onClick={() => {
+                    setBillingBusy(plan);
+                    setBillingError(null);
+                    void rpc.billing
+                      .checkout({ plan })
+                      .then((result) => {
+                        window.location.href = result.url;
+                      })
+                      .catch((error) => {
+                        setBillingError(
+                          error instanceof Error ? error.message : t`Could not start checkout`,
+                        );
+                        setBillingBusy(null);
+                      });
+                  }}
+                  className="rounded-full bg-[#26262A] px-4 py-2 text-[13.5px] font-medium capitalize text-[#ECECEE] disabled:opacity-40"
+                >
+                  {plan === "plus" ? t`Plus $20` : plan === "pro" ? t`Pro $60` : t`Ultra $200`}
+                </button>
+              ))}
+              {billing.plan !== "free" ? (
+                <button
+                  type="button"
+                  disabled={billingBusy !== null}
+                  onClick={() => {
+                    setBillingBusy("portal");
+                    setBillingError(null);
+                    void rpc.billing
+                      .portal()
+                      .then((result) => {
+                        window.location.href = result.url;
+                      })
+                      .catch((error) => {
+                        setBillingError(
+                          error instanceof Error ? error.message : t`Could not open billing portal`,
+                        );
+                        setBillingBusy(null);
+                      });
+                  }}
+                  className="rounded-full px-4 py-2 text-[13.5px] font-medium text-[#85858A]"
+                >
+                  <Trans>Manage billing</Trans>
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-[#7A7A80]">
+              <Trans>Billing is not configured on this deployment.</Trans>
+            </p>
+          )}
         </section>
 
         <ChangePasswordSection />

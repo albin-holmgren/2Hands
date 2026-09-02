@@ -66,6 +66,9 @@ importers:
       hono:
         specifier: ^4.9.6
         version: 4.13.1
+      stripe:
+        specifier: ^18.5.0
+        version: 18.5.0(@types/node@24.13.3)
     devDependencies:
       typescript:
         specifier: ^5.9.2
@@ -8830,6 +8833,15 @@ packages:
   strip-final-newline@2.0.0:
     resolution: {integrity: sha512-BrpvfNAE3dcvq7ll3xVumzjKjZQ5tI1sEUIKr3Uoks0XUl45St3FlatVqef9prk4jRDzhW6WZg+3bk93y6pLjA==}
     engines: {node: '>=6'}
+
+  stripe@18.5.0:
+    resolution: {integrity: sha512-Hp+wFiEQtCB0LlNgcFh5uVyKznpDjzyUZ+CNVEf+I3fhlYvh7rZruIg+jOwzJRCpy0ZTPMjlzm7J2/M2N6d+DA==}
+    engines: {node: '>=12.*'}
+    peerDependencies:
+      '@types/node': '>=12.x.x'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   structured-headers@0.4.1:
     resolution: {integrity: sha512-0MP/Cxx5SzeeZ10p/bZI0S6MpgD+yxAhi1BOQ34jgnMXsCq3j1t6tQnZu+KdlL7dvJTLT3g9xN8tl10TqgFMcg==}
@@ -19574,6 +19586,12 @@ snapshots:
       ansi-regex: 6.3.0
 
   strip-final-newline@2.0.0: {}
+
+  stripe@18.5.0(@types/node@24.13.3):
+    dependencies:
+      qs: 6.15.3
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   structured-headers@0.4.1: {}
 

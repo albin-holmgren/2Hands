@@ -135,5 +135,12 @@ export async function bootstrapUserSpace(
     .catch((error: unknown) => {
       if (!isUniqueViolation(error)) throw error;
     });
+  await prisma.organizationBilling
+    .create({
+      data: { organizationId: orgId, plan: "free", usagePeriodStart: new Date() },
+    })
+    .catch((error: unknown) => {
+      if (!isUniqueViolation(error)) throw error;
+    });
   return { spaceId: orgId };
 }

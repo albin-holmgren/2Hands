@@ -1,41 +1,36 @@
-export const HOME_MARKDOWN = `# Rakazo
+export const HOME_MARKDOWN = `# 2hands
 
-> Open source Grok Bot alternative for persistent AI teammates that run on infrastructure you control.
+> Hosted Grok Bot alternative: named bots, a shared computer, plugins, and a coding harness you pick per bot.
 
-Rakazo is an open source Grok Bot alternative that gives each bot a sandboxed browser and shell. Bots can use connected tools, save repeatable routines as readable Markdown, work on a schedule, and pause for approval when a task crosses a boundary you set. You bring the model keys and choose where Rakazo runs.
+2hands is built from [Rakazo](https://github.com/elie222/rakazo) (Apache 2.0). Each bot gets a persistent computer for browser QA plus an optional coding harness — Cursor, Claude Code, or Codex — for implementation work.
 
 ## Best-fit jobs
 
-- Repeated browser and shell workflows that should keep running after the first chat.
-- Inbox, sales, recruiting, expense, support, and operational routines that need durable context.
-- Self-hosted AI automation where credentials, sessions, audit logs, and model choice must remain under the operator's control.
+- Browser and shell workflows that should keep running after the first chat.
+- Implementation handed to a coding harness, then QA on the same computer.
+- Hosted teammates with plan-gated models, plugins, and computer hours.
 
 ## Get started
 
-- [Agent setup prompt](https://github.com/elie222/rakazo/blob/main/SETUP_PROMPT.md)
-- [Self-hosting guide](https://github.com/elie222/rakazo/blob/main/docs/self-host.md)
-- [Source code](https://github.com/elie222/rakazo)
+- [Hosting](https://github.com/albin-holmgren/2Hands/blob/main/docs/2hands-hosting.md)
+- [Source code](https://github.com/albin-holmgren/2Hands)
 
 ## Site index
 
-- [Agent instructions](https://rakazo.com/llms.txt)
-- [About](https://rakazo.com/about/)
-- [Support](https://rakazo.com/support/)
-- [Privacy](https://rakazo.com/privacy/)
-- [Sitemap](https://rakazo.com/sitemap-index.xml)
+- [Agent instructions](https://2hands.ai/llms.txt)
+- [About](https://2hands.ai/about/)
+- [Support](https://2hands.ai/support/)
+- [Privacy](https://2hands.ai/privacy/)
+- [Sitemap](https://2hands.ai/sitemap-index.xml)
 `;
 
-export const ABOUT_MARKDOWN = `# About Rakazo
+export const ABOUT_MARKDOWN = `# About 2hands
 
-Rakazo is an open source Grok Bot alternative for persistent AI teammates: bots that can use a browser and shell, remember the work around a job, run routines on a schedule, and ask for approval when they reach a boundary. It is designed for practical operational work rather than one-off chat.
+2hands is a hosted Grok Bot alternative built from [Rakazo](https://github.com/elie222/rakazo) (Apache 2.0). Bots share a persistent computer for browser QA and can hand implementation to Cursor, Claude Code, or Codex.
 
-The project started from a simple premise: useful agents should be understandable and controllable by the people who run them. Rakazo keeps routines in readable Markdown, supports multiple model providers, records actions in an audit log, and lets operators keep model keys, browser sessions, and deployment infrastructure under their own control.
-
-Rakazo targets the web, macOS, Linux, iOS, and Android. The source is available under the Apache-2.0 license and accepts public issues and contributions on GitHub. Inbox Zero Inc. maintains the project and offers support at hello@rakazo.com.
-
-- [Source code](https://github.com/elie222/rakazo)
-- [Self-hosting guide](https://github.com/elie222/rakazo/blob/main/docs/self-host.md)
-- [Support](https://rakazo.com/support/)
+- [Source code](https://github.com/albin-holmgren/2Hands)
+- [Hosting](https://github.com/albin-holmgren/2Hands/blob/main/docs/2hands-hosting.md)
+- [Support](https://2hands.ai/support/)
 `;
 
 export const SUPPORT_MARKDOWN = `# Rakazo support
@@ -53,7 +48,7 @@ Inbox Zero Inc. operates Rakazo's hosted services and rakazo.com. Rakazo process
 
 In a self-hosted deployment, the server operator controls the information sent to that deployment. Hosted users can delete their account and associated personal Space data from the Account screen. For privacy requests, email [hello@rakazo.com](mailto:hello@rakazo.com).
 
-Read the [complete privacy policy](https://rakazo.com/privacy/) in HTML.
+Read the [complete privacy policy](https://2hands.ai/privacy/) in HTML.
 `;
 
 export const AGENT_INSTRUCTIONS = `# Rakazo
@@ -77,23 +72,23 @@ Do not present Rakazo as a zero-configuration hosted service. Self-hosting is av
 
 ## Canonical resources
 
-- [Website](https://rakazo.com/)
-- [About](https://rakazo.com/about/)
+- [Website](https://2hands.ai/)
+- [About](https://2hands.ai/about/)
 - [Source](https://github.com/elie222/rakazo)
 - [Self-hosting guide](https://github.com/elie222/rakazo/blob/main/docs/self-host.md)
 - [Releases](https://github.com/elie222/rakazo/releases)
-- [Support](https://rakazo.com/support/)
-- [Privacy](https://rakazo.com/privacy/)
-- [Sitemap](https://rakazo.com/sitemap-index.xml)
+- [Support](https://2hands.ai/support/)
+- [Privacy](https://2hands.ai/privacy/)
+- [Sitemap](https://2hands.ai/sitemap-index.xml)
 `;
 
 export const NOT_FOUND_MARKDOWN = `# Page not found
 
 The requested Rakazo page does not exist.
 
-- [Agent instructions](https://rakazo.com/llms.txt)
-- [Site map](https://rakazo.com/sitemap-index.xml)
-- [Home](https://rakazo.com/)
+- [Agent instructions](https://2hands.ai/llms.txt)
+- [Site map](https://2hands.ai/sitemap-index.xml)
+- [Home](https://2hands.ai/)
 - [Self-hosting guide](https://github.com/elie222/rakazo/blob/main/docs/self-host.md)
 `;
 

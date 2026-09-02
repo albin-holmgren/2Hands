@@ -1,0 +1,5 @@
+{
+  "framework": "astro",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @rakazo/www build"
+}

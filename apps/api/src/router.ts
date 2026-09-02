@@ -124,6 +124,13 @@ import {
 } from "./computer-status.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import { chooseFocus, markAppConnected, startOnboarding } from "./onboarding.js";
+import {
+  assertBotModelAndHarness,
+  assertCanAddPlugin,
+  assertCanCreateBot,
+  billingForActor,
+  platformGatewayConfigured,
+} from "./plan-gates.js";
 import { listSpaceRuns } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
@@ -135,6 +142,7 @@ import {
   type UpdaterProxyConfig,
   UpdaterProxyError,
 } from "./server-update.js";
+import { billingSnapshot, createCheckoutUrl, createPortalUrl } from "./stripe-billing.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import { isPeerRun, loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 import {
@@ -377,6 +385,41 @@ export function createRouter(deps: RouterDeps) {
           data: { avatarStyle: input.avatarStyle },
         });
         return meDto(deps, context.actor);
+      }),
+    },
+    billing: {
+      get: authed.billing.get.handler(async ({ context }) =>
+        billingSnapshot(deps.prisma, context.actor.spaceId),
+      ),
+      checkout: authed.billing.checkout.handler(async ({ context, input }) => {
+        try {
+          const url = await createCheckoutUrl({
+            prisma: deps.prisma,
+            spaceId: context.actor.spaceId,
+            email: context.actor.email,
+            plan: input.plan,
+            webOrigin: deps.env.webOrigin,
+          });
+          return { url };
+        } catch (error) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: error instanceof Error ? error.message : "Could not start checkout",
+          });
+        }
+      }),
+      portal: authed.billing.portal.handler(async ({ context }) => {
+        try {
+          const url = await createPortalUrl({
+            prisma: deps.prisma,
+            spaceId: context.actor.spaceId,
+            webOrigin: deps.env.webOrigin,
+          });
+          return { url };
+        } catch (error) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: error instanceof Error ? error.message : "Could not open billing portal",
+          });
+        }
       }),
     },
     spaces: {
@@ -641,10 +684,12 @@ export function createRouter(deps: RouterDeps) {
         if (!found) throw new IsolationError();
         return found;
       }),
-      create: authed.bots.create.handler(async ({ context, input }) =>
-        repos.createBot(context.actor, input),
-      ),
+      create: authed.bots.create.handler(async ({ context, input }) => {
+        await assertCanCreateBot(deps.prisma, context.actor);
+        return repos.createBot(context.actor, input);
+      }),
       duplicate: authed.bots.duplicate.handler(async ({ context, input }) => {
+        await assertCanCreateBot(deps.prisma, context.actor);
         const source = await repos.getBot(context.actor, input.botId);
         const duplicate = await repos.createBot(context.actor, {
           name: duplicateBotName(source.name),
@@ -657,6 +702,7 @@ export function createRouter(deps: RouterDeps) {
           modelProvider: source.modelProvider,
           modelId: source.modelId,
           thinkingLevel: source.thinkingLevel,
+          codingHarness: source.codingHarness,
         });
         const assignments = await deps.prisma.botMcpServer.findMany({
           where: {
@@ -697,22 +743,31 @@ export function createRouter(deps: RouterDeps) {
           if (!section) throw new IsolationError();
         }
         if (input.modelProvider && input.modelId) {
+          const usesPlatformGateway = platformGatewayConfigured(
+            deps.env.deploymentModelKey,
+            input.modelProvider,
+          );
           const credential = await findModelCredential(
             deps.prisma,
             context.actor,
             input.modelProvider,
           );
-          if (!credential) {
+          if (!credential && !usesPlatformGateway) {
             throw new ORPCError("BAD_REQUEST", { message: "Connect that model provider first" });
           }
           const knownModels = [...listPiCatalog(), scriptedCatalogEntry];
           const inCatalog = knownModels.some(
             (item) => item.provider === input.modelProvider && item.id === input.modelId,
           );
-          if (!inCatalog && credential.defaultModel !== input.modelId) {
+          if (!inCatalog && credential?.defaultModel !== input.modelId && !usesPlatformGateway) {
             throw new ORPCError("BAD_REQUEST", { message: "Unknown model for that provider" });
           }
         }
+        await assertBotModelAndHarness(deps.prisma, context.actor, {
+          modelProvider: input.modelProvider,
+          modelId: input.modelId,
+          codingHarness: input.codingHarness,
+        });
         const thinkingLevel = input.thinkingLevel;
         if (input.thinkingLevel) {
           const provider =
@@ -751,6 +806,7 @@ export function createRouter(deps: RouterDeps) {
               ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
               : {}),
             ...(input.thinkingLevel !== undefined ? { thinkingLevel } : {}),
+            ...(input.codingHarness !== undefined ? { codingHarness: input.codingHarness } : {}),
           },
         });
         const bots = await repos.listBots(context.actor);
@@ -2377,6 +2433,7 @@ export function createRouter(deps: RouterDeps) {
           );
         }),
         create: authed.mcp.servers.create.handler(async ({ context, input }) => {
+          await assertCanAddPlugin(deps.prisma, context.actor);
           const secretPayload = buildMcpCredentialBlob(input);
           const stored = secretPayload
             ? await deps.secrets.put(
@@ -2789,6 +2846,7 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       begin: authed.connections.begin.handler(async ({ context, input }) => {
+        await assertCanAddPlugin(deps.prisma, context.actor);
         const connector = deps.connectors.managed(input.connectorId);
         if (!connector) {
           throw new ORPCError("BAD_REQUEST", {
@@ -3648,10 +3706,11 @@ async function loadAutoReviewSettings(deps: RouterDeps, actor: Actor) {
 }
 
 async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
-  const [user, cred, settings] = await Promise.all([
+  const [user, cred, settings, billing] = await Promise.all([
     deps.prisma.user.findUniqueOrThrow({ where: { id: actor.userId } }),
     findDefaultModelCredential(deps.prisma, actor),
     deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+    billingForActor(deps.prisma, actor).catch(() => null),
   ]);
   const hasDeployment = Boolean(
     settings?.deploymentModelCredentialCipher || deps.env.deploymentModelKey,
@@ -3669,6 +3728,8 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
     canChooseHostComputer: actor.isDeploymentOwner && deps.env.sandboxProvider === "docker",
     sandboxProvider: deps.env.sandboxProvider,
     avatarStyle: user.avatarStyle === "organic" ? "organic" : "robot",
+    plan: billing?.plan,
+    planName: billing?.entitlements.name,
   };
 }
 

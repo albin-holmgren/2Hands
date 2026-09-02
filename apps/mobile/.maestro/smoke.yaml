@@ -4,18 +4,18 @@ name: Rakazo mobile smoke
 - launchApp:
     clearState: true
 
-- assertVisible: "Sign in to Rakazo"
+- assertVisible: "Sign in to 2hands"
 - assertVisible: "Sign up"
 - tapOn: "Sign up"
-- assertVisible: "Sign up for Rakazo"
+- assertVisible: "Sign up for 2hands"
 - assertVisible: "Name"
 - tapOn: "Sign in"
-- assertVisible: "Sign in to Rakazo"
+- assertVisible: "Sign in to 2hands"
 - tapOn: "Email"
 - inputText: ${RAKAZO_E2E_EMAIL}
 - tapOn: "Password"
 - inputText: ${RAKAZO_E2E_PASSWORD}
-- tapOn: "Sign in to Rakazo"
+- tapOn: "Sign in to 2hands"
 - tapOn: "Sign in"
 
 - extendedWaitUntil:

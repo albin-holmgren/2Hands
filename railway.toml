@@ -1,0 +1,14 @@
+[build]
+  dockerfile = "infra/compose/Dockerfile"
+
+[deploy]
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 10
+
+[service]
+  internalPort = 3100
+
+[[services]]
+  # Railway fallback for the API process only.
+  # Graphile worker needs a second service using `pnpm --filter @rakazo/worker start`
+  # and REALTIME_DATABASE_URL on the direct Postgres port (5432).

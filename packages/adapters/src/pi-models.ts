@@ -8,6 +8,11 @@ import {
   OPENAI_COMPATIBLE_PROVIDER_ID,
   registerOpenAiCompatibleCatalog,
 } from "./pi-openai-compatible-provider.js";
+import {
+  registerVercelGatewayProvider,
+  VERCEL_GATEWAY_PROVIDER_ID,
+  VERCEL_GATEWAY_CATALOG,
+} from "./vercel-gateway-provider.js";
 
 export type PiCatalogAuth = "api-key" | "oauth" | "both";
 
@@ -25,6 +30,8 @@ export type PiCatalogEntry = {
   reasoning?: boolean;
   thinkingLevels?: ThinkingLevel[];
   placeholder?: boolean;
+  platform?: boolean;
+  tier?: "cheap" | "mid" | "frontier" | "ultra";
 };
 
 export function listPiCatalog(): PiCatalogEntry[] {
@@ -35,7 +42,9 @@ export function listPiCatalog(): PiCatalogEntry[] {
 let cachedCatalog: PiCatalogEntry[] | undefined;
 
 function buildPiCatalog(): PiCatalogEntry[] {
-  const models = registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
+  const models = registerVercelGatewayProvider(
+    registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels())),
+  );
   const entries: PiCatalogEntry[] = [];
   for (const provider of models.getProviders()) {
     const apiKey = Boolean(provider.auth.apiKey);
@@ -67,6 +76,8 @@ function buildPiCatalog(): PiCatalogEntry[] {
         signIn: signInMeta?.mode,
         reasoning: Boolean(model.reasoning),
         thinkingLevels,
+        platform: provider.id === VERCEL_GATEWAY_PROVIDER_ID,
+        tier: VERCEL_GATEWAY_CATALOG.find((entry) => entry.id === model.id)?.tier,
         ...(model.id === OPENAI_COMPATIBLE_CATALOG_MODEL_ID ? { placeholder: true } : {}),
       });
     }
@@ -136,18 +147,21 @@ function catalogBilling(
   const signInMeta = SUBSCRIPTION_SIGN_IN_PROVIDERS[providerId];
   if (signInMeta) return signInMeta.billing;
   if (providerId === LOCAL_PROVIDER_ID) {
-    return "Runs on infrastructure configured by the deployment owner. No model charges from Rakazo.";
+    return "Runs on infrastructure configured by the deployment owner. No model charges from 2hands.";
+  }
+  if (providerId === VERCEL_GATEWAY_PROVIDER_ID) {
+    return "Included in your 2hands plan through Vercel AI Gateway. Usage counts against monthly tokens.";
   }
   if (providerId === OPENAI_COMPATIBLE_PROVIDER_ID) {
-    return "Runs on a URL you control. Rakazo does not pay for model usage.";
+    return "Runs on a URL you control. 2hands does not pay for model usage.";
   }
   if (opts.oauth && !opts.apiKey) {
-    return `${name} subscription login is not in the Rakazo UI yet. Skip if this deployment already has credentials.`;
+    return `${name} subscription login is not in the 2hands UI yet. Skip if this deployment already has credentials.`;
   }
   if (opts.apiKey) {
-    return `Uses your ${name} API key. Rakazo does not pay for model usage.`;
+    return `Uses your ${name} API key. 2hands does not pay for model usage.`;
   }
-  return `Uses your ${name} key. Rakazo does not pay for model usage.`;
+  return `Uses your ${name} key. 2hands does not pay for model usage.`;
 }
 
 export const scriptedCatalogEntry: PiCatalogEntry = {

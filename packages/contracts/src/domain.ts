@@ -23,6 +23,15 @@ export const ThinkingLevelSchema = z.enum([
 ]);
 export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;
 
+export const CodingHarnessSchema = z.enum(["none", "cursor", "claude", "codex"]);
+export type CodingHarness = z.infer<typeof CodingHarnessSchema>;
+
+export const PlanIdSchema = z.enum(["free", "plus", "pro", "ultra"]);
+export type PlanId = z.infer<typeof PlanIdSchema>;
+
+export const ModelTierSchema = z.enum(["cheap", "mid", "frontier", "ultra"]);
+export type ModelTier = z.infer<typeof ModelTierSchema>;
+
 export const BotSchema = z.object({
   id: Id,
   spaceId: Id,
@@ -49,6 +58,7 @@ export const BotSchema = z.object({
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
   thinkingLevel: ThinkingLevelSchema.nullable(),
+  codingHarness: CodingHarnessSchema,
   webhookConfigured: z.boolean(),
 });
 export type Bot = z.infer<typeof BotSchema>;
@@ -224,6 +234,7 @@ export const UpdateBotInput = z
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
     thinkingLevel: ThinkingLevelSchema.nullable().optional(),
+    codingHarness: CodingHarnessSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const providerProvided = value.modelProvider !== undefined;
@@ -797,6 +808,8 @@ export const ModelCatalogEntrySchema = z.object({
   thinkingLevels: z.array(ThinkingLevelSchema).optional(),
   /** Catalog stand-in so a provider appears before the user enters a real model id. */
   placeholder: z.boolean().optional(),
+  platform: z.boolean().optional(),
+  tier: ModelTierSchema.optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
@@ -959,8 +972,33 @@ export const MeSchema = z.object({
   canChooseHostComputer: z.boolean(),
   sandboxProvider: z.string(),
   avatarStyle: AvatarStyleSchema,
+  plan: PlanIdSchema.optional(),
+  planName: z.string().optional(),
 });
 export type Me = z.infer<typeof MeSchema>;
+
+export const BillingSchema = z.object({
+  plan: PlanIdSchema,
+  planName: z.string(),
+  priceUsd: z.number(),
+  status: z.string(),
+  currentPeriodEnd: z.string().nullable(),
+  maxBots: z.number(),
+  maxPlugins: z.number().nullable(),
+  harnesses: z.array(z.enum(["cursor", "claude", "codex"])),
+  modelTiers: z.array(ModelTierSchema),
+  monthlyTokens: z.number(),
+  tokensUsed: z.number(),
+  computerHours: z.number(),
+  computerSecondsUsed: z.number(),
+  checkoutEnabled: z.boolean(),
+});
+export type Billing = z.infer<typeof BillingSchema>;
+
+export const BillingCheckoutInput = z.object({
+  plan: z.enum(["plus", "pro", "ultra"]),
+});
+export type BillingCheckoutInput = z.infer<typeof BillingCheckoutInput>;
 
 export const AppBootstrapSchema = z.object({
   me: MeSchema,

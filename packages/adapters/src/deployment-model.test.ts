@@ -19,5 +19,15 @@ describe("resolveDeploymentModel", () => {
     expect(
       resolveDeploymentModel({ OPENROUTER_API_KEY: "or-key", PI_DEFAULT_PROVIDER: "anthropic" }),
     ).toEqual({ provider: "anthropic", model: "claude-sonnet-5", key: undefined });
+    expect(
+      resolveDeploymentModel({
+        AI_GATEWAY_API_KEY: "gw-key",
+        PI_DEFAULT_PROVIDER: "vercel-gateway",
+      }),
+    ).toEqual({
+      provider: "vercel-gateway",
+      model: "openai/gpt-4.1-mini",
+      key: "gw-key",
+    });
   });
 });

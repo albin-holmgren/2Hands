@@ -83,7 +83,7 @@ model Verification {
 }
 
 model Organization {
-  id          String       @id
+  id          String               @id
   name        String
   slug        String
   logo        String?
@@ -92,9 +92,29 @@ model Organization {
   members     Member[]
   invitations Invitation[]
   spaces      Space[]
+  billing     OrganizationBilling?
 
   @@unique([slug])
   @@map("organization")
+}
+
+model OrganizationBilling {
+  organizationId        String       @id
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                  String       @default("free")
+  stripeCustomerId      String?      @unique
+  stripeSubscriptionId  String?      @unique
+  stripePriceId         String?
+  status                String       @default("active")
+  currentPeriodEnd      DateTime?
+  computerSecondsUsed   Int          @default(0)
+  inputTokensUsed       Int          @default(0)
+  outputTokensUsed      Int          @default(0)
+  usagePeriodStart      DateTime     @default(now())
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@map("organization_billing")
 }
 
 model ActionApprovalRule {
@@ -341,6 +361,7 @@ model Bot {
   modelProvider     String?
   modelId           String?
   thinkingLevel     String?
+  codingHarness     String?
   webhookSecretId   String?
   routines          Routine[]
   scratchpadItems   ScratchpadItem[]

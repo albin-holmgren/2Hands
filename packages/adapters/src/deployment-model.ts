@@ -5,17 +5,17 @@
  * Vendor env names and model ids live here, in the adapter layer, not in core.
  */
 export function resolveDeploymentModel(env: NodeJS.ProcessEnv = process.env) {
+  const gatewayKey = env.AI_GATEWAY_API_KEY?.trim() || env.VERCEL_AI_GATEWAY_API_KEY?.trim();
   const provider = env.PI_DEFAULT_PROVIDER?.trim() || "openrouter";
-  // A row per provider that ships a deployment key. A third one adds a row here, not a
-  // branch at each call site — and an unknown provider gets no key rather than another
-  // vendor's, which a ternary on one provider would not give.
   const keys: Record<string, string | undefined> = {
     openrouter: env.OPENROUTER_API_KEY,
     anthropic: env.ANTHROPIC_API_KEY,
+    "vercel-gateway": gatewayKey,
   };
   const models: Record<string, string> = {
     openrouter: "deepseek/deepseek-v4-flash-0731",
     anthropic: "claude-sonnet-5",
+    "vercel-gateway": "openai/gpt-4.1-mini",
   };
   return {
     provider,

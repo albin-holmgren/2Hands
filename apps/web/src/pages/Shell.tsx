@@ -5510,6 +5510,7 @@ function BotSettings({
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
+    codingHarness?: "none" | "cursor" | "claude" | "codex";
   }) => Promise<void>;
   onExport: () => Promise<void>;
   onClear: () => void;
@@ -5528,6 +5529,7 @@ function BotSettings({
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
   const [thinkingLevel, setThinkingLevel] = useState(bot.thinkingLevel ?? "");
+  const [codingHarness, setCodingHarness] = useState(bot.codingHarness ?? "none");
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -5588,6 +5590,17 @@ function BotSettings({
       seenOptions.add(option.key);
       connectedOptions.push(option);
     }
+  }
+  for (const entry of catalog.filter((item) => item.platform && !item.placeholder)) {
+    const key = modelOptionKey(entry.provider, entry.id);
+    if (seenOptions.has(key)) continue;
+    seenOptions.add(key);
+    connectedOptions.push({
+      key,
+      provider: entry.provider,
+      modelId: entry.id,
+      label: `${entry.providerName ?? "2hands"} · ${entry.label}`,
+    });
   }
 
   const effectiveProvider = modelKey
@@ -5693,6 +5706,21 @@ function BotSettings({
             </select>
           </label>
         ) : null}
+        <label className="mt-4 block text-[14px] text-[#85858A]">
+          <Trans>Coding harness</Trans>
+          <select
+            value={codingHarness}
+            onChange={(event) =>
+              setCodingHarness(event.target.value as "none" | "cursor" | "claude" | "codex")
+            }
+            className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-transparent px-3.5 py-3 text-[#ECECEE]"
+          >
+            <option value="none">{t`None — Pi only`}</option>
+            <option value="codex">{t`Codex`}</option>
+            <option value="claude">{t`Claude Code`}</option>
+            <option value="cursor">{t`Cursor`}</option>
+          </select>
+        </label>
         {memoryProviderConfigured ? (
           <div className="mt-4 text-[14px] text-[#85858A]">
             <Trans>Memory scope</Trans>
@@ -5767,6 +5795,7 @@ function BotSettings({
               voiceId: voiceId || null,
               modelProvider: selected?.provider ?? null,
               modelId: selected?.modelId ?? null,
+              codingHarness,
               // Only clear thinking when catalog metadata is available; otherwise
               // preserve the stored override if models.list failed or is still loading.
               ...(modelMetaReady

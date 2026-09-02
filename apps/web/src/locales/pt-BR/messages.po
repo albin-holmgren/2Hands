@@ -1153,7 +1153,7 @@ msgid "Create your first bot"
 msgstr "Crie seu primeiro bot"
 
 #: src/pages/Auth.tsx:18
-msgid "Create your Rakazo"
+msgid "Create your 2hands"
 msgstr "Crie o seu Rakazo"
 
 #: src/components/AskCard.tsx:19
@@ -2375,7 +2375,7 @@ msgid "Retry now"
 msgstr "Nova tentativa agora"
 
 #: src/pages/McpOAuthCallback.tsx:65
-msgid "Return to Rakazo"
+msgid "Return to 2hands"
 msgstr "Retorno a Rakazo"
 
 #: src/pages/MessagingSettingsOverlay.tsx:296
@@ -2593,7 +2593,7 @@ msgid "Sign in  →"
 msgstr "Entrar"
 
 #: src/pages/Auth.tsx:18
-msgid "Sign in to Rakazo"
+msgid "Sign in to 2hands"
 msgstr "Entrar no Rakazo"
 
 #: src/pages/Auth.tsx:156

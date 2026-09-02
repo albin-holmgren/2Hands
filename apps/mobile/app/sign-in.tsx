@@ -133,9 +133,9 @@ export default function SignIn() {
                 }}
               >
                 {mode === "in"
-                  ? "Sign in to Rakazo"
+                  ? "Sign in to 2hands"
                   : mode === "up"
-                    ? "Sign up for Rakazo"
+                    ? "Sign up for 2hands"
                     : "Reset your password"}
               </Text>
               {resetSent ? (

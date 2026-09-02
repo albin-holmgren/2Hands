@@ -31,6 +31,8 @@ import {
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
+  assertHarnessAllowed,
+  assertTokenBudget,
   assertTransition,
   blocksToAgentHistoryText,
   botMessageAllowsSilence,
@@ -51,6 +53,8 @@ import {
   nextCronDateAcross,
   nextFence,
   planActionGate,
+  parseCodingHarness,
+  PlanLimitError,
   promptInvokesSkill,
   redactSecrets,
   renderBotDirectory,
@@ -67,13 +71,16 @@ import {
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
+  ensureOrganizationBilling,
   findDefaultModelCredential,
   findModelCredential,
   InvalidSpaceNameError,
   type McpServer,
   type Prisma,
   type PrismaClient,
+  organizationIdForSpace,
   parseComputerMode,
+  recordTokenUsage,
   SpaceLimitError,
   type ThreadEvents,
 } from "@rakazo/db";
@@ -141,6 +148,7 @@ import {
   renewComputerExecutionLease,
   screenLeaseIdForRun,
 } from "./computer-lifecycle.js";
+import { runCodingHarness } from "./coding-harness.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
@@ -2647,6 +2655,31 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return archived;
           }
+          if (name === "send_to_coding_harness") {
+            const harness = parseCodingHarness(
+              args.harness ? String(args.harness) : bot.codingHarness,
+            );
+            if (harness === "none") {
+              return finish({
+                error:
+                  "This bot has no coding harness. Pick Cursor, Claude Code, or Codex in bot settings.",
+              });
+            }
+            try {
+              const organizationId = await organizationIdForSpace(deps.prisma, run.spaceId);
+              const billing = await ensureOrganizationBilling(deps.prisma, organizationId);
+              assertHarnessAllowed(billing.entitlements, harness);
+            } catch (error) {
+              if (error instanceof PlanLimitError) return finish({ error: error.message });
+              console.error("coding harness plan check", error);
+            }
+            const result = await runCodingHarness({
+              harness,
+              prompt: String(args.prompt ?? ""),
+              repoUrl: args.repo_url ? String(args.repo_url) : undefined,
+            });
+            return finish(result);
+          }
           if (deps.connector) {
             let result: unknown = { error: `unknown tool ${name}` };
             for await (const event of deps.connector.execute(
@@ -3114,6 +3147,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   outputTokens: event.outputTokens,
                 },
               });
+              try {
+                const organizationId = await organizationIdForSpace(deps.prisma, run.spaceId);
+                const billing = await ensureOrganizationBilling(deps.prisma, organizationId);
+                assertTokenBudget(
+                  billing.entitlements,
+                  billing.inputTokensUsed + billing.outputTokensUsed,
+                );
+                await recordTokenUsage(
+                  deps.prisma,
+                  organizationId,
+                  event.inputTokens,
+                  event.outputTokens,
+                );
+              } catch (error) {
+                if (error instanceof PlanLimitError) throw error;
+                console.error("token metering", error);
+              }
             } else if (event.type === "done") {
               if (!assembled && event.text) {
                 assembled = event.text;

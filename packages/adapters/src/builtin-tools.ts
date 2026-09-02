@@ -629,6 +629,30 @@ export const builtinAgentTools: ConnectorTool[] = [
       required: ["message"],
     },
   },
+  {
+    name: "send_to_coding_harness",
+    description:
+      "Hand implementation or code review to a coding harness (Cursor Cloud Agents, Claude Code, or Codex). Use this for writing or changing source code. After it returns, QA the result on this computer with browser and shell tools. Do not use this for clicking through apps or general computer use.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "What to implement, fix, or review. Include file paths and acceptance criteria.",
+        },
+        harness: {
+          type: "string",
+          enum: ["cursor", "claude", "codex"],
+          description: "Override the bot's default coding harness.",
+        },
+        repo_url: {
+          type: "string",
+          description: "Git repository URL when the harness should clone a remote repo.",
+        },
+      },
+      required: ["prompt"],
+    },
+  },
 ];
 
 /** Agent-connection tools, exposed only when the messaging surface is enabled. */

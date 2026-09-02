@@ -67,6 +67,7 @@ import { type AppEnv, loadEnv } from "./env.js";
 import { createMessagingInboundHandler } from "./messaging-inbound.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
 import { createRouter } from "./router.js";
+import { mountStripeWebhook } from "./stripe-webhook.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
 
@@ -229,6 +230,7 @@ export async function createApp(
     onEmailError: (error) => console.error("transactional email delivery failed", error),
     extraOrigins: [
       "rakazo://",
+      "2hands://",
       "exp://",
       "exp://*",
       "http://localhost:8081",
@@ -352,6 +354,7 @@ export async function createApp(
       credentials: true,
     }),
   );
+  mountStripeWebhook(app, prisma);
   app.get("/api/auth/capabilities", (c) =>
     c.json({
       passwordReset: Boolean(email),
@@ -473,7 +476,8 @@ export async function createApp(
 function isTrustedOrigin(origin: string, env: AppEnv) {
   if (!origin) return true;
   if (origin === env.webOrigin || origin === env.apiUrl || origin === env.authUrl) return true;
-  if (origin.startsWith("rakazo://") || origin.startsWith("exp://")) return true;
+  if (origin.startsWith("rakazo://") || origin.startsWith("2hands://") || origin.startsWith("exp://"))
+    return true;
   try {
     const host = new URL(origin).hostname;
     return isLoopbackHost(host);

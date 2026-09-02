@@ -8,11 +8,14 @@ import type {
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
 import { type Actor, type Bot, GROUP_MEMBER_MIN } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, assertBotLimit, PlanLimitError } from "@rakazo/core";
 import {
   computerScopeKey,
+  countOrganizationBots,
   createRepos,
   createThreadMessageInTransaction,
+  ensureOrganizationBilling,
+  organizationIdForSpace,
   type Prisma,
   type PrismaClient,
   withTransactionRetry,
@@ -60,6 +63,26 @@ export async function spawnBot(
     email: "",
     isDeploymentOwner: false,
   };
+  const existingSpawn = await deps.prisma.bot.findUnique({
+    where: {
+      spaceId_spawnKey: {
+        spaceId: input.spawnedBy.spaceId,
+        spawnKey: input.spawnKey,
+      },
+    },
+    select: { id: true },
+  });
+  if (!existingSpawn) {
+    try {
+      const organizationId = await organizationIdForSpace(deps.prisma, input.spawnedBy.spaceId);
+      const billing = await ensureOrganizationBilling(deps.prisma, organizationId);
+      const currentBots = await countOrganizationBots(deps.prisma, organizationId);
+      assertBotLimit(billing.entitlements, currentBots);
+    } catch (error) {
+      if (error instanceof PlanLimitError) return { error: error.message };
+      console.error("spawn bot plan check", error);
+    }
+  }
   let duplicate = false;
   let created: Pick<Bot, "id" | "name" | "title" | "threadId">;
   try {
