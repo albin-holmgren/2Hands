@@ -3,7 +3,7 @@ import { cancelModelOAuthAttempt, finishModelOAuthAttempt } from "@rakazo/core";
 import { useEffect, useRef, useState } from "react";
 import { oauthStateOf, onDesktopOAuthCallback } from "./desktop";
 import { waitForModelOAuth } from "./model-auth";
-import { rpc } from "./rpc";
+import { useWorkspaceRpc } from "./workspace-context";
 
 export type ModelOAuthSignInBegin = {
   provider: string;
@@ -21,6 +21,7 @@ export function useModelOAuthSignIn(options: {
   onError: (message: string) => void;
   onClearError?: () => void;
 }) {
+  const rpc = useWorkspaceRpc();
   const { onFinished, onError, onClearError } = options;
   const [oauth, setOauth] = useState<ModelOAuthBegin | null>(null);
   const [pasteCode, setPasteCode] = useState("");
@@ -57,7 +58,7 @@ export function useModelOAuthSignIn(options: {
   }
 
   async function finishSubscriptionSignIn(loginId: string, controller: AbortController) {
-    await waitForModelOAuth(loginId, controller.signal);
+    await waitForModelOAuth(loginId, controller.signal, rpc);
     if (controller.signal.aborted) return;
     await rpc.models.finishOAuth({ loginId }, { signal: controller.signal });
     if (controller.signal.aborted) return;

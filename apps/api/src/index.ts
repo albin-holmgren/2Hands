@@ -6,12 +6,14 @@ loadRootEnv();
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { loadEnv } from "./env.js";
+import { attachNovncProxy } from "./novnc-proxy.js";
 
 const env = loadEnv();
 const { app, stop } = await createApp(env);
 const server = serve({ fetch: app.fetch, port: env.port, hostname: env.apiHost }, () => {
   console.log(`rakazo api on http://${env.apiHost}:${env.port}`);
 });
+attachNovncProxy(server, env.screenProxySecret);
 
 // Long-lived connections (threads.subscribe SSE streams) never end on their
 // own, so server.close() alone waits forever for them. Track sockets and

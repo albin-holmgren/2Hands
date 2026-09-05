@@ -144,6 +144,7 @@ describe("contracts", () => {
     expect(appContract.models.beginOAuth).toBeTruthy();
     expect(appContract.bootstrap).toBeTruthy();
     expect(appContract.models.completeOAuth).toBeTruthy();
+    expect(appContract.onboarding.ensureChiefOfStaff).toBeTruthy();
     expect(appContract.bots.create).toBeTruthy();
     expect(appContract.bots.reorder).toBeTruthy();
     expect(appContract.bots.archive).toBeTruthy();

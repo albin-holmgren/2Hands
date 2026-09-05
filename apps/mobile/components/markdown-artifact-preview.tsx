@@ -6,6 +6,7 @@ import {
   openMobileArtifact,
   readMobileArtifactText,
 } from "../lib/artifact-open";
+import { useNativeTheme } from "../lib/theme";
 import { NativeSymbol } from "./native-symbol";
 
 export type MarkdownArtifactPreviewTarget = {
@@ -23,6 +24,7 @@ export function MarkdownArtifactPreview({
   target: MarkdownArtifactPreviewTarget;
   onClose: () => void;
 }) {
+  const native = useNativeTheme();
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "ready"; markdown: string }
@@ -53,20 +55,20 @@ export function MarkdownArtifactPreview({
 
   return (
     <Modal animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: native.page }}>
         <View
           style={{
             height: 54,
             flexDirection: "row",
             alignItems: "center",
             borderBottomWidth: 1,
-            borderBottomColor: "#27272B",
+            borderBottomColor: native.hairlineStrong,
             paddingHorizontal: 12,
           }}
         >
           <Text
             numberOfLines={1}
-            style={{ flex: 1, color: "#E7E7E9", fontSize: 15, fontWeight: "500" }}
+            style={{ flex: 1, color: native.ink, fontSize: 15, fontWeight: "500" }}
           >
             {target.name}
           </Text>
@@ -92,7 +94,7 @@ export function MarkdownArtifactPreview({
               ios="square.and.arrow.up"
               android="share-social-outline"
               size={19}
-              color="#A8A8AD"
+              color={native.muted}
             />
           </Pressable>
           <Pressable
@@ -101,26 +103,26 @@ export function MarkdownArtifactPreview({
             onPress={onClose}
             style={{ padding: 10 }}
           >
-            <NativeSymbol ios="xmark" android="close" size={19} color="#A8A8AD" />
+            <NativeSymbol ios="xmark" android="close" size={19} color={native.muted} />
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 28 }}>
           {state.status === "loading" ? (
-            <Text style={{ color: "#85858A", fontSize: 15 }}>Loading preview…</Text>
+            <Text style={{ color: native.muted, fontSize: 15 }}>Loading preview…</Text>
           ) : state.status === "error" ? (
             <View
               style={{
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: "#5A2A2A",
-                backgroundColor: "#2A1717",
+                borderColor: native.hairlineStrong,
+                backgroundColor: native.surface,
                 padding: 14,
               }}
             >
-              <Text style={{ color: "#FCA5A5", fontSize: 15 }}>{state.message}</Text>
+              <Text style={{ color: native.dangerSoft, fontSize: 15 }}>{state.message}</Text>
             </View>
           ) : (
-            <ChatMarkdown>{state.markdown}</ChatMarkdown>
+            <ChatMarkdown theme={native.theme}>{state.markdown}</ChatMarkdown>
           )}
         </ScrollView>
       </SafeAreaView>

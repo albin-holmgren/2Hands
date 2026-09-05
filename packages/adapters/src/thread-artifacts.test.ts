@@ -89,7 +89,10 @@ describe("current-turn thread files", () => {
       {
         prisma: { artifact: { findMany } } as unknown as PrismaClient,
         artifacts: { get } as unknown as ArtifactStore,
-        sandbox: { writeFile } as unknown as SandboxProvider,
+        sandbox: {
+          describe: () => ({ id: "fake" }),
+          writeFile,
+        } as unknown as SandboxProvider,
       },
       blocks,
       { context, computer, computerMode: "team" },
@@ -113,6 +116,51 @@ describe("current-turn thread files", () => {
       },
     ]);
     expect(currentTurnFilesInstruction(files)).toContain('"attachments/artifact-1.pdf"');
+  });
+
+  it("does not copy attachments onto a computer when computers are unavailable", async () => {
+    const findMany = vi.fn();
+    const writeFile = vi.fn();
+    const files = await materializeCurrentTurnFiles(
+      {
+        prisma: { artifact: { findMany } } as unknown as PrismaClient,
+        artifacts: { get: vi.fn() } as unknown as ArtifactStore,
+        sandbox: {
+          describe: () => ({ id: "none" }),
+          writeFile,
+        } as unknown as SandboxProvider,
+      },
+      [
+        {
+          kind: "file",
+          artifactId: "artifact-1",
+          name: "notes.txt",
+          mimeType: "text/plain",
+          size: 4,
+        },
+      ],
+      {
+        context: {
+          operationId: "run-1",
+          traceId: "run-1",
+          spaceId: "workspace-1",
+          userId: "user-1",
+          botId: "bot-1",
+          signal: new AbortController().signal,
+        },
+        computer: {
+          id: "computer-1",
+          botId: "bot-1",
+          kind: "fake",
+          providerRef: "fake-1",
+        },
+        computerMode: "team",
+      },
+    );
+
+    expect(files).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("does not load images as computer files", async () => {

@@ -576,35 +576,42 @@ describe("thread event reduction", () => {
     expect(next?.cursor).toBe(10);
   });
 
-  it("keeps a failed run and its error so the thread can surface the failure", () => {
-    const failing = threadRun("run-a");
-    const initial: ThreadSnapshot = {
-      ...snapshot([
-        { ...message("progress:run-a", [{ kind: "progress", text: "A" }]), runId: failing.id },
-      ]),
-      run: failing,
-    };
-    const failed = event({
-      type: "run.failed",
-      seq: 11,
-      runId: failing.id,
-      payload: { error: "Provider is not configured: openrouter" },
-    });
+  it.each([undefined, "MODEL_UNAVAILABLE"] as const)(
+    "keeps a failed run and optional %s recovery code",
+    (errorCode) => {
+      const failing = threadRun("run-a");
+      const initial: ThreadSnapshot = {
+        ...snapshot([
+          { ...message("progress:run-a", [{ kind: "progress", text: "A" }]), runId: failing.id },
+        ]),
+        run: failing,
+      };
+      const failed = event({
+        type: "run.failed",
+        seq: 11,
+        runId: failing.id,
+        payload: {
+          error: "Provider is not configured: openrouter",
+          ...(errorCode ? { errorCode } : {}),
+        },
+      });
 
-    const next = reduceThreadSnapshot(initial, failed);
+      const next = reduceThreadSnapshot(initial, failed);
 
-    expect(next?.messages).toEqual([]);
-    expect(next?.run).toMatchObject({
-      id: failing.id,
-      status: "failed",
-      error: "Provider is not configured: openrouter",
-    });
-    expect(threadRunError(next)).toBe("Provider is not configured: openrouter");
-    expect(threadRunError(next, new Set([failing.id]))).toBeNull();
-    expect(threadRunError(next, new Set(["other-run"]))).toBe(
-      "Provider is not configured: openrouter",
-    );
-  });
+      expect(next?.messages).toEqual([]);
+      expect(next?.run).toMatchObject({
+        id: failing.id,
+        status: "failed",
+        error: "Provider is not configured: openrouter",
+        ...(errorCode ? { errorCode } : {}),
+      });
+      expect(threadRunError(next)).toBe("Provider is not configured: openrouter");
+      expect(threadRunError(next, new Set([failing.id]))).toBeNull();
+      expect(threadRunError(next, new Set(["other-run"]))).toBe(
+        "Provider is not configured: openrouter",
+      );
+    },
+  );
 
   it("keeps the error when a member run fails while another member is still running", () => {
     const runA = threadRun("run-a", "bot-a");

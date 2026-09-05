@@ -25,7 +25,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, ExecutionError } from "@rakazo/core";
 import { SingleScreenClaimTracker } from "./computer-screens.js";
 import {
   boundedComputerActions,
@@ -95,7 +95,7 @@ export class BoxSandboxProvider implements SandboxProvider {
         graphical: true,
         pty: false,
         snapshots: true,
-        takeover: true,
+        takeover: false,
         persistentHome: true,
         multiScreen: false,
       },
@@ -248,53 +248,28 @@ export class BoxSandboxProvider implements SandboxProvider {
   }
 
   async connectScreen(
-    computer: ComputerRef,
-    request: ScreenRequest,
-    context: AdapterContext,
+    _computer: ComputerRef,
+    _request: ScreenRequest,
+    _context: AdapterContext,
   ): Promise<ScreenSession> {
-    const id = this.id(computer);
-    this.screens.claim(id, context);
-    try {
-      const deadline = Date.now() + 60_000;
-      while (true) {
-        if (context.signal.aborted) {
-          throw context.signal.reason ?? new Error("screen connection aborted");
-        }
-        const desktop = await this.client.desktop(
-          {
-            boxId: id,
-            vnc: 1,
-            desktopRequest: { publicAccess: false },
-          },
-          { signal: context.signal },
-        );
-        if (!desktop.provisioning && desktop.desktopUrl) {
-          const url = new URL(desktop.desktopUrl);
-          url.searchParams.set("autoconnect", "true");
-          url.searchParams.set("resize", "scale");
-          url.searchParams.set("view_only", request.interactive ? "false" : "true");
-          return {
-            url: url.toString(),
-            mimeType: "text/html",
-            close: async () => undefined,
-          };
-        }
-        if (Date.now() >= deadline) throw new Error("Box desktop did not become ready");
-        await delay(1_000, undefined, { signal: context.signal });
-      }
-    } catch (error) {
-      this.screens.release(id, context);
-      throw error;
-    }
+    throw new ExecutionError(
+      "COMPUTER_UNAVAILABLE",
+      "Box streaming is unavailable because the provider cannot isolate viewing from control.",
+    );
   }
 
   async setScreenControl(
-    computer: ComputerRef,
+    _computer: ComputerRef,
     interactive: boolean,
-    context: AdapterContext,
+    _context: AdapterContext,
     _controlToken?: string,
   ): Promise<void> {
-    if (interactive) this.screens.claim(this.id(computer), context);
+    if (interactive) {
+      throw new ExecutionError(
+        "COMPUTER_UNAVAILABLE",
+        "Box streaming is unavailable because the provider cannot isolate viewing from control.",
+      );
+    }
   }
 
   async sendInput(

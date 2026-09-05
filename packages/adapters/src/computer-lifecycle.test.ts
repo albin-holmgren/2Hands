@@ -33,6 +33,63 @@ const context = {
 } satisfies AdapterContext;
 
 describe("computer provisioning", () => {
+  it("joins the winning shared boot when another bot claims it after the initial read", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-shared-boot-race-"));
+    const computer = {
+      id: "computer-1",
+      homeKey: "shared-home",
+      providerRef: null,
+      kind: "fake",
+      scope: "dedicated",
+      state: "stopped",
+      controlLeaseId: null,
+    };
+    const ready = { ...computer, state: "running", providerRef: "winner-provider" };
+    const prisma = {
+      computer: {
+        findUniqueOrThrow: vi.fn().mockResolvedValueOnce(computer).mockResolvedValue(ready),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      bot: { findFirst: vi.fn(async () => ({ id: context.botId })) },
+    } as unknown as PrismaClient;
+    const sandbox = {
+      provision: vi.fn(async () => ({
+        id: "winner-provider",
+        providerRef: "winner-provider",
+        botId: "shared-home",
+        kind: "fake",
+      })),
+      prepare: vi.fn(async () => {}),
+    } as unknown as SandboxProvider;
+    try {
+      await expect(
+        provisionComputer(
+          {
+            prisma,
+            sandbox,
+            home: {} as AgentHomeStore,
+            jobs: {} as JobPublisher,
+            events: {} as ThreadEvents,
+            dataDir,
+          },
+          "computer-1",
+          context,
+        ),
+      ).resolves.toMatchObject({ providerRef: "winner-provider" });
+      expect(sandbox.provision).toHaveBeenCalledWith(
+        expect.objectContaining({ providerRef: "winner-provider" }),
+        context,
+      );
+      expect(prisma.computer.updateMany).toHaveBeenCalledOnce();
+      expect(prisma.bot.findFirst).toHaveBeenCalledWith({
+        where: { id: context.botId, computerId: "computer-1", archivedAt: null },
+        select: { id: true },
+      });
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it("stops a provider when archive invalidates its boot claim", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-race-"));
     const stop = vi.fn().mockResolvedValue(undefined);

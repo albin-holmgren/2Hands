@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
+import { ExecutionErrorCodeSchema } from "./execution-errors.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
@@ -685,7 +686,9 @@ export const RunSchema = z.object({
   routineId: Id.nullable(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
+  modelFunding: z.enum(["hosted", "byok"]).nullable().optional(),
   error: z.string().nullable(),
+  errorCode: ExecutionErrorCodeSchema.optional(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -810,6 +813,12 @@ export const ModelCatalogEntrySchema = z.object({
   placeholder: z.boolean().optional(),
   platform: z.boolean().optional(),
   tier: ModelTierSchema.optional(),
+  inputUsdPerMillion: z.number().nonnegative().optional(),
+  outputUsdPerMillion: z.number().nonnegative().optional(),
+  cacheReadUsdPerMillion: z.number().nonnegative().optional(),
+  cacheWriteUsdPerMillion: z.number().nonnegative().optional(),
+  supportsImages: z.boolean().optional(),
+  supportsTools: z.boolean().optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
@@ -992,6 +1001,14 @@ export const BillingSchema = z.object({
   computerHours: z.number(),
   computerSecondsUsed: z.number(),
   checkoutEnabled: z.boolean(),
+  billingEnabled: z.boolean(),
+  legacyUntil: z.string().nullable(),
+  allowanceUsd: z.number(),
+  spentUsd: z.number(),
+  reservedUsd: z.number(),
+  remainingUsd: z.number(),
+  resetAt: z.string(),
+  exhausted: z.boolean(),
 });
 export type Billing = z.infer<typeof BillingSchema>;
 

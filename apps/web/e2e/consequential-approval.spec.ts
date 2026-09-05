@@ -79,7 +79,7 @@ test("actions run by default while optional confirmations live in advanced user 
 
 async function openUserSettings(page: Page) {
   await page.getByTestId("user-menu-trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await expect(page.getByTestId("user-settings")).toBeVisible();
 }
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { testDatabaseUrl } from "./cli/test-database-url.js";
 import { sessionCookieHeader } from "./index.js";
 
 const live = process.env.RUN_COMPUTER_E2E === "1";
@@ -17,6 +18,7 @@ describeLive("real model and E2B computer journey", () => {
     for (const key of ["DATABASE_URL", "E2B_API_KEY", "OPENROUTER_API_KEY", "COMPUTER_E2E_MODEL"]) {
       if (!process.env[key]) throw new Error(`${key} is required for pnpm test:computer`);
     }
+    testDatabaseUrl(process.env.DATABASE_URL);
     dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-computer-e2e-"));
     const { createApp } = await import("../../../apps/api/src/app.ts");
     handles = await createApp({

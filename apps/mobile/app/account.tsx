@@ -1,6 +1,6 @@
 import type { AvatarStyle } from "@rakazo/contracts";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo as useThemeMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -37,11 +37,19 @@ import {
   openPromotedNotificationSettings,
   setLiveNotificationSettings,
 } from "../lib/live-notifications";
-import { native } from "../lib/native";
 import { registerPushToken } from "../lib/push";
+import {
+  type NativeTheme,
+  setThemePreference,
+  useNativeTheme,
+  useThemePreference,
+} from "../lib/theme";
 
 export default function Account() {
+  const native = useNativeTheme();
+  const styles = useThemeMemo(() => makeStyles(native), [native]);
   const router = useRouter();
+  const appearance = useThemePreference();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const [me, setMe] = useState<MobileMe | null>(null);
   const [password, setPassword] = useState("");
@@ -87,15 +95,15 @@ export default function Account() {
   }, []);
 
   const usageBlock = (
-    <View accessibilityLabel="Usage" style={styles.profile}>
-      <Text style={styles.settingsTitle}>Usage</Text>
-      {usage ? (
-        <Text style={styles.email}>
-          {usage.runs} runs · {usage.inputTokens + usage.outputTokens} tokens
-        </Text>
-      ) : null}
-      <Text style={styles.settingsExplanation}>Model spend uses your provider keys.</Text>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Usage and plan"
+      style={styles.profile}
+      onPress={() => router.push("/usage")}
+    >
+      <Text style={styles.settingsTitle}>Usage & plan →</Text>
+      {usage ? <Text style={styles.email}>{usage.runs} runs this month</Text> : null}
+    </Pressable>
   );
 
   async function restoreBot(botId: string) {
@@ -222,6 +230,40 @@ export default function Account() {
         </View>
         {focus !== "usage" ? usageBlock : null}
 
+        <View accessibilityLabel="Appearance" style={styles.profile}>
+          <Text style={styles.settingsTitle}>Appearance</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+            {(["system", "light", "dark"] as const).map((value) => (
+              <Pressable
+                key={value}
+                accessibilityRole="button"
+                accessibilityLabel={`${value} appearance`}
+                accessibilityState={{ selected: appearance === value }}
+                onPress={() =>
+                  void setThemePreference(value).catch(() => setError("Could not save appearance"))
+                }
+                style={{
+                  minHeight: 44,
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 12,
+                  backgroundColor: appearance === value ? native.cream : native.fill,
+                }}
+              >
+                <Text
+                  style={{
+                    color: appearance === value ? native.creamInk : native.ink,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {value}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         <View accessibilityLabel="Password" style={styles.profile}>
           <Text style={styles.settingsTitle}>Password</Text>
           <AccountPasswordInput
@@ -336,14 +378,14 @@ export default function Account() {
               onPress={() => void openPromotedNotificationSettings()}
               style={{ minHeight: 44, justifyContent: "center" }}
             >
-              <Text style={{ color: "#4C8DFF", fontSize: 14 }}>Live update settings</Text>
+              <Text style={{ color: native.accent, fontSize: 14 }}>Live update settings</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               onPress={() => void openLiveNotificationSettings()}
               style={{ minHeight: 44, justifyContent: "center" }}
             >
-              <Text style={{ color: "#4C8DFF", fontSize: 14 }}>Notification settings</Text>
+              <Text style={{ color: native.accent, fontSize: 14 }}>Notification settings</Text>
             </Pressable>
             {notificationError ? <Text style={styles.error}>{notificationError}</Text> : null}
           </View>
@@ -459,7 +501,7 @@ export default function Account() {
             ]}
           >
             {pending ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={native.ink} />
             ) : (
               <Text style={styles.deleteLabel}>Delete account</Text>
             )}
@@ -483,6 +525,7 @@ function NotificationSwitch({
   disabled: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const native = useNativeTheme();
   return (
     <View
       style={{
@@ -518,6 +561,8 @@ function AccountPasswordInput({
   onChange: (value: string) => void;
   autoComplete: "current-password" | "new-password";
 }) {
+  const native = useNativeTheme();
+  const styles = useThemeMemo(() => makeStyles(native), [native]);
   return (
     <TextInput
       accessibilityLabel={label}
@@ -534,202 +579,203 @@ function AccountPasswordInput({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: native.page,
-  },
-  content: {
-    flexGrow: 1,
-    padding: 20,
-    gap: 20,
-  },
-  profile: {
-    borderRadius: 16,
-    backgroundColor: native.fill,
-    padding: 18,
-    gap: 4,
-  },
-  name: {
-    color: native.label,
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  email: {
-    color: native.secondaryLabel,
-    fontSize: 15,
-  },
-  button: {
-    minHeight: 50,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: native.fill,
-  },
-  buttonLabel: {
-    color: native.label,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  archivedSection: {
-    borderRadius: 16,
-    backgroundColor: native.fill,
-    padding: 18,
-    gap: 14,
-  },
-  sectionTitle: {
-    color: native.secondaryLabel,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  archivedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  archivedName: {
-    flex: 1,
-    color: native.label,
-    fontSize: 16,
-  },
-  restoreLabel: {
-    color: native.label,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  archivedDeleteLabel: {
-    color: "#FF6961",
-    fontSize: 14,
-  },
-  settingsButton: {
-    minHeight: 62,
-    borderRadius: 14,
-    backgroundColor: native.fill,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  avatarSection: {
-    borderRadius: 16,
-    backgroundColor: native.fill,
-    padding: 18,
-    gap: 14,
-  },
-  avatarOptions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  avatarOption: {
-    flex: 1,
-    minHeight: 86,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: native.tertiaryLabel,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  avatarOptionSelected: {
-    borderColor: native.label,
-    backgroundColor: native.fillPressed,
-  },
-  avatarLabel: {
-    color: native.label,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  settingsTitle: {
-    color: native.label,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  settingsExplanation: {
-    color: native.secondaryLabel,
-    fontSize: 13,
-    marginTop: 3,
-  },
-  accountPassword: {
-    minHeight: 46,
-    borderRadius: 12,
-    backgroundColor: native.fillPressed,
-    color: native.label,
-    paddingHorizontal: 14,
-    marginTop: 8,
-  },
-  passwordMessage: {
-    color: native.secondaryLabel,
-    fontSize: 13,
-    marginTop: 8,
-  },
-  changePasswordButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: native.fillPressed,
-    marginTop: 10,
-  },
-  changePasswordLabel: {
-    color: native.label,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  chevron: {
-    color: native.secondaryLabel,
-    fontSize: 28,
-    fontWeight: "300",
-  },
-  dangerZone: {
-    marginTop: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#5A2426",
-    padding: 18,
-  },
-  dangerTitle: {
-    color: "#FF6961",
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  explanation: {
-    color: native.secondaryLabel,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8,
-  },
-  password: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: native.fill,
-    color: native.label,
-    paddingHorizontal: 14,
-    marginTop: 16,
-    fontSize: 16,
-  },
-  error: {
-    color: "#FF6961",
-    fontSize: 14,
-    marginTop: 10,
-  },
-  deleteButton: {
-    minHeight: 50,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#C9363E",
-    marginTop: 14,
-  },
-  deleteLabel: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.45,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-});
+const makeStyles = (native: NativeTheme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: native.page,
+    },
+    content: {
+      flexGrow: 1,
+      padding: 20,
+      gap: 20,
+    },
+    profile: {
+      borderRadius: 16,
+      backgroundColor: native.fill,
+      padding: 18,
+      gap: 4,
+    },
+    name: {
+      color: native.label,
+      fontSize: 20,
+      fontWeight: "600",
+    },
+    email: {
+      color: native.secondaryLabel,
+      fontSize: 15,
+    },
+    button: {
+      minHeight: 50,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: native.fill,
+    },
+    buttonLabel: {
+      color: native.label,
+      fontSize: 17,
+      fontWeight: "600",
+    },
+    archivedSection: {
+      borderRadius: 16,
+      backgroundColor: native.fill,
+      padding: 18,
+      gap: 14,
+    },
+    sectionTitle: {
+      color: native.secondaryLabel,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    archivedRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+    },
+    archivedName: {
+      flex: 1,
+      color: native.label,
+      fontSize: 16,
+    },
+    restoreLabel: {
+      color: native.label,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    archivedDeleteLabel: {
+      color: native.danger,
+      fontSize: 14,
+    },
+    settingsButton: {
+      minHeight: 62,
+      borderRadius: 14,
+      backgroundColor: native.fill,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    avatarSection: {
+      borderRadius: 16,
+      backgroundColor: native.fill,
+      padding: 18,
+      gap: 14,
+    },
+    avatarOptions: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    avatarOption: {
+      flex: 1,
+      minHeight: 86,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: native.tertiaryLabel,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    avatarOptionSelected: {
+      borderColor: native.label,
+      backgroundColor: native.fillPressed,
+    },
+    avatarLabel: {
+      color: native.label,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    settingsTitle: {
+      color: native.label,
+      fontSize: 17,
+      fontWeight: "600",
+    },
+    settingsExplanation: {
+      color: native.secondaryLabel,
+      fontSize: 13,
+      marginTop: 3,
+    },
+    accountPassword: {
+      minHeight: 46,
+      borderRadius: 12,
+      backgroundColor: native.fillPressed,
+      color: native.label,
+      paddingHorizontal: 14,
+      marginTop: 8,
+    },
+    passwordMessage: {
+      color: native.secondaryLabel,
+      fontSize: 13,
+      marginTop: 8,
+    },
+    changePasswordButton: {
+      minHeight: 44,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: native.fillPressed,
+      marginTop: 10,
+    },
+    changePasswordLabel: {
+      color: native.label,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    chevron: {
+      color: native.secondaryLabel,
+      fontSize: 28,
+      fontWeight: "300",
+    },
+    dangerZone: {
+      marginTop: 12,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: native.hairlineStrong,
+      padding: 18,
+    },
+    dangerTitle: {
+      color: native.danger,
+      fontSize: 17,
+      fontWeight: "600",
+    },
+    explanation: {
+      color: native.secondaryLabel,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 8,
+    },
+    password: {
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: native.fill,
+      color: native.label,
+      paddingHorizontal: 14,
+      marginTop: 16,
+      fontSize: 16,
+    },
+    error: {
+      color: native.danger,
+      fontSize: 14,
+      marginTop: 10,
+    },
+    deleteButton: {
+      minHeight: 50,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#C9363E",
+      marginTop: 14,
+    },
+    deleteLabel: {
+      color: native.ink,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    disabled: {
+      opacity: 0.45,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+  });

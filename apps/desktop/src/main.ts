@@ -8,6 +8,7 @@ import {
   type ElectronAutoUpdater,
   LAUNCH_CHECK_DELAY_MS,
 } from "./auto-update.js";
+import { hiddenElectronTest } from "./e2e-policy.js";
 import { oauthCallbackFrom } from "./oauth-callback.js";
 import {
   bundledRendererCandidates,
@@ -17,6 +18,7 @@ import {
   isRendererAssetMiss,
 } from "./renderer-assets.js";
 import {
+  DEFAULT_HOSTED_WEB_URL,
   DEFAULT_LOCAL_WEB_URL,
   isRakazoHealth,
   normalizeServerUrl,
@@ -32,6 +34,8 @@ import { shouldOpenInAppPopup } from "./window-open.js";
 import { browserWindowOptions, setupWindowOptions, warmWindowTtlMs } from "./window-options.js";
 
 const PERFORMANCE_USER_DATA = process.env.RAKAZO_PERFORMANCE_USER_DATA;
+const HIDDEN_TEST = hiddenElectronTest(process.env);
+if (HIDDEN_TEST && process.platform === "darwin") app.setActivationPolicy("prohibited");
 const PROBE_TIMEOUT_MS = 8_000;
 const PROBE_RESPONSE_LIMIT_BYTES = 64 * 1024;
 let mainWindow: BrowserWindow | null = null;
@@ -51,7 +55,7 @@ const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS
 const updaterEnvironment = {
   packaged: app.isPackaged,
   version: app.getVersion(),
-  disabled: process.env.RAKAZO_DISABLE_AUTO_UPDATE === "1",
+  disabled: HIDDEN_TEST || process.env.RAKAZO_DISABLE_AUTO_UPDATE === "1",
 };
 const desktopUpdater = new DesktopUpdateController(updaterEnvironment, async () => {
   const module = await import("electron-updater");
@@ -60,6 +64,12 @@ const desktopUpdater = new DesktopUpdateController(updaterEnvironment, async () 
 let launchUpdateCheckScheduled = false;
 
 markOnce("rk:main:module-evaluated");
+// Keep existing installs' cookies and server selection across the display-name change.
+if (app.isPackaged && !PERFORMANCE_USER_DATA) {
+  const existingUserData = path.join(app.getPath("appData"), "Rakazo");
+  app.setPath("userData", existingUserData);
+  app.setPath("sessionData", existingUserData);
+}
 if (PERFORMANCE_USER_DATA) {
   app.setPath("userData", PERFORMANCE_USER_DATA);
   app.setPath("sessionData", path.join(PERFORMANCE_USER_DATA, "session"));
@@ -69,6 +79,12 @@ app.once("ready", () => markOnce("rk:main:ready"));
 
 function markOnce(name: string) {
   if (performance.getEntriesByName(name).length === 0) performance.mark(name);
+}
+
+function presentWindow(win: BrowserWindow) {
+  if (HIDDEN_TEST) return;
+  win.show();
+  win.focus();
 }
 
 function windowFrom(event: Electron.IpcMainInvokeEvent) {
@@ -185,9 +201,11 @@ function createWindow(url: string, partition: string | null) {
   const icon = developmentIcon();
   const win = new BrowserWindow({
     ...browserWindowOptions(process.platform),
+    ...(HIDDEN_TEST ? { show: false } : {}),
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(import.meta.dirname, "preload.cjs"),
+      ...(HIDDEN_TEST ? { backgroundThrottling: false } : {}),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -489,14 +507,16 @@ async function installBundledRenderer(
 
 function oauthPopupWindowOptions() {
   return {
+    ...(HIDDEN_TEST ? { show: false } : {}),
     width: 560,
     height: 720,
     frame: true,
     titleBarStyle: "default" as const,
     autoHideMenuBar: true,
-    backgroundColor: "#050506",
+    backgroundColor: "#F8F8F8",
     webPreferences: {
       preload: "",
+      ...(HIDDEN_TEST ? { backgroundThrottling: false } : {}),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -508,9 +528,11 @@ function createSetupWindow() {
   const icon = developmentIcon();
   const win = new BrowserWindow({
     ...setupWindowOptions(process.platform),
+    ...(HIDDEN_TEST ? { show: false } : {}),
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(import.meta.dirname, "setup-preload.cjs"),
+      ...(HIDDEN_TEST ? { backgroundThrottling: false } : {}),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -540,8 +562,7 @@ function showSetupWindow(error: string | null = null) {
     win = createSetupWindow();
   }
   if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.hide();
-  win.show();
-  win.focus();
+  presentWindow(win);
   return win;
 }
 
@@ -550,14 +571,13 @@ function restoreAppWindowAfterSetup() {
   if (setupWindow !== null && !setupWindow.isDestroyed()) return;
   if (mainWindow === null || mainWindow.isDestroyed() || currentTargetUrl === null) return;
   clearTimeout(warmWindowTimer);
-  mainWindow.show();
-  mainWindow.focus();
+  presentWindow(mainWindow);
 }
 
 function installApplicationMenu() {
   const changeServer: Electron.MenuItemConstructorOptions = {
     id: "change-rakazo-server",
-    label: "Change Rakazo Server…",
+    label: "Change Server…",
     accelerator: "CmdOrCtrl+Shift+K",
     click: () => showSetupWindow(),
   };
@@ -618,7 +638,7 @@ async function probeServer(rawUrl: string): Promise<DesktopReachability> {
         ok: false,
         status: response.status,
         url,
-        error: "That address redirects elsewhere. Enter the final Rakazo server address.",
+        error: "That address redirects elsewhere. Enter the final 2hands server address.",
       };
     }
     if (!response.ok) {
@@ -635,7 +655,7 @@ async function probeServer(rawUrl: string): Promise<DesktopReachability> {
         ok: false,
         status: response.status,
         url,
-        error: "That address did not respond like a Rakazo server.",
+        error: "That address did not respond like a 2hands server.",
       };
     }
     return {
@@ -757,8 +777,7 @@ function abandonPendingAppSwitch(
     // session visible — otherwise macOS can be left with no shown window.
     if (setupWindow === null || setupWindow.isDestroyed()) {
       clearTimeout(warmWindowTimer);
-      previous.show();
-      previous.focus();
+      presentWindow(previous);
     }
     return "restored";
   }
@@ -835,6 +854,7 @@ app.whenReady().then(async () => {
   const target = resolveStartupTarget({
     envUrl: process.env.RAKAZO_WEB_URL,
     saved: currentSetup,
+    hostedUrl: app.isPackaged ? DEFAULT_HOSTED_WEB_URL : undefined,
     forceSetup: process.env.RAKAZO_FORCE_SETUP === "1",
   });
   if (process.env.RAKAZO_PERFORMANCE_CLEAR_CACHE === "1") {
@@ -988,14 +1008,12 @@ app.whenReady().then(async () => {
   // Register before startup awaits so macOS dock clicks during probe/open are handled.
   app.on("activate", () => {
     if (setupWindow !== null && !setupWindow.isDestroyed()) {
-      setupWindow.show();
-      setupWindow.focus();
+      presentWindow(setupWindow);
       return;
     }
     if (mainWindow !== null && !mainWindow.isDestroyed()) {
       clearTimeout(warmWindowTimer);
-      mainWindow.show();
-      mainWindow.focus();
+      presentWindow(mainWindow);
       return;
     }
     if (openAppPromise !== null) return;

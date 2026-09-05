@@ -7,6 +7,7 @@ export function toComputerRef(computer: {
   homeKey: string;
   kind: string;
   providerRef: string | null;
+  billingCoveredUntil?: Date | null;
 }): ComputerRef {
   if (!computer.providerRef) throw new Error("computer provider reference is missing");
   return {
@@ -14,6 +15,9 @@ export function toComputerRef(computer: {
     botId: computer.homeKey,
     kind: computer.kind as ComputerRef["kind"],
     providerRef: computer.providerRef,
+    ...(computer.billingCoveredUntil
+      ? { expiresAt: computer.billingCoveredUntil.toISOString() }
+      : {}),
   };
 }
 

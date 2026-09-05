@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  checkpointAndRecordComputerWorkspace,
   checkpointComputerWorkspace,
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
+import { NoneSandboxProvider } from "./none-sandbox.js";
 
 const context = {
   operationId: "workspace-test",
@@ -74,5 +76,27 @@ describe("provider-neutral computer workspace", () => {
         await replacementProvider.readFile(replacement, "notes/result.txt", context),
       ),
     ).toBe("portable");
+  });
+
+  it("skips workspace checkpoints when computers are unavailable", async () => {
+    const sandbox = new NoneSandboxProvider();
+    const exportWorkspace = vi.spyOn(sandbox, "exportWorkspace");
+    const updateMany = vi.fn();
+
+    await expect(
+      checkpointAndRecordComputerWorkspace(
+        {
+          home: {} as never,
+          sandbox,
+          prisma: { computer: { updateMany } } as never,
+        },
+        { id: "computer-1", homeKey: "bot-1" },
+        { id: "computer-1", botId: "bot-1", kind: "docker", providerRef: "ref-1" },
+        context,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(exportWorkspace).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@
 .DS_Store
 .env
 .env.*
+.pnpm-store
 node_modules
 **/node_modules
 **/dist

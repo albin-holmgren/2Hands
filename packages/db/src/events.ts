@@ -1,13 +1,16 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import {
+  type ExecutionErrorCode,
   type MessageBlock,
   MessageBlock as MessageBlockSchema,
   type ProductEvent,
 } from "@rakazo/contracts";
 import {
   blocksToAgentHistoryText,
+  decodeExecutionError,
   isApprovalAskBlock,
   isSecretAskBlock,
+  persistExecutionError,
   sanitizeJsonValue,
 } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "./client.js";
@@ -109,7 +112,7 @@ interface FinalizeRunBase {
 export type FinalizeRunInput = FinalizeRunBase &
   (
     | { outcome: "completed"; blocks: MessageBlock[]; markUnread?: boolean }
-    | { outcome: "failed"; error: string }
+    | { outcome: "failed"; error: string; errorCode?: ExecutionErrorCode }
   );
 
 export interface PauseRunForInput {
@@ -910,6 +913,8 @@ async function finalizeRunOnce(
       throw error;
     }
     const now = new Date();
+    const failure =
+      input.outcome === "failed" ? persistExecutionError(input.error, input.errorCode) : null;
     const terminal = await tx.run.updateMany({
       where: {
         id: input.runId,
@@ -923,7 +928,7 @@ async function finalizeRunOnce(
       },
       data: {
         status: input.outcome,
-        error: input.outcome === "failed" ? input.error : null,
+        error: failure,
         completedAt: now,
         leaseOwner: null,
         leaseExpiresAt: null,
@@ -940,7 +945,7 @@ async function finalizeRunOnce(
       },
       data: {
         status: input.outcome,
-        error: input.outcome === "failed" ? input.error : null,
+        error: failure,
         finishedAt: now,
       },
     });
@@ -984,7 +989,7 @@ async function finalizeRunOnce(
       botId: input.botId,
       type: input.outcome === "completed" ? "run.completed" : "run.failed",
       runId: input.runId,
-      payload: input.outcome === "completed" ? {} : { error: input.error },
+      payload: failure === null ? {} : decodeExecutionError(failure),
     });
     await tx.event.deleteMany({ where: { runId: input.runId, type: "thread.progress" } });
     if (input.outcome === "completed") {

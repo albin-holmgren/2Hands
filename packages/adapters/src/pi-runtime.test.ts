@@ -19,9 +19,9 @@ describe("describeToolActivity", () => {
     expect(describeToolActivity("run_subagent", { name: "scout", task: "…" })).toBe(
       "Delegating to helper: scout",
     );
-    expect(describeToolActivity("send_to_coding_harness", { harness: "cursor", prompt: "fix it" })).toBe(
-      "Handing coding to cursor",
-    );
+    expect(
+      describeToolActivity("send_to_coding_harness", { harness: "cursor", prompt: "fix it" }),
+    ).toBe("Handing coding to cursor");
     expect(describeToolActivity("create_space", { name: "Customer support" })).toBe(
       "Creating space: Customer support",
     );

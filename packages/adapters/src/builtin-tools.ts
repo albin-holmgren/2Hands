@@ -9,6 +9,20 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "message_bot",
 ]);
 
+/** Tools that need a live sandbox. Withheld when SANDBOX_PROVIDER=none. */
+export const COMPUTER_RUNTIME_TOOL_NAMES = new Set([
+  "computer_observe",
+  "computer_act",
+  "list_files",
+  "read_file",
+  "write_file",
+  "attach_file",
+  "shell",
+  "open_path",
+  "launch_app",
+  "request_takeover",
+]);
+
 export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "computer_observe",
@@ -638,7 +652,8 @@ export const builtinAgentTools: ConnectorTool[] = [
       properties: {
         prompt: {
           type: "string",
-          description: "What to implement, fix, or review. Include file paths and acceptance criteria.",
+          description:
+            "What to implement, fix, or review. Include file paths and acceptance criteria.",
         },
         harness: {
           type: "string",

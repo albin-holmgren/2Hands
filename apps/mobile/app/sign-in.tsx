@@ -20,19 +20,24 @@ import {
   defaultApiBase,
   displayApiHost,
   loadSessionToken,
+  type MobileBot,
+  type MobileMe,
   normalizeApiBase,
   type PasswordResetCapabilities,
   passwordResetCapabilities,
   probeApiBase,
   requestPasswordReset,
   resetApiBase,
+  rpc,
   saveApiBase,
   signIn,
   signUp,
   usesCustomApiBase,
 } from "../lib/api";
+import { useNativeTheme } from "../lib/theme";
 
 export default function SignIn() {
+  const native = useNativeTheme();
   const router = useRouter();
   const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [name, setName] = useState("");
@@ -69,8 +74,10 @@ export default function SignIn() {
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#F7F7F4", justifyContent: "center", padding: 24 }}>
-        <Text style={{ color: "#6E6E68", textAlign: "center" }}>Loading…</Text>
+      <View
+        style={{ flex: 1, backgroundColor: native.page, justifyContent: "center", padding: 24 }}
+      >
+        <Text style={{ color: native.muted, textAlign: "center" }}>Loading…</Text>
       </View>
     );
   }
@@ -92,6 +99,21 @@ export default function SignIn() {
       if (mode === "up") {
         const trimmedEmail = email.trim();
         await signUp(trimmedEmail, password, name.trim() || trimmedEmail.split("@")[0] || "User");
+        // Account creation succeeded. A transient onboarding failure must not ask
+        // the user to sign up again; the home screen can recover the session.
+        try {
+          const me = await rpc<MobileMe>("me");
+          if (!me.needsModel) {
+            const bot = await rpc<MobileBot>("onboarding/ensureChiefOfStaff");
+            router.replace({
+              pathname: "/thread",
+              params: { botId: bot.id, name: bot.name, spaceId: me.spaceId },
+            });
+            return;
+          }
+        } catch {
+          /* Continue into the signed-in workspace. */
+        }
       } else {
         await signIn(email.trim(), password);
       }
@@ -106,8 +128,8 @@ export default function SignIn() {
   const custom = usesCustomApiBase(apiBase);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F7F7F4" }}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: native.page }}>
+      <StatusBar style={native.theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -126,7 +148,7 @@ export default function SignIn() {
             >
               <Text
                 style={{
-                  color: "#1B1B1E",
+                  color: native.ink,
                   fontSize: 32,
                   fontWeight: "500",
                   textAlign: "center",
@@ -138,11 +160,21 @@ export default function SignIn() {
                     ? "Sign up for 2hands"
                     : "Reset your password"}
               </Text>
+              {mode === "up" && !usesCustomApiBase(apiBase) ? (
+                <Text style={{ color: native.muted, textAlign: "center", marginTop: 12 }}>
+                  Start free. No card or API key.
+                </Text>
+              ) : null}
               {resetSent ? (
                 <View style={{ alignItems: "center", marginTop: 28 }}>
-                  <Text style={{ color: "#1B1B1E", fontSize: 17 }}>Check your email</Text>
+                  <Text style={{ color: native.ink, fontSize: 17 }}>Check your email</Text>
                   <Text
-                    style={{ color: "#6E6E68", fontSize: 15, marginTop: 10, textAlign: "center" }}
+                    style={{
+                      color: native.muted,
+                      fontSize: 15,
+                      marginTop: 10,
+                      textAlign: "center",
+                    }}
                   >
                     If an account exists for that address, we sent a password reset link.
                   </Text>
@@ -154,7 +186,7 @@ export default function SignIn() {
                     }}
                     style={{ marginTop: 22 }}
                   >
-                    <Text style={{ color: "#1B1B1E", fontSize: 15, fontWeight: "600" }}>
+                    <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
                       Back to sign in
                     </Text>
                   </Pressable>
@@ -165,15 +197,15 @@ export default function SignIn() {
                     <TextInput
                       autoComplete="name"
                       placeholder="Name"
-                      placeholderTextColor="#8C8C86"
+                      placeholderTextColor={native.muted2}
                       value={name}
                       onChangeText={setName}
                       style={{
                         marginTop: 28,
-                        backgroundColor: "#F1F1ED",
+                        backgroundColor: native.surface,
                         borderRadius: 13,
                         padding: 16,
-                        color: "#1B1B1E",
+                        color: native.ink,
                       }}
                     />
                   ) : null}
@@ -182,15 +214,15 @@ export default function SignIn() {
                     autoComplete="email"
                     keyboardType="email-address"
                     placeholder="Email"
-                    placeholderTextColor="#8C8C86"
+                    placeholderTextColor={native.muted2}
                     value={email}
                     onChangeText={setEmail}
                     style={{
                       marginTop: mode === "up" ? 12 : 28,
-                      backgroundColor: "#F1F1ED",
+                      backgroundColor: native.surface,
                       borderRadius: 13,
                       padding: 16,
-                      color: "#1B1B1E",
+                      color: native.ink,
                     }}
                   />
                   {mode === "in" && reset?.passwordReset && reset.resetUrl ? (
@@ -203,7 +235,7 @@ export default function SignIn() {
                       }}
                       style={{ alignSelf: "flex-end", marginTop: 10 }}
                     >
-                      <Text style={{ color: "#1B1B1E", fontSize: 14, fontWeight: "600" }}>
+                      <Text style={{ color: native.ink, fontSize: 14, fontWeight: "600" }}>
                         Forgot password?
                       </Text>
                     </Pressable>
@@ -212,7 +244,7 @@ export default function SignIn() {
                     <TextInput
                       autoComplete={mode === "in" ? "current-password" : "new-password"}
                       placeholder="Password"
-                      placeholderTextColor="#8C8C86"
+                      placeholderTextColor={native.muted2}
                       returnKeyType="go"
                       secureTextEntry
                       value={password}
@@ -220,27 +252,30 @@ export default function SignIn() {
                       onSubmitEditing={() => void submit()}
                       style={{
                         marginTop: 12,
-                        backgroundColor: "#F1F1ED",
+                        backgroundColor: native.surface,
                         borderRadius: 13,
                         padding: 16,
-                        color: "#1B1B1E",
+                        color: native.ink,
                       }}
                     />
                   ) : null}
-                  {error ? <Text style={{ color: "#B91C1C", marginTop: 12 }}>{error}</Text> : null}
+                  {error ? (
+                    <Text style={{ color: native.danger, marginTop: 12 }}>{error}</Text>
+                  ) : null}
                   <Pressable
                     accessibilityRole="button"
+                    testID="auth-submit"
                     onPress={() => void submit()}
                     disabled={pending}
                     style={{
                       marginTop: 16,
-                      backgroundColor: "#121215",
-                      borderRadius: 13,
-                      padding: 18,
+                      backgroundColor: native.cream,
+                      borderRadius: 10,
+                      paddingVertical: 12,
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "#FBFBF9", fontSize: 17 }}>
+                    <Text style={{ color: native.creamInk, fontSize: 15, fontWeight: "600" }}>
                       {pending
                         ? "Working…"
                         : mode === "in"
@@ -258,7 +293,7 @@ export default function SignIn() {
                       marginTop: 24,
                     }}
                   >
-                    <Text style={{ color: "#8C8C86", fontSize: 15 }}>
+                    <Text style={{ color: native.muted2, fontSize: 15 }}>
                       {mode === "in"
                         ? "Don’t have an account?"
                         : mode === "up"
@@ -274,7 +309,7 @@ export default function SignIn() {
                       }}
                       style={{ marginLeft: 5 }}
                     >
-                      <Text style={{ color: "#1B1B1E", fontSize: 15, fontWeight: "600" }}>
+                      <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
                         {mode === "in" ? "Sign up" : mode === "up" ? "Sign in" : "Back to sign in"}
                       </Text>
                     </Pressable>
@@ -298,13 +333,13 @@ export default function SignIn() {
             >
               {custom ? (
                 <>
-                  <Text style={{ color: "#A8A8A2", fontSize: 12 }}>Custom server</Text>
-                  <Text style={{ color: "#6E6E68", fontSize: 13, marginTop: 2 }}>
+                  <Text style={{ color: native.muted, fontSize: 12 }}>Custom server</Text>
+                  <Text style={{ color: native.muted, fontSize: 13, marginTop: 2 }}>
                     {displayApiHost(apiBase)}
                   </Text>
                 </>
               ) : (
-                <Text style={{ color: "#A8A8A2", fontSize: 13 }}>Use a custom server</Text>
+                <Text style={{ color: native.muted, fontSize: 13 }}>Use a custom server</Text>
               )}
             </Pressable>
           </View>
@@ -334,6 +369,7 @@ function ServerSheet({
   onClose: () => void;
   onSaved: (url: string) => void;
 }) {
+  const native = useNativeTheme();
   const [draft, setDraft] = useState(current);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -391,7 +427,7 @@ function ServerSheet({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: "#F7F7F4" }}
+        style={{ flex: 1, backgroundColor: native.page }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <SafeAreaView style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12 }}>
@@ -403,17 +439,17 @@ function ServerSheet({
             }}
           >
             <Pressable onPress={onClose} hitSlop={8}>
-              <Text style={{ color: "#6E6E68", fontSize: 17 }}>Cancel</Text>
+              <Text style={{ color: native.muted, fontSize: 17 }}>Cancel</Text>
             </Pressable>
-            <Text style={{ color: "#1B1B1E", fontSize: 17, fontWeight: "600" }}>Server</Text>
+            <Text style={{ color: native.ink, fontSize: 17, fontWeight: "600" }}>Server</Text>
             <Pressable onPress={() => void save()} disabled={pending} hitSlop={8}>
-              <Text style={{ color: "#1B1B1E", fontSize: 17, fontWeight: "600" }}>
+              <Text style={{ color: native.ink, fontSize: 17, fontWeight: "600" }}>
                 {pending ? "Checking…" : "Save"}
               </Text>
             </Pressable>
           </View>
-          <Text style={{ color: "#6E6E68", marginTop: 28, fontSize: 15, lineHeight: 22 }}>
-            Point this app at your self-hosted Rakazo origin — the same HTTPS URL you open in a
+          <Text style={{ color: native.muted, marginTop: 28, fontSize: 15, lineHeight: 22 }}>
+            Point this app at your self-hosted 2hands origin — the same HTTPS URL you open in a
             browser.
           </Text>
           <TextInput
@@ -425,7 +461,7 @@ function ServerSheet({
             returnKeyType="go"
             onSubmitEditing={() => void save()}
             placeholder={defaultApiBase()}
-            placeholderTextColor="#8C8C86"
+            placeholderTextColor={native.muted2}
             value={draft}
             onChangeText={(value) => {
               setDraft(value);
@@ -433,24 +469,24 @@ function ServerSheet({
             }}
             style={{
               marginTop: 20,
-              backgroundColor: "#F1F1ED",
+              backgroundColor: native.surface,
               borderRadius: 13,
               padding: 16,
-              color: "#1B1B1E",
+              color: native.ink,
               fontSize: 16,
             }}
           />
           {warning ? (
-            <Text style={{ color: "#8C8C86", marginTop: 12, fontSize: 13 }}>{warning}</Text>
+            <Text style={{ color: native.muted2, marginTop: 12, fontSize: 13 }}>{warning}</Text>
           ) : null}
-          {error ? <Text style={{ color: "#B91C1C", marginTop: 12 }}>{error}</Text> : null}
+          {error ? <Text style={{ color: native.danger, marginTop: 12 }}>{error}</Text> : null}
           {usesCustomApiBase(current) || draft.trim() !== current ? (
             <Pressable
               onPress={() => void restoreDefault()}
               disabled={pending}
               style={{ marginTop: 28, alignItems: "center" }}
             >
-              <Text style={{ color: "#6E6E68", fontSize: 15 }}>Use default server</Text>
+              <Text style={{ color: native.muted, fontSize: 15 }}>Use default server</Text>
             </Pressable>
           ) : null}
         </SafeAreaView>

@@ -80,7 +80,7 @@ test("messaging settings show linked chat apps, channels, and connections", asyn
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Messaging" })).toBeVisible();
   await page.getByRole("button", { name: "Manage messaging settings" }).click();
 

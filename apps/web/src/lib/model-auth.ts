@@ -13,8 +13,8 @@ export function providerHint(entry: ModelCatalogEntry) {
   return "API key";
 }
 
-export async function waitForModelOAuth(loginId: string, signal?: AbortSignal) {
-  return waitForModelOAuthCompletion(() => rpc.models.completeOAuth({ loginId }, { signal }), {
+export async function waitForModelOAuth(loginId: string, signal?: AbortSignal, client = rpc) {
+  return waitForModelOAuthCompletion(() => client.models.completeOAuth({ loginId }, { signal }), {
     signal,
   });
 }

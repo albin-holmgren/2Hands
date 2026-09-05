@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MCP_OAUTH_CHANNEL } from "../lib/mcp-connect";
-import { rpc } from "../lib/rpc";
+import { useWorkspaceRpc } from "../lib/workspace-context";
 
 // The window.open name set by the OAuth popup flow. Providers whose login
 // pages send COOP sever window.opener mid-flow, but the window name survives,
@@ -10,6 +10,7 @@ import { rpc } from "../lib/rpc";
 const POPUP_NAME = MCP_OAUTH_CHANNEL;
 
 export function McpOAuthCallbackPage() {
+  const rpc = useWorkspaceRpc();
   const { t } = useLingui();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -44,9 +45,9 @@ export function McpOAuthCallbackPage() {
   }, [navigate, params, t]);
   const showReturn = Boolean(error) && window.name !== POPUP_NAME;
   return (
-    <div className="grid min-h-screen place-items-center bg-[#050506] p-6 text-center">
+    <div className="grid min-h-screen place-items-center bg-[var(--rk-page)] p-6 text-center">
       <div>
-        <div className="text-lg text-[#F1F1F2]">
+        <div className="text-lg text-[var(--rk-ink)]">
           {error ? (
             <Trans>OAuth connection failed</Trans>
           ) : done ? (

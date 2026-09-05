@@ -299,6 +299,30 @@ describe("mobile API authentication", () => {
     });
   });
 
+  it("preserves hosted quota recovery metadata from the ORPC JSON envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            json: {
+              defined: false,
+              code: "FORBIDDEN",
+              status: 403,
+              message: "Your included usage is used up.",
+              data: { errorCode: "ALLOWANCE_EXHAUSTED" },
+            },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+    await expect(rpc("threads/send", { text: "Hello" })).rejects.toMatchObject({
+      code: "ALLOWANCE_EXHAUSTED",
+      message: "Your included usage is used up.",
+    });
+  });
+
   it("does not switch spaces when the selection cannot be persisted", async () => {
     await expect(selectSpace("space-support")).resolves.toBe(true);
     vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key) => {
@@ -1151,31 +1175,39 @@ describe("mobile thread event reduction", () => {
     expect(next?.cursor).toBe(10);
   });
 
-  it("keeps a failed member run's error while another member run is still active", () => {
-    const runA = { id: "run-a", status: "running" };
-    const runB = { id: "run-b", status: "running" };
-    const initial: MobileSnapshot = {
-      ...snapshot([
-        {
-          ...mobileMessage("progress:run-b", [{ kind: "progress", text: "B" }]),
-          runId: runB.id,
-        },
-      ]),
-      run: runA,
-      activeRuns: [runA, runB],
-    };
+  it.each([undefined, "ALLOWANCE_EXHAUSTED"] as const)(
+    "keeps a failed member run and optional %s metadata",
+    (errorCode) => {
+      const runA = { id: "run-a", status: "running" };
+      const runB = { id: "run-b", status: "running" };
+      const initial: MobileSnapshot = {
+        ...snapshot([
+          {
+            ...mobileMessage("progress:run-b", [{ kind: "progress", text: "B" }]),
+            runId: runB.id,
+          },
+        ]),
+        run: runA,
+        activeRuns: [runA, runB],
+      };
 
-    const next = applyMobileThreadEvent(initial, {
-      type: "run.failed",
-      seq: 11,
-      runId: runB.id,
-      payload: { error: "member exploded" },
-    });
+      const next = applyMobileThreadEvent(initial, {
+        type: "run.failed",
+        seq: 11,
+        runId: runB.id,
+        payload: { error: "member exploded", ...(errorCode ? { errorCode } : {}) },
+      });
 
-    expect(next?.activeRuns).toEqual([runA]);
-    expect(next?.run).toEqual({ id: runB.id, status: "failed", error: "member exploded" });
-    expect(next?.messages).toEqual([]);
-  });
+      expect(next?.activeRuns).toEqual([runA]);
+      expect(next?.run).toEqual({
+        id: runB.id,
+        status: "failed",
+        error: "member exploded",
+        errorCode,
+      });
+      expect(next?.messages).toEqual([]);
+    },
+  );
 
   it("leaves the snapshot unchanged for unrelated events", () => {
     const initial = snapshot();

@@ -3,6 +3,7 @@ import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
+import { resolveNovncTarget } from "./screen-proxy.js";
 
 describe("account preferences", () => {
   function preferencesDeps(avatarStyle: string) {
@@ -77,7 +78,7 @@ describe("account preferences", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("coerces unknown stored avatar styles to robot on me", async () => {
+  it("coerces unknown stored avatar styles to organic on me", async () => {
     const { actor, handler } = preferencesDeps("custom-cdn");
 
     const { response } = await handler.handle(
@@ -91,7 +92,7 @@ describe("account preferences", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      json: expect.objectContaining({ avatarStyle: "robot" }),
+      json: expect.objectContaining({ avatarStyle: "organic" }),
     });
   });
 });
@@ -475,5 +476,25 @@ describe("computer screen url", () => {
     expect(response.status).toBe(500);
     expect(updateMany).not.toHaveBeenCalled();
     logError.mockRestore();
+  });
+
+  it("proxies live E2B desktop URLs onto the app origin", async () => {
+    const { response } = await callScreenUrl(async () => ({
+      url: "https://6080-desktop.e2b.app/vnc.html?authKey=secret-token",
+      mimeType: "text/html",
+      upstreamHeaders: { "screen-access-token": "private-provider-access" },
+      close: async () => undefined,
+    }));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { json: { url: string | null } };
+    expect(body.json.url).toMatch(/^http:\/\/127\.0\.0\.1:5173\/novnc\/remote\/view\//);
+    expect(body.json.url).not.toContain("secret-token");
+    expect(JSON.stringify(body)).not.toContain("private-provider-access");
+    const capability = new URL(body.json.url!);
+    expect(
+      resolveNovncTarget(capability.pathname + capability.search, "fake-test-secret"),
+    ).toMatchObject({
+      upstreamHeaders: { "screen-access-token": "private-provider-access" },
+    });
   });
 });

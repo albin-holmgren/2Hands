@@ -26,7 +26,7 @@ describe("resolveDeploymentModel", () => {
       }),
     ).toEqual({
       provider: "vercel-gateway",
-      model: "openai/gpt-4.1-mini",
+      model: "alibaba/qwen3.8-max",
       key: "gw-key",
     });
   });

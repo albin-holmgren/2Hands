@@ -165,6 +165,7 @@ async function main() {
     if (stopping) return;
     stopping = true;
     await reconciler.stop();
+    await executor.shutdown();
     await jobHost.stop();
     await jobs.close();
     await realtime.close();

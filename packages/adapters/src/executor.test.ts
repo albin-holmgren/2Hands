@@ -2,6 +2,7 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { ONCE_ROUTINE_CRON } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
+import { COMPUTER_RUNTIME_TOOL_NAMES } from "./builtin-tools.js";
 import {
   createRunExecutor,
   loadCurrentTurnImages,
@@ -36,6 +37,22 @@ describe("run tool selection", () => {
     expect(toolNames("routine", "group-1")).not.toContain("schedule_create");
     expect(toolNames("routine", "group-1")).toEqual(
       expect.arrayContaining(["schedule_list", "schedule_cancel"]),
+    );
+  });
+
+  it("withholds computer, shell, and file tools when computers are unavailable", () => {
+    const names = selectBuiltinToolsForRun({
+      graphicalToolsAllowed: true,
+      groupId: null,
+      trigger: "user",
+      semanticMemoryEnabled: false,
+      computersAvailable: false,
+    }).map((tool) => tool.name);
+    for (const name of COMPUTER_RUNTIME_TOOL_NAMES) {
+      expect(names).not.toContain(name);
+    }
+    expect(names).toEqual(
+      expect.arrayContaining(["web_search", "remember", "ask_user", "render_plot"]),
     );
   });
 });
@@ -806,11 +823,13 @@ description: Prepare standup notes
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => ({ id: "fixture-secret", ciphertext: "encrypted-fixture" })),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
-      secretStore: { load: vi.fn(), put: vi.fn() },
+      secretStore: { load: vi.fn(() => "fake-user-key"), put: vi.fn() },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     const model = await executor.resolveModel({
@@ -831,7 +850,7 @@ description: Prepare standup notes
     );
   });
 
-  it("falls back to the Space default when the override provider has no credential", async () => {
+  it("rejects an unavailable override instead of changing providers", async () => {
     const findFirst = vi.fn(
       async (args: { where: { credential?: { provider?: string }; isDefault?: boolean } }) => {
         if (args.where.credential?.provider === "xai") return null;
@@ -865,18 +884,14 @@ description: Prepare standup notes
       deploymentModelKey: "deployment-openrouter-key",
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
-    const model = await executor.resolveModel({
-      userId: "user-1",
-      spaceId: "ws-1",
-      botId: "bot-1",
-    });
+    await expect(
+      executor.resolveModel({
+        userId: "user-1",
+        spaceId: "ws-1",
+        botId: "bot-1",
+      }),
+    ).rejects.toThrow(/selected model is unavailable/);
 
-    expect(model).toMatchObject({
-      provider: "openrouter",
-      id: "deepseek/deepseek-v4-flash-0731",
-      // Override thinking must drop with the override provider/credential unit.
-      thinkingLevel: null,
-    });
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ credential: { provider: "xai" } }),
@@ -936,11 +951,13 @@ description: Prepare standup notes
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => ({ id: "fixture-secret", ciphertext: "encrypted-fixture" })),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
-      secretStore: { load: vi.fn(), put: vi.fn() },
+      secretStore: { load: vi.fn(() => "fake-user-key"), put: vi.fn() },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     const model = await executor.resolveModel({

@@ -7,6 +7,6 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="148" fill="url(#blue)" />
-  <rect x="157" y="196" width="62" height="120" rx="31" fill="#F2F2F0" />
-  <rect x="293" y="196" width="62" height="120" rx="31" fill="#F2F2F0" />
+  <rect x="157" y="196" width="62" height="120" rx="31" fill="#F5F3F0" />
+  <rect x="293" y="196" width="62" height="120" rx="31" fill="#F5F3F0" />
 </svg>

@@ -6,10 +6,15 @@ import { I18nBootstrap } from "./components/I18nBootstrap";
 import { applyUiDirection } from "./lib/apply-ui-direction";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import { resolveUiLocale } from "./lib/ui-locale";
+import { applyUiThemePreference, readUiThemePreference } from "./lib/ui-theme";
 import "./styles.css";
 
 markOnce("rk:renderer:module-evaluated");
 applyUiDirection(resolveUiLocale());
+applyUiThemePreference(readUiThemePreference());
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  applyUiThemePreference(readUiThemePreference());
+});
 
 function PerformanceProbe() {
   useLayoutEffect(() => {

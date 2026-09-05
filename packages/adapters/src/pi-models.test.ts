@@ -1,3 +1,4 @@
+import { ModelCatalogEntrySchema } from "@rakazo/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalogModelLabel, listPiCatalog, scriptedCatalogEntry } from "./pi-models.js";
 
@@ -5,6 +6,22 @@ describe("Pi model catalog", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
+  });
+
+  it("publishes every upstream entry through the shared contract without inventing unknown rates", () => {
+    const catalog = listPiCatalog();
+    for (const entry of [...catalog, scriptedCatalogEntry]) {
+      expect(
+        ModelCatalogEntrySchema.safeParse(entry).success,
+        `${entry.provider}/${entry.id}`,
+      ).toBe(true);
+    }
+    const automatic = catalog.find(
+      (entry) => entry.provider === "openrouter" && entry.id === "openrouter/auto",
+    );
+    expect(automatic).toBeDefined();
+    expect(automatic?.inputUsdPerMillion).toBeUndefined();
+    expect(automatic?.outputUsdPerMillion).toBeUndefined();
   });
 
   it("lists real Pi providers instead of a two-option dropdown", () => {

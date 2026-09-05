@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { clearComposerDrafts } from "./composer-drafts";
 import { stopLiveNotifications } from "./live-notifications";
 
 const SESSION_KEY = "rakazo.session_token";
@@ -18,20 +19,24 @@ export async function saveSessionToken(token: string) {
   sessionFallback = undefined;
 }
 
-/** Clears the session. Returns false only when SecureStore could neither delete nor overwrite. */
+/** Clears the session and draft records; false means a private store could not be wiped. */
 export async function clearSessionToken(): Promise<boolean> {
+  const draftsCleared = await clearComposerDrafts().then(
+    () => true,
+    () => false,
+  );
   await stopLiveNotifications(true).catch(() => undefined);
   try {
     await SecureStore.deleteItemAsync(SESSION_KEY);
     sessionInvalidated = false;
     sessionFallback = undefined;
-    return true;
+    return draftsCleared;
   } catch {
     try {
       await SecureStore.setItemAsync(SESSION_KEY, "");
       sessionInvalidated = false;
       sessionFallback = undefined;
-      return true;
+      return draftsCleared;
     } catch {
       sessionInvalidated = true;
       sessionFallback = undefined;

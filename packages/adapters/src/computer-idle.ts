@@ -5,10 +5,16 @@ import {
   type JobPublisher,
   type SandboxProvider,
 } from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, hostedBillingEnabled } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { toComputerRef } from "./computer-lifecycle.js";
+import {
+  ensureComputerUsageCoverage,
+  HOSTED_COMPUTER_LEASE_MS,
+  settleComputerUsage,
+  suspendComputerForBudget,
+} from "./computer-usage.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 
 export const DEFAULT_SANDBOX_IDLE_MS = 10 * 60 * 1000;
@@ -49,21 +55,31 @@ export const BACKGROUND_WORK_PROBE = [
 ].join("\n");
 
 export function sandboxIdleMs(): number {
+  if (hostedBillingEnabled(process.env.BILLING_ENABLED)) return HOSTED_COMPUTER_LEASE_MS;
   const raw = Number(process.env.SANDBOX_IDLE_MS ?? DEFAULT_SANDBOX_IDLE_MS);
   return Number.isFinite(raw) && raw >= 30_000 ? raw : DEFAULT_SANDBOX_IDLE_MS;
 }
 
 export function scheduleComputerSleep(jobs: JobPublisher, computerId: string): void {
   if (!computerId) return;
-  void jobs.enqueue(computerSleepJob(computerId, new Date(Date.now() + sandboxIdleMs())));
+  const delay = hostedBillingEnabled(process.env.BILLING_ENABLED) ? 60_000 : sandboxIdleMs();
+  void jobs.enqueue(computerSleepJob(computerId, new Date(Date.now() + delay)));
 }
 
 export async function touchRunningComputer(
-  deps: { sandbox: SandboxProvider; jobs: JobPublisher },
+  deps: { prisma: PrismaClient; sandbox: SandboxProvider; jobs: JobPublisher },
   computer: { id: string; homeKey: string; providerRef: string; kind: string },
 ): Promise<void> {
+  let expiresAt: string | undefined;
+  try {
+    expiresAt = await ensureComputerUsageCoverage(deps, computer.id);
+    await deps.sandbox.keepAlive?.({ ...toComputerRef(computer), expiresAt }, { expiresAt });
+  } catch (error) {
+    if (hostedBillingEnabled(process.env.BILLING_ENABLED))
+      await suspendComputerForBudget(deps, computer.id);
+    throw error;
+  }
   scheduleComputerSleep(deps.jobs, computer.id);
-  await deps.sandbox.keepAlive?.(toComputerRef(computer));
 }
 
 export async function sleepComputerIfIdle(
@@ -77,7 +93,15 @@ export async function sleepComputerIfIdle(
   computerId: string,
 ): Promise<void> {
   let computer = await loadComputer(deps.prisma, computerId);
-  if (!computer?.providerRef || computer.state !== "running") return;
+  if (computer?.billingCoveredUntil && computer.billingCoveredUntil.getTime() <= Date.now()) {
+    await suspendComputerForBudget(deps, computerId);
+    return;
+  }
+  if (!computer?.providerRef || computer.state !== "running") {
+    // Unknown provisioning outcomes remain reserved until the provider's hard deadline.
+    if (computer?.billingCoveredUntil) scheduleComputerSleep(deps.jobs, computerId);
+    return;
+  }
 
   if (computer.controlBotId && computer.controlLeaseId && !hasActiveComputerControl(computer)) {
     await expireComputerControl(deps, computer.id, computer.controlLeaseId);
@@ -89,7 +113,9 @@ export async function sleepComputerIfIdle(
     ? [...ACTIVE_RUN_STATUSES]
     : ACTIVE_RUN_STATUSES.filter((status) => status !== "waiting_takeover");
   if (await findActiveRun(deps.prisma, computerId, activeStatuses)) {
-    scheduleComputerSleep(deps.jobs, computerId);
+    if (hostedBillingEnabled(process.env.BILLING_ENABLED))
+      await touchRunningComputer(deps, { ...computer, providerRef: computer.providerRef! });
+    else scheduleComputerSleep(deps.jobs, computerId);
     return;
   }
 
@@ -103,8 +129,7 @@ export async function sleepComputerIfIdle(
     signal: new AbortController().signal,
   };
   if (await hasActiveBackgroundWork(deps.sandbox, ref, ctx, computerId)) {
-    scheduleComputerSleep(deps.jobs, computerId);
-    await deps.sandbox.keepAlive?.(ref);
+    await touchRunningComputer(deps, { ...computer, providerRef: computer.providerRef! });
     return;
   }
 
@@ -145,8 +170,9 @@ export async function sleepComputerIfIdle(
       where: { id: computerId, state: "suspending" },
       data: { state: "running" },
     });
-    scheduleComputerSleep(deps.jobs, computerId);
-    if (backgroundAfterCheckpoint) await deps.sandbox.keepAlive?.(ref);
+    if (backgroundAfterCheckpoint)
+      await touchRunningComputer(deps, { ...computer, providerRef: computer.providerRef! });
+    else scheduleComputerSleep(deps.jobs, computerId);
     return;
   }
   if (
@@ -171,6 +197,7 @@ export async function sleepComputerIfIdle(
     });
     throw error;
   }
+  await settleComputerUsage(deps.prisma, computerId);
   await deps.prisma.computer.update({
     where: { id: computerId },
     data: {
@@ -214,6 +241,7 @@ function loadComputer(prisma: PrismaClient, computerId: string) {
       controlLeaseExpiresAt: true,
       controlBotId: true,
       updatedAt: true,
+      billingCoveredUntil: true,
     },
   });
 }

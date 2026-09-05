@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { runContinueJob } from "@rakazo/adapter-kit";
+import { ScriptedAgentRuntime } from "@rakazo/adapters";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import { createThreadEvents } from "@rakazo/db";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDb, createThreadEvents, organizationIdForSpace, reserveUsage } from "@rakazo/db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.WAKEUP_DRIVER = "memory";
 process.env.SANDBOX_PROVIDER = "fake";
@@ -532,6 +534,125 @@ describeIntegration("run executor lifecycle", () => {
     expect(first.runIds).toHaveLength(2);
     expect(replay.runIds).toEqual(first.runIds);
     expect(await handles.prisma.run.count({ where: { threadId: thread.id } })).toBe(2);
+  });
+
+  it("shuts down active work and resumes its fenced run without losing model or uncertain charges", async () => {
+    const seeded = await seedRun("shutdown", "keep working until I stop you");
+    const database = createDb(process.env.DATABASE_URL!);
+    let restoreRuntime: (() => void) | undefined;
+    try {
+      const organizationId = await organizationIdForSpace(database.prisma, seeded.me.spaceId);
+      const reservation = await reserveUsage(database.prisma, {
+        organizationId,
+        spaceId: seeded.me.spaceId,
+        userId: seeded.me.userId,
+        runId: seeded.run.id,
+        operationKey: `unknown-shutdown-${stamp}`,
+        kind: "ai",
+        funding: "hosted",
+        amountUsd: 0.25,
+      });
+      const effect = await database.prisma.externalEffect.create({
+        data: {
+          spaceId: seeded.me.spaceId,
+          runId: seeded.run.id,
+          kind: "destination.write",
+          idempotencyKey: `shutdown-effect-${stamp}`,
+          status: "executing",
+          request: { collection: "notes", title: "Pending" },
+        },
+      });
+      await handles.jobs.enqueue(runContinueJob(seeded.run.id));
+      await expect
+        .poll(
+          () =>
+            database.prisma.event.count({
+              where: { runId: seeded.run.id, type: "thread.progress" },
+            }),
+          { timeout: 15_000 },
+        )
+        .toBeGreaterThan(0);
+      const before = await database.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } });
+
+      await handles.stop();
+      const interrupted = await database.prisma.run.findUniqueOrThrow({
+        where: { id: seeded.run.id },
+      });
+      expect(interrupted).toMatchObject({
+        status: "queued",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        completedAt: null,
+        modelProvider: before.modelProvider,
+        modelId: before.modelId,
+        modelFunding: before.modelFunding,
+        modelThinkingLevel: before.modelThinkingLevel,
+      });
+      expect(
+        await database.prisma.attempt.findFirstOrThrow({
+          where: { runId: seeded.run.id },
+          orderBy: { startedAt: "desc" },
+        }),
+      ).toMatchObject({ status: "interrupted" });
+      expect(
+        await database.prisma.computerExecutionLease.count({ where: { runId: seeded.run.id } }),
+      ).toBe(0);
+      expect(
+        await database.prisma.externalEffect.findUniqueOrThrow({ where: { id: effect.id } }),
+      ).toMatchObject({ status: "executing" });
+      expect(
+        await database.prisma.usageReservation.findUniqueOrThrow({ where: { id: reservation.id } }),
+      ).toMatchObject({ status: "reserved", settledMicros: null });
+      expect(
+        await database.prisma.event.count({
+          where: { runId: seeded.run.id, type: { in: ["run.completed", "run.failed"] } },
+        }),
+      ).toBe(0);
+
+      const resumedRuntime = vi
+        .spyOn(ScriptedAgentRuntime.prototype, "run")
+        .mockImplementation(async function* () {
+          yield { type: "done", text: "Resumed after restart." };
+        });
+      restoreRuntime = () => resumedRuntime.mockRestore();
+      const { createApp } = await import("../../../apps/api/src/app.ts");
+      handles = await createApp({
+        databaseUrl: process.env.DATABASE_URL!,
+        dataDir,
+        sandboxProvider: "fake",
+        agentRuntime: "scripted",
+        wakeupDriver: "memory",
+        defaultProvider: "scripted",
+        defaultModel: "scripted",
+      });
+      await handles.executor.continueRun(seeded.run.id, "restarted-worker");
+      await expect
+        .poll(
+          async () =>
+            (
+              await database.prisma.run.findUniqueOrThrow({
+                where: { id: seeded.run.id },
+              })
+            ).status,
+        )
+        .toBe("completed");
+      expect(
+        await database.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      ).toMatchObject({
+        modelProvider: before.modelProvider,
+        modelId: before.modelId,
+        modelFunding: before.modelFunding,
+        modelThinkingLevel: before.modelThinkingLevel,
+        leaseFence: before.leaseFence + 1,
+      });
+      expect(
+        await database.prisma.usageReservation.findUniqueOrThrow({ where: { id: reservation.id } }),
+      ).toMatchObject({ status: "reserved" });
+    } finally {
+      restoreRuntime?.();
+      await database.prisma.$disconnect();
+      await database.pool.end();
+    }
   });
 
   async function seedRun(

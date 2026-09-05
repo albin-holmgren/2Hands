@@ -1,0 +1,49 @@
+appId: com.rakazo.app
+name: 2hands workspace draft isolation
+---
+# Requires the signed-in, seeded local fixture described in README.md.
+- launchApp
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- inputText: "Saved in the first workspace"
+- openLink: ${RAKAZO_E2E_SECONDARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- assertNotVisible: "Saved in the first workspace"
+- tapOn:
+    id: "composer-input"
+- inputText: "Saved in the second workspace"
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Saved in the first workspace"
+    timeout: 30000
+- assertNotVisible: "Saved in the second workspace"
+- pressKey: Home
+- killApp
+- launchApp:
+    stopApp: false
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Saved in the first workspace"
+    timeout: 30000
+- assertNotVisible: "Saved in the second workspace"
+- takeScreenshot: screenshots/restored-draft

@@ -5,7 +5,9 @@ import {
   type Provider,
 } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import type { ModelTier } from "@rakazo/core";
+import { AUTO_MODEL_LABEL, type ModelTier } from "@rakazo/core";
+import { HOSTED_DEFAULT_MODEL_ID } from "./deployment-model.js";
+import snapshot from "./gateway-catalog.json" with { type: "json" };
 
 export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-gateway";
 export const VERCEL_GATEWAY_DEFAULT_URL = "https://ai-gateway.vercel.sh/v1";
@@ -16,67 +18,25 @@ export type GatewayCatalogModel = {
   tier: ModelTier;
   vision: boolean;
   reasoning: boolean;
+  contextWindow: number;
+  maxTokens: number;
+  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
 };
 
-/** Curated 2hands catalog. Not every Gateway model — only ones we meter and support. */
-export const VERCEL_GATEWAY_CATALOG: GatewayCatalogModel[] = [
-  {
-    id: "openai/gpt-4.1-mini",
-    name: "GPT-4.1 Mini",
-    tier: "cheap",
-    vision: true,
-    reasoning: false,
-  },
-  {
-    id: "google/gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    tier: "cheap",
-    vision: true,
-    reasoning: false,
-  },
-  {
-    id: "openai/gpt-4.1",
-    name: "GPT-4.1",
-    tier: "mid",
-    vision: true,
-    reasoning: false,
-  },
-  {
-    id: "anthropic/claude-sonnet-4.5",
-    name: "Claude Sonnet 4.5",
-    tier: "mid",
-    vision: true,
-    reasoning: true,
-  },
-  {
-    id: "google/gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    tier: "mid",
-    vision: true,
-    reasoning: true,
-  },
-  {
-    id: "openai/gpt-5",
-    name: "GPT-5",
-    tier: "frontier",
-    vision: true,
-    reasoning: true,
-  },
-  {
-    id: "anthropic/claude-opus-4.6",
-    name: "Claude Opus 4.6",
-    tier: "frontier",
-    vision: true,
-    reasoning: true,
-  },
-  {
-    id: "xai/grok-4",
-    name: "Grok 4",
-    tier: "ultra",
-    vision: true,
-    reasoning: true,
-  },
-];
+/** Reviewed public pricing snapshot; shared by the picker, request limits, and usage meter. */
+export const VERCEL_GATEWAY_CATALOG: GatewayCatalogModel[] = snapshot.models.map((model) => ({
+  ...model,
+  name: model.id === HOSTED_DEFAULT_MODEL_ID ? AUTO_MODEL_LABEL : model.name,
+  tier:
+    model.cost.input <= 2 && model.cost.output <= 6
+      ? "cheap"
+      : model.cost.output >= 50
+        ? "ultra"
+        : model.cost.output >= 20
+          ? "frontier"
+          : "mid",
+}));
+export const GATEWAY_PRICING_UPDATED_AT = snapshot.retrievedAt;
 
 export function vercelGatewayApiKey(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const value =
@@ -104,9 +64,9 @@ function gatewayModel(entry: GatewayCatalogModel, baseUrl: string): Model<"opena
     baseUrl,
     reasoning: entry.reasoning,
     input: entry.vision ? ["text", "image"] : ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200_000,
-    maxTokens: 16_384,
+    cost: entry.cost,
+    contextWindow: entry.contextWindow,
+    maxTokens: entry.maxTokens,
   };
 }
 

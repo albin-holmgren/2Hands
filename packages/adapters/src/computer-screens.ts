@@ -1,12 +1,12 @@
 import type { AdapterContext } from "@rakazo/adapter-kit";
-import { canReleaseScreenLease, canTakeScreenLease } from "@rakazo/core";
+import { canReleaseScreenLease, canTakeScreenLease, ExecutionError } from "@rakazo/core";
 
 export const MULTI_SCREEN_UNAVAILABLE =
   "This computer provider does not support multiple screens. Desktop tools are already in use on the shared display. File and shell tools still work.";
 
-export class ComputerScreenUnavailableError extends Error {
+export class ComputerScreenUnavailableError extends ExecutionError {
   constructor(message = MULTI_SCREEN_UNAVAILABLE) {
-    super(message);
+    super("COMPUTER_UNAVAILABLE", message);
     this.name = "ComputerScreenUnavailableError";
   }
 }

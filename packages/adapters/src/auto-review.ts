@@ -1,4 +1,4 @@
-import type { AgentModelOAuthCredential, AgentRuntime } from "@rakazo/adapter-kit";
+import type { AgentModelOAuthCredential, AgentRunRequest, AgentRuntime } from "@rakazo/adapter-kit";
 import type { ActionApprovalRule } from "@rakazo/core";
 import { type AutoReviewJudgeDecision, redactSecrets } from "@rakazo/core";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -189,6 +189,7 @@ export function buildAutoReviewPrompt(input: {
 }
 
 export async function runAutoReviewJudge(input: {
+  meterModelCall?: AgentRunRequest["meterModelCall"];
   runtime: AgentRuntime;
   checker: AutoReviewChecker;
   apiKey?: string;
@@ -220,6 +221,7 @@ export async function runAutoReviewJudge(input: {
           "You are a fast safety checker. Output strict JSON only. No tools. No markdown.",
         history: [],
         tools: [],
+        meterModelCall: input.meterModelCall,
         model: {
           provider: input.checker.provider,
           id: input.checker.model,

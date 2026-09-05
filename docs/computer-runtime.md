@@ -33,7 +33,7 @@ Human input and agent input may coexist on distinct Team screens. “Take contro
 
 The first cloud implementation uses `@e2b/desktop` directly. Rakazo provisions or reconnects the desktop, maintains its authenticated live-view URL, captures PNG observations, performs mouse/keyboard/scroll/app actions, executes shell commands, and accesses files through the E2B SDK.
 
-On Team Computers, bot index 0 uses the E2B desktop stream and SDK screenshot/input APIs. Additional Team bots get their own Xvfb display, view port (`6080 + 2i`), and interactive control port (`6081 + 2i`) spawned inside the same sandbox via shell commands. Takeover opens the signed control URL for that bot's screen, not the shared primary stream.
+On Team Computers, bot index 0 uses an authenticated, permanently read-only primary view service and SDK screenshot/input APIs. Additional Team bots get their own Xvfb display, view port (`6080 + 2i`), and interactive control port (`6081 + 2i`) spawned inside the same sandbox via shell commands. Takeover opens a separate authenticated control service for that bot, including the primary display. Its password rotates between leases; revocation must confirm that its listeners closed. New E2B machines deny public traffic at the provider boundary. The screen proxy supplies the provider traffic token only upstream, while the authorized client receives only its scoped VNC password. Legacy public machines are normalized before uncached reconnect returns; rollout must also checkpoint/pause or normalize untouched running machines before public signup.
 
 ## Daytona backend
 
@@ -59,7 +59,15 @@ The disposable OS image is not a portable disk snapshot. System packages install
 
 Offline tests cover tool-result images, action parsing, provider conformance, workspace checkpoint/restore, provider SDK translation, lifecycle integration, and the Box single-screen emulator. They never call a model or live sandbox.
 
-The explicit acceptance test requires Docker (for temporary Postgres), `E2B_API_KEY`, `OPENROUTER_API_KEY`, and a vision-capable OpenRouter model id:
+The bounded provider probe requires only `E2B_API_KEY` in the process environment:
+
+```bash
+pnpm test:canary --provider=e2b
+```
+
+It provisions one synthetic desktop with a fixed three-minute expiry and checks shell output, a real screen image, and private networking. Through an isolated loopback screen proxy, a minimal RFB client requires password authentication, verifies that view-only input is ignored during takeover, and verifies that control input works. Revocation must close the old stream, and a replacement lease must reject the old password. The probe then checks file preservation across pause/resume and destroys the machine. A missing resource fails the probe instead of allocating a replacement. No model or database is used, and no customer account is created. Cleanup errors fail the command.
+
+The full acceptance test requires Docker (for temporary Postgres), `E2B_API_KEY`, `OPENROUTER_API_KEY`, and a vision-capable OpenRouter model id. An explicit loopback `TEST_DATABASE_URL` ending in `_test` can replace Docker. Supply keys in the process environment; these live commands never load `.env` or reuse an inherited `DATABASE_URL`:
 
 ```bash
 COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer

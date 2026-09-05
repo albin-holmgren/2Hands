@@ -10,7 +10,7 @@ const workflow = readFileSync(
 describe("desktop release workflow", () => {
   it("cannot execute contributor pull-request code with release credentials", () => {
     expect(workflow).not.toMatch(/^\s*pull_request:/m);
-    expect(workflow).toContain("permissions:\n  contents: read");
+    expect(workflow).toContain("permissions:\n  actions: read\n  contents: read");
     expect(workflow.match(/persist-credentials: false/g)).toHaveLength(3);
   });
 
@@ -36,12 +36,15 @@ describe("desktop release workflow", () => {
     expect(workflow).not.toContain("cache: pnpm");
     expect(workflow).toContain("apps/desktop/out/latest*.yml");
     expect(workflow).not.toContain("apps/desktop/out/*.yml");
+    expect(workflow).toContain("Verify the packaged renderer without opening desktop windows");
+    expect(workflow).toContain("packaged.spec.ts");
+    expect(workflow).toContain("must pass the complete main-branch CI workflow before release");
   });
 
   it("pins every platform update feed to the official GitHub owner and repo", () => {
     expect(workflow).toContain('grep -Fqx "provider: github"');
-    expect(workflow).toContain('grep -Fqx "owner: elie222"');
-    expect(workflow).toContain('grep -Fqx "repo: rakazo"');
+    expect(workflow).toContain('grep -Fqx "owner: albin-holmgren"');
+    expect(workflow).toContain('grep -Fqx "repo: 2Hands"');
     expect(workflow).toContain("Verify Linux update feed is pinned to the official GitHub channel");
     expect(workflow).toContain("Windows update config missing");
     expect(workflow).toContain("RELEASE_VERSION:");

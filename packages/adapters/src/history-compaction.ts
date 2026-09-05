@@ -8,6 +8,7 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+import { createModelMeter } from "./run-metering.js";
 
 /**
  * Sentinel for "nothing compacted yet". Message `seq` is 0-based, so an exclusive lower bound of
@@ -242,7 +243,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   // text keyed off the prompt, so summarizing with it would save nonsense to external memory and
   // advance the cursor past messages that are then lost from both stores. Skip instead.
   const deploymentFallback = resolveDeploymentModel();
-  const model = deps.resolveModel
+  const model: AgentRunRequest["model"] = deps.resolveModel
     ? await deps.resolveModel({
         userId: thread.userId,
         spaceId: thread.spaceId,
@@ -283,6 +284,11 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       history: [],
       tools: [],
       model,
+      meterModelCall: createModelMeter(
+        deps.prisma,
+        { userId: thread.userId, spaceId: thread.spaceId },
+        model.funding ?? "hosted",
+      ),
     },
     {
       operationId: `compact:${threadId}`,

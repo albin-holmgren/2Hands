@@ -4,8 +4,21 @@ import { captureScreenshot, signup } from "./helpers";
 test("onboarding model list never labels an older model the latest one", async ({
   page,
 }, testInfo) => {
+  // Exercise the self-hosted setup path; hosted signup opens a ready assistant.
+  await page.route("**/rpc/me", async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...payload, json: { ...payload.json, needsModel: true } },
+    });
+  });
   const stamp = Date.now();
   await signup(page, `model-labels-${stamp}@rakazo.test`, "password12", `Model labels ${stamp}`);
+  const connectModel = page.getByRole("heading", { name: "Connect a model" });
+  const readyAssistant = page.getByRole("combobox", { name: /^Message / });
+  await expect(connectModel.or(readyAssistant)).toBeVisible({ timeout: 20_000 });
+  if (await readyAssistant.isVisible()) await page.goto("/onboarding");
   await expect(page.getByRole("heading", { name: "Connect a model" })).toBeVisible({
     timeout: 20_000,
   });
@@ -28,4 +41,5 @@ test("onboarding model list never labels an older model the latest one", async (
   await models.selectOption({ label: alias! });
 
   await captureScreenshot(page, testInfo, "onboarding-model-labels");
+  await page.unrouteAll({ behavior: "wait" });
 });

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { i18n } from "@lingui/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import de from "../../scripts/translations-de.json";
@@ -179,5 +180,12 @@ describe("lingui catalogs", () => {
     i18n.activate("zh-CN");
     expect(i18n._({ id: "Settings", message: "Settings" })).toBe("设置");
     expect(i18n._({ id: "Cancel", message: "Cancel" })).toBe("取消");
+  });
+
+  it("keeps billed plan labels in the English catalog", () => {
+    const catalog = readFileSync(new URL("../locales/en/messages.po", import.meta.url), "utf8");
+    for (const msgid of ["Plan", "Plus $20", "Pro $60", "Ultra $200"]) {
+      expect(catalog).toContain(`msgid "${msgid}"`);
+    }
   });
 });

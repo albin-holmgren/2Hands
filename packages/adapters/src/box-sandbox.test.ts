@@ -112,7 +112,7 @@ describe("BoxSandboxProvider", () => {
     expect(replacement).toMatchObject({ providerRef: "bx_testbox2", fresh: true });
   });
 
-  it("captures the desktop, exposes a private view, and enforces one screen", async () => {
+  it("preserves desktop snapshots and agent actions while enforcing one screen", async () => {
     const fixture = boxFixture();
     const provider = new BoxSandboxProvider({ apiKey: "test-key" }, fixture.client);
     const computer = await provider.provision({ botId: "bot-a", homePath: "/unused" }, context);
@@ -127,14 +127,6 @@ describe("BoxSandboxProvider", () => {
       activeWindow: { id: "42", title: "Box browser" },
     });
     expect(observation.image).toEqual(Uint8Array.from([137, 80, 78, 71]));
-
-    const screen = await provider.connectScreen(
-      computer,
-      { view: "stream", interactive: false },
-      context,
-    );
-    expect(screen.url).toContain("view_only=true");
-    expect(screen.url).toContain("_token=secret");
 
     await provider.act(
       computer,
@@ -153,15 +145,26 @@ describe("BoxSandboxProvider", () => {
     expect(provider.describe().capabilities.multiScreen).toBe(false);
   });
 
-  it("releases the screen claim when desktop connection fails", async () => {
+  it("rejects unsafe viewing and takeover before requesting a URL or claiming a screen", async () => {
     const fixture = boxFixture();
-    fixture.desktop.mockRejectedValueOnce(new Error("desktop unavailable"));
     const provider = new BoxSandboxProvider({ apiKey: "test-key" }, fixture.client);
     const computer = await provider.provision({ botId: "bot-a", homePath: "/unused" }, context);
 
+    for (const interactive of [false, true]) {
+      await expect(
+        provider.connectScreen(
+          computer,
+          { view: "stream", interactive, controlToken: "test-control-lease" },
+          context,
+        ),
+      ).rejects.toMatchObject({ code: "COMPUTER_UNAVAILABLE" });
+    }
     await expect(
-      provider.connectScreen(computer, { view: "stream", interactive: false }, context),
-    ).rejects.toThrow("desktop unavailable");
+      provider.setScreenControl(computer, true, context, "test-control-lease"),
+    ).rejects.toMatchObject({ code: "COMPUTER_UNAVAILABLE" });
+    await expect(provider.setScreenControl(computer, false, context)).resolves.toBeUndefined();
+    expect(fixture.desktop).not.toHaveBeenCalled();
+    expect(provider.describe().capabilities.takeover).toBe(false);
     await expect(provider.observe(computer, { ...context, botId: "bot-b" })).resolves.toMatchObject(
       { width: 1920, height: 1080 },
     );

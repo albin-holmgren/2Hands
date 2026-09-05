@@ -1,3 +1,5 @@
+export const HOSTED_DEFAULT_MODEL_ID = "alibaba/qwen3.8-max";
+
 /**
  * The deployment-wide model default: which provider a run falls back to when no user
  * credential applies, and the key for that provider.
@@ -15,7 +17,7 @@ export function resolveDeploymentModel(env: NodeJS.ProcessEnv = process.env) {
   const models: Record<string, string> = {
     openrouter: "deepseek/deepseek-v4-flash-0731",
     anthropic: "claude-sonnet-5",
-    "vercel-gateway": "openai/gpt-4.1-mini",
+    "vercel-gateway": HOSTED_DEFAULT_MODEL_ID,
   };
   return {
     provider,

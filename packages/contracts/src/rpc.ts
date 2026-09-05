@@ -529,6 +529,8 @@ export const appContract = {
     },
   },
   onboarding: {
+    /** Create the default Chief of Staff in an empty space, or return the existing first bot. */
+    ensureChiefOfStaff: oc.output(BotSchema),
     /** Seed the first-run conversational onboarding into the bot's thread. */
     start: oc.input(z.object({ botId: Id })).output(z.object({ ok: z.literal(true) })),
     /** Answer the focus choice; renames the bot and posts the app cards. */

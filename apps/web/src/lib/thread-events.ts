@@ -14,6 +14,7 @@ import {
   prependThreadHistoryPage,
   progressMessageId,
   reduceLiveMessageBlocks,
+  runFailureCode,
   runFailureError,
   subagentBlockFromPayload,
   upsertMessageById,
@@ -323,7 +324,7 @@ export function reduceThreadSnapshot(
       // why it stopped, matching what threads.get returns on the next load.
       run:
         endedRun && failure
-          ? { ...endedRun, status: "failed", error: failure }
+          ? { ...endedRun, status: "failed", error: failure, errorCode: runFailureCode(event) }
           : primaryEnded
             ? (activeRuns?.[0] ?? null)
             : prev.run,

@@ -49,6 +49,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions } from "../components/AskActions";
 import { BotAvatar } from "../components/bot-avatar";
+import { BotModelPicker } from "../components/bot-model-picker";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
@@ -57,6 +58,7 @@ import { NativeSymbol } from "../components/native-symbol";
 import {
   applyMobileThreadEvent,
   blockText,
+  captureApiRequestContext,
   currentApiBase,
   loadSessionToken,
   type MobileBot,
@@ -75,6 +77,13 @@ import {
 } from "../lib/api";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
+import {
+  composerAccountId,
+  composerDraftKey,
+  loadComposerDraft,
+  readComposerDraft,
+  saveComposerDraft,
+} from "../lib/composer-drafts";
 import { saveLastBotId } from "../lib/last-bot";
 import {
   dismissThreadNotifications,
@@ -94,6 +103,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { useNativeTheme } from "../lib/theme";
 import {
   type ThreadScrollAction,
   ThreadScrollBehavior,
@@ -141,16 +151,23 @@ function isWorkingStatus(status: string | undefined): boolean {
 type NotificationRouteState = "loading" | "ready" | "failed";
 
 export default function ThreadRoute() {
+  const native = useNativeTheme();
   const router = useRouter();
-  const { spaceId } = useLocalSearchParams<{ spaceId?: string | string[] }>();
+  const { spaceId, botId, groupId } = useLocalSearchParams<{
+    spaceId?: string | string[];
+    botId?: string;
+    groupId?: string;
+  }>();
   const requestedSpaceId = typeof spaceId === "string" && spaceId ? spaceId : null;
   const invalidSpaceId = spaceId !== undefined && requestedSpaceId === null;
   const routeMatchesSelectedSpace =
     requestedSpaceId === null || selectedSpaceId() === requestedSpaceId;
   const [routeState, setRouteState] = useState<NotificationRouteState>(() => {
     if (invalidSpaceId) return "failed";
-    return routeMatchesSelectedSpace ? "ready" : "loading";
+    return "loading";
   });
+  const [draftKey, setDraftKey] = useState<string | null>(null);
+  const [draftStorageUnavailable, setDraftStorageUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,38 +177,77 @@ export default function ThreadRoute() {
         cancelled = true;
       };
     }
-    if (!requestedSpaceId || selectedSpaceId() === requestedSpaceId) {
-      setRouteState("ready");
-      return () => {
-        cancelled = true;
-      };
-    }
     setRouteState("loading");
-    void selectSpace(requestedSpaceId).then((selected) => {
-      if (!cancelled) setRouteState(selected ? "ready" : "failed");
+    void (async () => {
+      if (
+        requestedSpaceId &&
+        selectedSpaceId() !== requestedSpaceId &&
+        !(await selectSpace(requestedSpaceId))
+      ) {
+        throw new Error("Workspace unavailable");
+      }
+      if (!composerAccountId(currentApiBase())) await rpc("me");
+      const accountId = composerAccountId(currentApiBase());
+      if (!accountId) throw new Error("Account unavailable");
+      const key = composerDraftKey(
+        currentApiBase(),
+        accountId,
+        selectedSpaceId() ?? "",
+        groupId ?? botId ?? "",
+      );
+      let unavailable = false;
+      await loadComposerDraft(key).catch(() => {
+        unavailable = true;
+      });
+      if (!cancelled) {
+        setDraftKey(key);
+        setDraftStorageUnavailable(unavailable);
+        setRouteState("ready");
+      }
+    })().catch(() => {
+      if (!cancelled) setRouteState("failed");
     });
     return () => {
       cancelled = true;
     };
-  }, [invalidSpaceId, requestedSpaceId]);
+  }, [invalidSpaceId, requestedSpaceId, botId, groupId]);
 
-  if (routeState === "ready" && !invalidSpaceId && routeMatchesSelectedSpace) return <Thread />;
+  if (routeState === "ready" && draftKey && !invalidSpaceId && routeMatchesSelectedSpace)
+    return (
+      <Thread
+        key={draftKey}
+        draftKey={draftKey}
+        draftStorageUnavailable={draftStorageUnavailable}
+      />
+    );
   return (
     <View
-      style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: native.page,
+      }}
     >
       {routeState === "loading" ? (
-        <ActivityIndicator color="#ECECEE" />
+        <ActivityIndicator color={native.ink} />
       ) : (
         <Pressable accessibilityRole="button" onPress={() => router.replace("/")}>
-          <Text style={{ color: "#ECECEE", fontSize: 16 }}>Return to inbox</Text>
+          <Text style={{ color: native.ink, fontSize: 16 }}>Return to inbox</Text>
         </Pressable>
       )}
     </View>
   );
 }
 
-function Thread() {
+function Thread({
+  draftKey,
+  draftStorageUnavailable,
+}: {
+  draftKey: string;
+  draftStorageUnavailable: boolean;
+}) {
+  const native = useNativeTheme();
   const navigation = useNavigation();
   const router = useRouter();
   const headerHeight = useHeaderHeight();
@@ -226,6 +282,7 @@ function Thread() {
   activeGroupId.current = groupId;
   const readVisibleTarget = useRef<string | null>(null);
   const threadKey = groupId ?? botId;
+  const [initialDraft] = useState(() => readComposerDraft(draftKey));
   const [threadScrollState, setThreadScrollState] = useState<ThreadScrollState>(() =>
     scrollBehavior.current.state(),
   );
@@ -245,7 +302,7 @@ function Thread() {
       : undefined;
   const [snap, setSnap] = useState<MobileSnapshot | null>(null);
   const activeThreadId = useRef<string | undefined>(undefined);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft.text);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
@@ -260,11 +317,32 @@ function Thread() {
       connectionId?: string;
     }>
   >([]);
-  const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
-  const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
-  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(null);
-  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>(
+    initialDraft.mentions,
+  );
+  const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(
+    initialDraft.skill,
+  );
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>(
+    initialDraft.attachments,
+  );
+  const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(initialDraft.reply);
+  useEffect(() => {
+    saveComposerDraft(draftKey, {
+      text: draft,
+      attachments: pendingAttachments,
+      reply: replyTarget,
+      mentions: selectedMentions,
+      skill: selectedSkill,
+    });
+  }, [draftKey, draft, pendingAttachments, replyTarget, selectedMentions, selectedSkill]);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(
+    draftStorageUnavailable
+      ? "Draft storage is unavailable. Keep this conversation open until you send."
+      : initialDraft.unavailableAttachments
+        ? "Some draft attachments are no longer available. Attach them again."
+        : null,
+  );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -461,7 +539,7 @@ function Thread() {
               muted={!currentBot.notifyOnFinish}
             />
           ) : null}
-          <Text numberOfLines={1} style={{ color: "#ECECEE", fontSize: 18, fontWeight: "600" }}>
+          <Text numberOfLines={1} style={{ color: native.ink, fontSize: 18, fontWeight: "600" }}>
             {name || "Thread"}
           </Text>
         </View>
@@ -478,11 +556,16 @@ function Thread() {
               })
             }
           >
-            <NativeSymbol ios="gearshape" android="settings-outline" size={21} color="#ECECEE" />
+            <NativeSymbol ios="gearshape" android="settings-outline" size={21} color={native.ink} />
           </Pressable>
         ) : (
           <Pressable accessibilityLabel="Bot actions" hitSlop={8} onPress={showBotActions}>
-            <NativeSymbol ios="ellipsis" android="ellipsis-horizontal" size={21} color="#ECECEE" />
+            <NativeSymbol
+              ios="ellipsis"
+              android="ellipsis-horizontal"
+              size={21}
+              color={native.ink}
+            />
           </Pressable>
         ),
     });
@@ -813,18 +896,6 @@ function Thread() {
     );
   }, [botId, groupId, messageId]);
 
-  useEffect(() => {
-    setPendingAttachments((current) => attachmentsForThread(current, threadKey));
-    setDraft("");
-    setMentionQuery(null);
-    setSlashQuery(null);
-    setSelectedSkill(null);
-    setSelectedMentions([]);
-    setReplyTarget(null);
-    setAttachmentNotice(null);
-    setError(null);
-  }, [threadKey]);
-
   function updateDraft(value: string) {
     setDraft(value);
     const match = /(?:^|\s)@([\w-]*)$/.exec(value);
@@ -905,18 +976,30 @@ function Thread() {
     setSending(true);
     setError(null);
     try {
+      const requestContext = await captureApiRequestContext();
       if (plan.shouldRunRoutines) {
         const sendNonce = newClientNonce();
         await Promise.all(
           plan.routineIds.map((routineId) =>
-            rpc("routines/testRun", {
-              routineId,
-              clientNonce: `routine-mention:${sendNonce}:${routineId}`,
-            }),
+            rpc(
+              "routines/testRun",
+              {
+                routineId,
+                clientNonce: `routine-mention:${sendNonce}:${routineId}`,
+              },
+              { requestContext },
+            ),
           ),
         );
       }
       const clearOriginComposer = () => {
+        saveComposerDraft(draftKey, {
+          text: "",
+          attachments: [],
+          reply: null,
+          mentions: [],
+          skill: null,
+        });
         setPendingAttachments((current) =>
           current.filter((attachment) => attachment.threadKey !== originThreadKey),
         );
@@ -947,12 +1030,16 @@ function Thread() {
       }
       const artifactIds: string[] = [];
       for (const pending of attachments) {
-        const artifact = await rpc<{ id: string }>("artifacts/create", {
-          ...(groupTarget ? { groupId: groupTarget } : { botId: botTarget! }),
-          name: pending.name,
-          mimeType: pending.mimeType,
-          contentBase64: pending.contentBase64,
-        });
+        const artifact = await rpc<{ id: string }>(
+          "artifacts/create",
+          {
+            ...(groupTarget ? { groupId: groupTarget } : { botId: botTarget! }),
+            name: pending.name,
+            mimeType: pending.mimeType,
+            contentBase64: pending.contentBase64,
+          },
+          { requestContext },
+        );
         artifactIds.push(artifact.id);
       }
       const clientNonce = newClientNonce();
@@ -975,6 +1062,7 @@ function Thread() {
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: replyTarget?.id,
             },
+        { requestContext },
       );
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
@@ -1191,7 +1279,7 @@ function Thread() {
         {activityBotId ? (
           <View style={{ paddingTop: 22 }}>
             <BotAvatar
-              color={activityBot?.color ?? "#85858A"}
+              color={activityBot?.color ?? native.muted}
               identity={activityBotId}
               size={inGroup ? 20 : 28}
               status={activityStatus}
@@ -1220,7 +1308,7 @@ function Thread() {
             }}
           >
             <Pressable accessibilityLabel="Reply" onPress={() => setReplyTarget(message)}>
-              <Text style={{ color: "#6C6C70", fontSize: 12 }}>Reply</Text>
+              <Text style={{ color: native.muted, fontSize: 12 }}>Reply</Text>
             </Pressable>
             {canReactToThreadMessage(message) ? (
               <Pressable
@@ -1228,7 +1316,7 @@ function Thread() {
                 accessibilityState={{ selected: Boolean(message.thumbsUp) }}
                 onPress={() => void reactToMessage(message)}
               >
-                <Text style={{ color: message.thumbsUp ? "#E9C46A" : "#6C6C70", fontSize: 13 }}>
+                <Text style={{ color: message.thumbsUp ? "#E9C46A" : native.muted, fontSize: 13 }}>
                   👍
                 </Text>
               </Pressable>
@@ -1272,7 +1360,7 @@ function Thread() {
           size={28}
           status={currentBotStatus}
         />
-        <Text style={{ color: "#85858A", fontSize: 13.5 }}>{currentBot.name} is working</Text>
+        <Text style={{ color: native.muted, fontSize: 13.5 }}>{currentBot.name} is working</Text>
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
       <View
@@ -1297,7 +1385,7 @@ function Thread() {
             </View>
           ))}
         </View>
-        <Text style={{ color: "#85858A", fontSize: 13.5, flexShrink: 1 }}>
+        <Text style={{ color: native.muted, fontSize: 13.5, flexShrink: 1 }}>
           {workingGroupBots.length === 1
             ? `${workingGroupBots[0]?.name ?? "Agent"} is working`
             : `${workingGroupBots.length} agents working`}
@@ -1316,7 +1404,7 @@ function Thread() {
           paddingVertical: 10,
         }}
       >
-        <Text style={{ color: "#85858A", fontSize: 13 }}>
+        <Text style={{ color: native.muted, fontSize: 13 }}>
           {loadingOlder ? "Loading…" : "Load earlier messages"}
         </Text>
       </Pressable>
@@ -1326,10 +1414,10 @@ function Thread() {
     <KeyboardAvoidingView
       behavior="height"
       keyboardVerticalOffset={headerHeight}
-      style={{ flex: 1, backgroundColor: "#000", paddingHorizontal: 20 }}
+      style={{ flex: 1, backgroundColor: native.page, paddingHorizontal: 20 }}
     >
-      {error ? <Text style={{ color: "#8E8E93", marginTop: 12 }}>{error}</Text> : null}
-      {runError ? <Text style={{ color: "#EF4444", marginTop: 12 }}>{runError}</Text> : null}
+      {error ? <Text style={{ color: native.muted, marginTop: 12 }}>{error}</Text> : null}
+      {runError ? <Text style={{ color: native.danger, marginTop: 12 }}>{runError}</Text> : null}
       <View style={{ flex: 1, position: "relative" }}>
         {showPinnedPage ? (
           <ScrollView
@@ -1405,13 +1493,13 @@ function Thread() {
               height: 42,
               borderRadius: 21,
               borderWidth: 1,
-              borderColor: "#303035",
-              backgroundColor: "#1A1A1D",
+              borderColor: native.hairlineStrong,
+              backgroundColor: native.surface2,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <NativeSymbol ios="arrow.down" android="arrow-down" size={18} color="#ECECEE" />
+            <NativeSymbol ios="arrow.down" android="arrow-down" size={18} color={native.ink} />
             {threadScrollState.unread ? (
               <View
                 style={{
@@ -1421,7 +1509,7 @@ function Thread() {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#4C8DFF",
+                  backgroundColor: native.accent,
                 }}
               />
             ) : null}
@@ -1435,8 +1523,8 @@ function Thread() {
               marginTop: 12,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#26262A",
-              backgroundColor: "#17171A",
+              borderColor: native.hairlineStrong,
+              backgroundColor: native.surface,
               paddingHorizontal: 12,
               paddingVertical: 10,
               flexDirection: "row",
@@ -1445,18 +1533,20 @@ function Thread() {
             }}
           >
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#85858A", fontSize: 12 }}>Replying to</Text>
-              <Text style={{ color: "#C9C9CE", fontSize: 13 }} numberOfLines={1}>
+              <Text style={{ color: native.muted, fontSize: 12 }}>Replying to</Text>
+              <Text style={{ color: native.muted, fontSize: 13 }} numberOfLines={1}>
                 {previewMessageText(replyTarget)}
               </Text>
             </View>
             <Pressable accessibilityLabel="Cancel reply" onPress={() => setReplyTarget(null)}>
-              <Text style={{ color: "#85858A" }}>✕</Text>
+              <Text style={{ color: native.muted }}>✕</Text>
             </Pressable>
           </View>
         ) : null}
         {attachmentNotice ? (
-          <Text style={{ color: "#D6CFA0", marginTop: 12, fontSize: 13 }}>{attachmentNotice}</Text>
+          <Text style={{ color: native.muted, marginTop: 12, fontSize: 13 }}>
+            {attachmentNotice}
+          </Text>
         ) : null}
         {activePendingAttachments.length ? (
           <View
@@ -1476,8 +1566,8 @@ function Thread() {
                   gap: 8,
                   borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: "#26262A",
-                  backgroundColor: "#17171A",
+                  borderColor: native.hairlineStrong,
+                  backgroundColor: native.surface,
                   paddingHorizontal: 12,
                   paddingVertical: 8,
                 }}
@@ -1488,9 +1578,9 @@ function Thread() {
                     style={{ width: 28, height: 28, borderRadius: 6 }}
                   />
                 ) : (
-                  <Text style={{ color: "#C9C9CE" }}>📎</Text>
+                  <Text style={{ color: native.muted }}>📎</Text>
                 )}
-                <Text style={{ color: "#C9C9CE", maxWidth: 140 }} numberOfLines={1}>
+                <Text style={{ color: native.muted, maxWidth: 140 }} numberOfLines={1}>
                   {attachment.name}
                 </Text>
                 <Pressable
@@ -1501,7 +1591,7 @@ function Thread() {
                     )
                   }
                 >
-                  <NativeSymbol ios="xmark" android="close" size={14} color="#85858A" />
+                  <NativeSymbol ios="xmark" android="close" size={14} color={native.muted} />
                 </Pressable>
               </View>
             ))}
@@ -1514,8 +1604,8 @@ function Thread() {
               marginTop: 12,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#26262A",
-              backgroundColor: "#17171A",
+              borderColor: native.hairlineStrong,
+              backgroundColor: native.surface,
               overflow: "hidden",
             }}
           >
@@ -1534,12 +1624,12 @@ function Thread() {
               >
                 <MentionOptionIcon mention={mention} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: "#ECECEE", fontSize: 14 }}>@{mention.name}</Text>
+                  <Text style={{ color: native.ink, fontSize: 14 }}>@{mention.name}</Text>
                   {mention.subtitle ? (
                     <Text
                       numberOfLines={1}
                       style={{
-                        color: "#85858A",
+                        color: native.muted,
                         fontSize: 12.5,
                         marginTop: 2,
                       }}
@@ -1559,8 +1649,8 @@ function Thread() {
               marginTop: 12,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#26262A",
-              backgroundColor: "#17171A",
+              borderColor: native.hairlineStrong,
+              backgroundColor: native.surface,
               overflow: "hidden",
             }}
           >
@@ -1577,12 +1667,12 @@ function Thread() {
                   paddingVertical: 10,
                 }}
               >
-                <NativeSymbol ios="cube" android="cube-outline" size={16} color="#9A9AA0" />
+                <NativeSymbol ios="cube" android="cube-outline" size={16} color={native.muted2} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: "#ECECEE", fontSize: 14 }}>{skill.name}</Text>
+                  <Text style={{ color: native.ink, fontSize: 14 }}>{skill.name}</Text>
                   <Text
                     numberOfLines={1}
-                    style={{ color: "#85858A", fontSize: 12.5, marginTop: 2 }}
+                    style={{ color: native.muted, fontSize: 12.5, marginTop: 2 }}
                   >
                     {truncateSlashDescription(skill.description)}
                   </Text>
@@ -1606,9 +1696,9 @@ function Thread() {
                   ios="gearshape"
                   android="settings-outline"
                   size={16}
-                  color="#9A9AA0"
+                  color={native.muted2}
                 />
-                <Text style={{ color: "#ECECEE", fontSize: 14 }}>{action.label}</Text>
+                <Text style={{ color: native.ink, fontSize: 14 }}>{action.label}</Text>
               </Pressable>
             ))}
           </View>
@@ -1629,12 +1719,12 @@ function Thread() {
               height: 44,
               borderRadius: 22,
               borderWidth: 1,
-              borderColor: "#26262A",
+              borderColor: native.hairlineStrong,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <NativeSymbol ios="plus" android="add" size={18} color="#9A9AA0" />
+            <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
           </Pressable>
           <View
             style={{
@@ -1643,7 +1733,7 @@ function Thread() {
               flexWrap: "wrap",
               alignItems: "center",
               gap: 6,
-              backgroundColor: "#131315",
+              backgroundColor: native.surface2,
               borderRadius: 20,
               paddingHorizontal: 10,
               paddingVertical: 8,
@@ -1657,15 +1747,15 @@ function Thread() {
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
-                  backgroundColor: "#1C1C1F",
+                  backgroundColor: native.surface2,
                   borderRadius: 999,
                   paddingHorizontal: 10,
                   paddingVertical: 5,
                   maxWidth: "100%",
                 }}
               >
-                <NativeSymbol ios="cube" android="cube-outline" size={13} color="#B0B0B6" />
-                <Text numberOfLines={1} style={{ color: "#ECECEE", fontSize: 13, flexShrink: 1 }}>
+                <NativeSymbol ios="cube" android="cube-outline" size={13} color={native.muted} />
+                <Text numberOfLines={1} style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}>
                   {selectedSkill.name}
                 </Text>
                 <Pressable
@@ -1673,7 +1763,7 @@ function Thread() {
                   hitSlop={8}
                   onPress={() => setSelectedSkill(null)}
                 >
-                  <NativeSymbol ios="xmark" android="close" size={12} color="#85858A" />
+                  <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
                 </Pressable>
               </View>
             ) : null}
@@ -1685,7 +1775,7 @@ function Thread() {
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
-                  backgroundColor: "#1C1C1F",
+                  backgroundColor: native.surface2,
                   borderRadius: 999,
                   paddingHorizontal: 10,
                   paddingVertical: 5,
@@ -1693,7 +1783,7 @@ function Thread() {
                 }}
               >
                 <MentionChipIcon mention={mention} />
-                <Text numberOfLines={1} style={{ color: "#ECECEE", fontSize: 13, flexShrink: 1 }}>
+                <Text numberOfLines={1} style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}>
                   {mention.name}
                 </Text>
                 <Pressable
@@ -1707,11 +1797,12 @@ function Thread() {
                     )
                   }
                 >
-                  <NativeSymbol ios="xmark" android="close" size={12} color="#85858A" />
+                  <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
                 </Pressable>
               </View>
             ))}
             <TextInput
+              testID="composer-input"
               value={draft}
               onChangeText={updateDraft}
               accessibilityLabel={name ? `Message ${name}` : "Message"}
@@ -1731,8 +1822,8 @@ function Thread() {
                     ? `Message ${name}`
                     : "Message…"
               }
-              placeholderTextColor="#6C6C70"
-              keyboardAppearance="dark"
+              placeholderTextColor={native.muted}
+              keyboardAppearance={native.theme}
               multiline
               textAlignVertical="center"
               blurOnSubmit={false}
@@ -1740,7 +1831,7 @@ function Thread() {
                 flexGrow: 1,
                 flexShrink: 1,
                 minWidth: 96,
-                color: "#ECECEE",
+                color: native.ink,
                 paddingVertical: 2,
                 maxHeight: 100,
                 writingDirection: "auto",
@@ -1748,11 +1839,13 @@ function Thread() {
             />
           </View>
           <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Send"
+            testID="composer-send"
             disabled={sending || !canSend}
             onPress={() => void send()}
             style={{
-              backgroundColor: "#F1F1EF",
+              backgroundColor: native.cream,
               borderRadius: 22,
               width: 44,
               height: 44,
@@ -1761,7 +1854,7 @@ function Thread() {
               opacity: sending || !canSend ? 0.5 : 1,
             }}
           >
-            <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color="#17171A" />
+            <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color={native.creamInk} />
           </Pressable>
           {working ? (
             <Pressable
@@ -1769,7 +1862,7 @@ function Thread() {
               disabled={sending}
               onPress={() => void stop()}
               style={{
-                borderColor: "#34343A",
+                borderColor: native.hairlineStrong,
                 borderWidth: 1,
                 borderRadius: 22,
                 width: 44,
@@ -1779,22 +1872,42 @@ function Thread() {
                 opacity: sending ? 0.5 : 1,
               }}
             >
-              <NativeSymbol ios="stop.fill" android="stop" size={15} color="#C9C9CE" />
+              <NativeSymbol ios="stop.fill" android="stop" size={15} color={native.muted} />
             </Pressable>
           ) : null}
         </View>
         {!inGroup ? (
-          <Link
-            href={{
-              pathname: "/computer",
-              params: { botId: botId ?? "", name: name ?? "Bot" },
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
             }}
-            asChild
           >
-            <Pressable style={{ marginTop: 16 }}>
-              <Text style={{ color: "#C9C9CE" }}>Open computer →</Text>
-            </Pressable>
-          </Link>
+            <BotModelPicker
+              botId={botId ?? ""}
+              onUpdate={(bot) =>
+                setMentionBots((current) =>
+                  current.map((entry) => (entry.id === bot.id ? { ...entry, ...bot } : entry)),
+                )
+              }
+            />
+            <Link
+              href={{
+                pathname: "/computer",
+                params: { botId: botId ?? "", name: name ?? "Bot" },
+              }}
+              asChild
+            >
+              <Pressable
+                accessibilityRole="button"
+                style={{ minHeight: 44, justifyContent: "center" }}
+              >
+                <Text style={{ color: native.muted }}>Open computer →</Text>
+              </Pressable>
+            </Link>
+          </View>
         ) : null}
       </View>
       {markdownPreview && artifactTarget ? (
@@ -1809,8 +1922,9 @@ function Thread() {
 }
 
 function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
+  const native = useNativeTheme();
   if (mention.kind === "routine") {
-    return <NativeSymbol ios="clock" android="time-outline" size={16} color="#9A9AA0" />;
+    return <NativeSymbol ios="clock" android="time-outline" size={16} color={native.muted2} />;
   }
   if (mention.kind === "connector") {
     return (
@@ -1818,7 +1932,7 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
         ios="puzzlepiece.extension"
         android="extension-puzzle-outline"
         size={16}
-        color="#9A9AA0"
+        color={native.muted2}
       />
     );
   }
@@ -1829,12 +1943,12 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
           width: 16,
           height: 16,
           borderRadius: 8,
-          backgroundColor: "#2A2A2E",
+          backgroundColor: "#D0CDC4",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text style={{ color: "#C9C9CE", fontSize: 9 }}>G</Text>
+        <Text style={{ color: native.muted, fontSize: 9 }}>G</Text>
       </View>
     );
   }
@@ -1845,12 +1959,12 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
           width: 16,
           height: 16,
           borderRadius: 8,
-          backgroundColor: "#2A2A2E",
+          backgroundColor: "#D0CDC4",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text style={{ color: "#C9C9CE", fontSize: 9 }}>@</Text>
+        <Text style={{ color: native.muted, fontSize: 9 }}>@</Text>
       </View>
     );
   }
@@ -1860,15 +1974,16 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
         width: 16,
         height: 16,
         borderRadius: 4,
-        backgroundColor: mention.color ?? "#85858A",
+        backgroundColor: mention.color ?? "#5F5E57",
       }}
     />
   );
 }
 
 function MentionChipIcon({ mention }: { mention: ComposerMention }) {
+  const native = useNativeTheme();
   if (mention.kind === "routine") {
-    return <NativeSymbol ios="clock" android="time-outline" size={13} color="#B0B0B6" />;
+    return <NativeSymbol ios="clock" android="time-outline" size={13} color={native.muted} />;
   }
   if (mention.kind === "connector") {
     return (
@@ -1876,7 +1991,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
         ios="puzzlepiece.extension"
         android="extension-puzzle-outline"
         size={13}
-        color="#B0B0B6"
+        color={native.muted}
       />
     );
   }
@@ -1887,12 +2002,12 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
           width: 14,
           height: 14,
           borderRadius: 7,
-          backgroundColor: "#2A2A2E",
+          backgroundColor: "#D0CDC4",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text style={{ color: "#C9C9CE", fontSize: 9 }}>
+        <Text style={{ color: native.muted, fontSize: 9 }}>
           {mention.kind === "group" ? "G" : "@"}
         </Text>
       </View>
@@ -1904,7 +2019,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
         width: 14,
         height: 14,
         borderRadius: 4,
-        backgroundColor: mention.color ?? "#85858A",
+        backgroundColor: mention.color ?? "#5F5E57",
       }}
     />
   );
@@ -1970,6 +2085,7 @@ const MessageBubble = memo(function MessageBubble({
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   onSpeak?: (message: MobileMessage) => void;
 }) {
+  const native = useNativeTheme();
   const [peerExpanded, setPeerExpanded] = useState(false);
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
   const cardBotId = message.botId ?? botId;
@@ -2022,7 +2138,7 @@ const MessageBubble = memo(function MessageBubble({
     const peerColor =
       bots.find((bot) => bot.id === peerBotId)?.color ??
       members?.find((member) => member.botId === peerBotId)?.color ??
-      "#85858A";
+      "#5F5E57";
     // Compact receipt only: peer bodies stay out of the human thread.
     // Full view-only peer chat is web-first; mobile keeps the chip without expand.
     return (
@@ -2039,7 +2155,7 @@ const MessageBubble = memo(function MessageBubble({
         }}
       >
         <BotAvatar color={peerColor} identity={peerBotId} size={16} />
-        <Text numberOfLines={1} style={{ color: "#85858A", fontSize: 13.5, flexShrink: 1 }}>
+        <Text numberOfLines={1} style={{ color: native.muted, fontSize: 13.5, flexShrink: 1 }}>
           {label}
         </Text>
       </View>
@@ -2052,7 +2168,7 @@ const MessageBubble = memo(function MessageBubble({
   if (channelMessage) {
     return (
       <View style={{ width: "100%", paddingVertical: 4, alignItems: "center" }}>
-        <Text style={{ color: "#85858A", fontSize: 13.5, textAlign: "center" }}>
+        <Text style={{ color: native.muted, fontSize: 13.5, textAlign: "center" }}>
           {messagingProviderLabel(channelMessage.provider)} · {channelMessage.fromLabel}:{" "}
           {channelMessage.text}
         </Text>
@@ -2071,8 +2187,8 @@ const MessageBubble = memo(function MessageBubble({
           width: "90%",
           borderRadius: 18,
           borderWidth: 1,
-          borderColor: "#232326",
-          backgroundColor: "#17171A",
+          borderColor: native.hairlineStrong,
+          backgroundColor: native.surface,
           paddingHorizontal: 16,
           paddingVertical: 14,
         }}
@@ -2084,12 +2200,12 @@ const MessageBubble = memo(function MessageBubble({
             gap: 8,
           }}
         >
-          <Text style={{ color: "#ECECEE", fontSize: 15, fontWeight: "600" }}>
+          <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
             {special.name || "subagent"}
           </Text>
           <Text
             style={{
-              color: failed ? "#EF4444" : running ? "#F5A03C" : "#4ECB71",
+              color: failed ? native.danger : running ? "#F5A03C" : native.successSoft,
               fontSize: 13,
             }}
           >
@@ -2097,11 +2213,11 @@ const MessageBubble = memo(function MessageBubble({
           </Text>
         </View>
         {special.task ? (
-          <Text style={{ color: "#85858A", marginTop: 8, fontSize: 13.5 }}>{special.task}</Text>
+          <Text style={{ color: native.muted, marginTop: 8, fontSize: 13.5 }}>{special.task}</Text>
         ) : null}
         {special.result || special.progress ? (
           <View style={{ marginTop: 8 }}>
-            <ChatMarkdown streaming={running}>
+            <ChatMarkdown theme={native.theme} streaming={running}>
               {special.result || special.progress || ""}
             </ChatMarkdown>
           </View>
@@ -2119,8 +2235,8 @@ const MessageBubble = memo(function MessageBubble({
           width: "90%",
           borderRadius: 18,
           borderWidth: 1,
-          borderColor: "#232326",
-          backgroundColor: "#17171A",
+          borderColor: native.hairlineStrong,
+          backgroundColor: native.surface,
           paddingHorizontal: 16,
           paddingVertical: 14,
           opacity: removed ? 0.6 : 1,
@@ -2133,10 +2249,10 @@ const MessageBubble = memo(function MessageBubble({
             gap: 8,
           }}
         >
-          <Text style={{ color: "#ECECEE", fontSize: 15, fontWeight: "600" }}>
+          <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
             {special.name || "Bot"}
           </Text>
-          <Text style={{ color: removed ? "#EF4444" : "#4ECB71", fontSize: 13 }}>
+          <Text style={{ color: removed ? native.danger : native.successSoft, fontSize: 13 }}>
             {special.status === "archived"
               ? "archived"
               : special.status === "deleted"
@@ -2146,7 +2262,7 @@ const MessageBubble = memo(function MessageBubble({
         </View>
         <Text
           style={{
-            color: "#A8A8AD",
+            color: native.muted,
             marginTop: 8,
             fontSize: 14.5,
             lineHeight: 21,
@@ -2181,21 +2297,21 @@ const MessageBubble = memo(function MessageBubble({
             width: "90%",
             borderRadius: 18,
             borderWidth: 1,
-            borderColor: "#232326",
-            backgroundColor: "#17171A",
+            borderColor: native.hairlineStrong,
+            backgroundColor: native.surface,
             paddingHorizontal: 16,
             paddingVertical: 14,
           }}
         >
           {askBlock.text ? (
-            <Text style={{ color: "#ECECEE", fontSize: 15.5, lineHeight: 23 }}>
+            <Text style={{ color: native.ink, fontSize: 15.5, lineHeight: 23 }}>
               {askBlock.text}
             </Text>
           ) : null}
           {askBlock.detail ? (
             <Text
               style={{
-                color: "#85858A",
+                color: native.muted,
                 marginTop: 8,
                 fontSize: 12.5,
                 fontFamily: "Menlo",
@@ -2208,7 +2324,7 @@ const MessageBubble = memo(function MessageBubble({
           {askBlock.status === "answered" ? (
             <Text
               style={{
-                color: "#4ECB71",
+                color: native.successSoft,
                 marginTop: 12,
                 fontSize: 13.5,
                 fontWeight: "600",
@@ -2226,7 +2342,7 @@ const MessageBubble = memo(function MessageBubble({
               onAnswer={(answer) => onAnswer(message, answer)}
             />
           ) : (
-            <Text style={{ color: "#85858A", marginTop: 12, fontSize: 13.5 }}>
+            <Text style={{ color: native.muted, marginTop: 12, fontSize: 13.5 }}>
               No longer active
             </Text>
           )}
@@ -2257,25 +2373,25 @@ const MessageBubble = memo(function MessageBubble({
           maxWidth: "100%",
           borderRadius: 20,
           borderWidth: 1,
-          borderColor: "#26262A",
-          backgroundColor: message.role === "user" ? "#F1F1EF" : "#1A1A1D",
+          borderColor: native.hairlineStrong,
+          backgroundColor: message.role === "user" ? native.page : native.surface2,
           paddingHorizontal: 14,
           paddingVertical: 12,
           gap: 8,
         }}
       >
         {speaker ? (
-          <Text style={{ color: "#85858A", fontSize: 12.5, fontWeight: "600" }}>{speaker}</Text>
+          <Text style={{ color: native.muted, fontSize: 12.5, fontWeight: "600" }}>{speaker}</Text>
         ) : null}
         {replyPreview ? (
-          <Text style={{ color: "#85858A", fontSize: 12.5 }} numberOfLines={2}>
+          <Text style={{ color: native.muted, fontSize: 12.5 }} numberOfLines={2}>
             {previewMessageText(replyPreview)}
           </Text>
         ) : null}
         {caption ? (
           <Text
             style={{
-              color: message.role === "user" ? "#1A1A1A" : "#DFDFE2",
+              color: message.role === "user" ? native.ink : native.ink,
               fontSize: 15,
             }}
           >
@@ -2304,7 +2420,7 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? "#1A1A1A" : "#DFDFE2",
+                  color: message.role === "user" ? native.ink : native.ink,
                   fontSize: 15,
                 }}
               >
@@ -2338,14 +2454,14 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? "#1A1A1A" : "#DFDFE2",
+                  color: message.role === "user" ? native.ink : native.ink,
                   fontSize: 15,
                 }}
               >
                 📎 {attachment.name ?? "File"}
               </Text>
               {attachment.size ? (
-                <Text style={{ color: "#85858A", marginTop: 4, fontSize: 13 }}>
+                <Text style={{ color: native.muted, marginTop: 4, fontSize: 13 }}>
                   {attachment.mimeType ?? "file"} · {attachment.size} bytes
                 </Text>
               ) : null}
@@ -2403,6 +2519,7 @@ function MessageTextCard({
   replyPreview?: MobileMessage;
   onSpeak?: () => void;
 }) {
+  const native = useNativeTheme();
   const contentText = blockText(message);
   if (!contentText) return null;
   return (
@@ -2411,26 +2528,28 @@ function MessageTextCard({
         flexShrink: 1,
         minWidth: 0,
         maxWidth: "100%",
-        backgroundColor: message.role === "user" ? "#F1F1EF" : "#1A1A1D",
-        padding: 12,
-        borderRadius: 20,
+        backgroundColor: message.role === "user" ? native.surface : native.page,
+        padding: 0,
+        borderRadius: 0,
       }}
     >
       {speaker ? (
-        <Text style={{ color: "#85858A", fontSize: 12.5, fontWeight: "600", marginBottom: 4 }}>
+        <Text style={{ color: native.muted, fontSize: 12.5, fontWeight: "600", marginBottom: 4 }}>
           {speaker}
         </Text>
       ) : null}
       {replyPreview ? (
-        <Text style={{ color: "#85858A", fontSize: 12.5, marginBottom: 6 }} numberOfLines={2}>
+        <Text style={{ color: native.muted, fontSize: 12.5, marginBottom: 6 }} numberOfLines={2}>
           {previewMessageText(replyPreview)}
         </Text>
       ) : null}
       {message.role === "user" ? (
-        <Text style={{ color: "#1A1A1A", fontSize: 15.5, lineHeight: 23 }}>{contentText}</Text>
+        <Text style={{ color: native.ink, fontSize: 15, lineHeight: 22 }}>{contentText}</Text>
       ) : (
         <>
-          <ChatMarkdown streaming={message.id.startsWith("progress:")}>{contentText}</ChatMarkdown>
+          <ChatMarkdown theme={native.theme} streaming={message.id.startsWith("progress:")}>
+            {contentText}
+          </ChatMarkdown>
           {onSpeak ? (
             <Pressable
               accessibilityRole="button"
@@ -2439,7 +2558,7 @@ function MessageTextCard({
               hitSlop={8}
               style={{ marginTop: 8 }}
             >
-              <Text style={{ color: "#85858A", fontSize: 13 }}>Speak</Text>
+              <Text style={{ color: native.muted, fontSize: 13 }}>Speak</Text>
             </Pressable>
           ) : null}
         </>
@@ -2459,6 +2578,7 @@ function AgentEventLabel({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const native = useNativeTheme();
   return (
     <Pressable
       onPress={onToggle}
@@ -2466,7 +2586,7 @@ function AgentEventLabel({
       accessibilityLabel={`${expanded ? "Hide" : "Show"} ${label}`}
       style={{ width: "100%", paddingVertical: 4, alignItems: "center" }}
     >
-      <Text style={{ color: "#85858A", fontSize: 13.5, textAlign: "center" }}>↔ {label}</Text>
+      <Text style={{ color: native.muted, fontSize: 13.5, textAlign: "center" }}>↔ {label}</Text>
       {expanded && detail ? (
         <View
           style={{
@@ -2474,13 +2594,13 @@ function AgentEventLabel({
             marginTop: 6,
             borderRadius: 14,
             borderWidth: 1,
-            borderColor: "#26262A",
-            backgroundColor: "#101012",
+            borderColor: native.hairlineStrong,
+            backgroundColor: native.page,
             paddingHorizontal: 14,
             paddingVertical: 10,
           }}
         >
-          <ChatMarkdown>{detail}</ChatMarkdown>
+          <ChatMarkdown theme={native.theme}>{detail}</ChatMarkdown>
         </View>
       ) : null}
     </Pressable>
@@ -2494,6 +2614,7 @@ function ExpandableToolBlock({
   block: Extract<MessageBlock, { kind: "progress" | "steps" }>;
   live: boolean;
 }) {
+  const native = useNativeTheme();
   const [expanded, setExpanded] = useState(false);
   const provider =
     block.kind === "progress" ? /^Using\s+([^:]+)/i.exec(block.text)?.[1] : undefined;
@@ -2528,10 +2649,12 @@ function ExpandableToolBlock({
           paddingVertical: 2,
         }}
       >
-        <Text style={{ color: live ? "#C9C9CE" : "#85858A", fontSize: 12.5, fontWeight: "600" }}>
+        <Text
+          style={{ color: live ? native.muted : native.muted, fontSize: 12.5, fontWeight: "600" }}
+        >
           {title}
         </Text>
-        <Text style={{ color: "#6C6C70", fontSize: 12 }}>{expanded ? "⌃" : "⌄"}</Text>
+        <Text style={{ color: native.muted, fontSize: 12 }}>{expanded ? "⌃" : "⌄"}</Text>
       </Pressable>
       {expanded ? (
         <View
@@ -2544,7 +2667,7 @@ function ExpandableToolBlock({
             <Text
               key={tool}
               style={{
-                color: "#77777D",
+                color: native.muted,
                 fontSize: 11.5,
                 fontFamily: "monospace",
               }}
@@ -2567,6 +2690,7 @@ function AskBlock({
   canAnswer: boolean;
   onAnswer: (answer: string) => Promise<void>;
 }) {
+  const native = useNativeTheme();
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -2594,17 +2718,19 @@ function AskBlock({
         width: "90%",
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: "#2D2D31",
-        backgroundColor: "#17171A",
+        borderColor: native.hairlineStrong,
+        backgroundColor: native.surface,
         paddingHorizontal: 16,
         paddingVertical: 14,
         gap: 10,
       }}
     >
-      <Text style={{ color: "#ECECEE", fontSize: 15.5, fontWeight: "600" }}>{ask.text}</Text>
-      {ask.detail ? <Text style={{ color: "#85858A", fontSize: 13.5 }}>{ask.detail}</Text> : null}
+      <Text style={{ color: native.ink, fontSize: 15.5, fontWeight: "600" }}>{ask.text}</Text>
+      {ask.detail ? (
+        <Text style={{ color: native.muted, fontSize: 13.5 }}>{ask.detail}</Text>
+      ) : null}
       {answered ? (
-        <Text style={{ color: "#4ECB71", fontSize: 14 }}>
+        <Text style={{ color: native.successSoft, fontSize: 14 }}>
           {secretInput ? "Submitted" : `Answered: ${ask.answer ?? "Done"}`}
         </Text>
       ) : canAnswer ? (
@@ -2614,7 +2740,7 @@ function AskBlock({
             value={answer}
             onChangeText={setAnswer}
             placeholder={secretInput ? "Code" : "Type your answer"}
-            placeholderTextColor="#6C6C70"
+            placeholderTextColor={native.muted}
             secureTextEntry={secretInput}
             autoComplete="off"
             onSubmitEditing={() => void submit()}
@@ -2622,8 +2748,8 @@ function AskBlock({
               minHeight: 42,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: "#35353A",
-              color: "#ECECEE",
+              borderColor: native.hairlineStrong,
+              color: native.ink,
               paddingHorizontal: 12,
               paddingVertical: 9,
             }}
@@ -2636,21 +2762,23 @@ function AskBlock({
             style={{
               alignSelf: "flex-end",
               borderRadius: 999,
-              backgroundColor: "#ECECEE",
+              backgroundColor: native.surface,
               opacity: (secretInput ? answer.length === 0 : !answer.trim()) || submitting ? 0.5 : 1,
               paddingHorizontal: 16,
               paddingVertical: 9,
             }}
           >
-            <Text style={{ color: "#17171A", fontWeight: "600" }}>
+            <Text style={{ color: native.ink, fontWeight: "600" }}>
               {submitting ? "Sending…" : "Send answer"}
             </Text>
           </Pressable>
         </>
       ) : (
-        <Text style={{ color: "#85858A", fontSize: 13.5 }}>Waiting for this bot’s response.</Text>
+        <Text style={{ color: native.muted, fontSize: 13.5 }}>
+          Waiting for this bot’s response.
+        </Text>
       )}
-      {error ? <Text style={{ color: "#EF4444", fontSize: 13 }}>{error}</Text> : null}
+      {error ? <Text style={{ color: native.danger, fontSize: 13 }}>{error}</Text> : null}
     </View>
   );
 }

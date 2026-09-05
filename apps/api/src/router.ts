@@ -95,6 +95,7 @@ import {
   createSpaceForMember,
   createThreadMessageInTransaction,
   deleteUnreferencedCredentialSecret,
+  ensureChiefOfStaffBot,
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
@@ -122,6 +123,7 @@ import {
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
+import { throwExecutionRpcError } from "./execution-errors.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import { chooseFocus, markAppConnected, startOnboarding } from "./onboarding.js";
 import {
@@ -132,7 +134,7 @@ import {
   platformGatewayConfigured,
 } from "./plan-gates.js";
 import { listSpaceRuns } from "./runs.js";
-import { addScreenProxyCapability } from "./screen-proxy.js";
+import { addScreenProxyCapability, proxyExternalScreen } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import {
@@ -372,7 +374,11 @@ export function createRouter(deps: RouterDeps) {
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
-    return next({ context: { ...context, actor: context.actor } });
+    try {
+      return await next({ context: { ...context, actor: context.actor } });
+    } catch (error) {
+      throwExecutionRpcError(error);
+    }
   });
 
   return os.router({
@@ -396,12 +402,14 @@ export function createRouter(deps: RouterDeps) {
           const url = await createCheckoutUrl({
             prisma: deps.prisma,
             spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
             email: context.actor.email,
             plan: input.plan,
             webOrigin: deps.env.webOrigin,
           });
           return { url };
         } catch (error) {
+          if (error instanceof ORPCError) throw error;
           throw new ORPCError("BAD_REQUEST", {
             message: error instanceof Error ? error.message : "Could not start checkout",
           });
@@ -412,10 +420,12 @@ export function createRouter(deps: RouterDeps) {
           const url = await createPortalUrl({
             prisma: deps.prisma,
             spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
             webOrigin: deps.env.webOrigin,
           });
           return { url };
         } catch (error) {
+          if (error instanceof ORPCError) throw error;
           throw new ORPCError("BAD_REQUEST", {
             message: error instanceof Error ? error.message : "Could not open billing portal",
           });
@@ -764,8 +774,9 @@ export function createRouter(deps: RouterDeps) {
           }
         }
         await assertBotModelAndHarness(deps.prisma, context.actor, {
-          modelProvider: input.modelProvider,
-          modelId: input.modelId,
+          modelProvider:
+            input.modelProvider === undefined ? existing.modelProvider : input.modelProvider,
+          modelId: input.modelId === undefined ? existing.modelId : input.modelId,
           codingHarness: input.codingHarness,
         });
         const thinkingLevel = input.thinkingLevel;
@@ -1410,8 +1421,16 @@ export function createRouter(deps: RouterDeps) {
         try {
           if (bot.computer.providerRef) {
             const ctx = computerContext(context.actor, bot.id, "stop");
+            const computerId = bot.computer.id;
             const ref = toComputerRef(bot.computer);
-            await checkpointAndRecordComputerWorkspace(deps, bot.computer, ref, ctx);
+            await Promise.race([
+              checkpointAndRecordComputerWorkspace(deps, bot.computer, ref, ctx),
+              new Promise<void>((_, reject) => {
+                setTimeout(() => reject(new Error("computer checkpoint timed out")), 20_000);
+              }),
+            ]).catch((error: unknown) => {
+              console.error(`computer ${computerId} stop checkpoint`, error);
+            });
             await deps.sandbox.stop(ref, ctx);
           }
           await deps.prisma.computer.update({
@@ -1781,7 +1800,10 @@ export function createRouter(deps: RouterDeps) {
             deps.env.screenProxySecret,
             deps.env.webOrigin,
             undefined,
-            { proxyExternal: bot.computer.kind === "box" },
+            {
+              proxyExternal: proxyExternalScreen(bot.computer.kind),
+              upstreamHeaders: session.upstreamHeaders,
+            },
           ),
         };
       }),
@@ -1793,7 +1815,7 @@ export function createRouter(deps: RouterDeps) {
             data: { updatedAt: new Date() },
           });
           await touchRunningComputer(
-            { sandbox: deps.sandbox, jobs: deps.jobs },
+            { prisma: deps.prisma, sandbox: deps.sandbox, jobs: deps.jobs },
             {
               id: bot.computer.id,
               homeKey: bot.computer.homeKey,
@@ -2766,6 +2788,11 @@ export function createRouter(deps: RouterDeps) {
       },
     },
     onboarding: {
+      ensureChiefOfStaff: authed.onboarding.ensureChiefOfStaff.handler(async ({ context }) => {
+        const existing = await repos.listBots(context.actor);
+        if (existing[0]) return existing[0];
+        return ensureChiefOfStaffBot(deps.prisma, context.actor);
+      }),
       start: authed.onboarding.start.handler(async ({ context, input }) => {
         await startOnboarding(
           { prisma: deps.prisma, events: deps.events, composio: deps.composio },
@@ -3727,7 +3754,7 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
     computerHost: computerHostFor(settings?.computerHost, deps.env.sandboxProvider),
     canChooseHostComputer: actor.isDeploymentOwner && deps.env.sandboxProvider === "docker",
     sandboxProvider: deps.env.sandboxProvider,
-    avatarStyle: user.avatarStyle === "organic" ? "organic" : "robot",
+    avatarStyle: user.avatarStyle === "robot" ? "robot" : "organic",
     plan: billing?.plan,
     planName: billing?.entitlements.name,
   };

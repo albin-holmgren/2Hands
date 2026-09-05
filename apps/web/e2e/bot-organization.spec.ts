@@ -24,7 +24,7 @@ test("pinned bots and sidebar sections persist", async ({ page }, testInfo) => {
   await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   await captureScreenshot(page, testInfo, "move-to-section-menu");
   await page
-    .getByRole("menu", { name: /Move Chief to section/ })
+    .getByRole("menu", { name: /Move Chief.* to section/ })
     .getByText("New section")
     .click();
   const dialog = page.getByRole("dialog", { name: "New section" });
@@ -43,7 +43,7 @@ test("pinned bots and sidebar sections persist", async ({ page }, testInfo) => {
   await bot.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   await page
-    .getByRole("menu", { name: /Move Chief to section/ })
+    .getByRole("menu", { name: /Move Chief.* to section/ })
     .getByRole("menuitem", { name: "Unassigned", exact: true })
     .click();
   await expect(sidebar.locator('[data-sidebar-group="unassigned"]')).toContainText("Chief");
@@ -170,9 +170,14 @@ test("chat composer controls are vertically centered", async ({ page }) => {
   await completeOnboarding(page);
 
   const centers = await page.getByTestId("composer-bar").evaluate((composer) =>
-    ["Attach file", "Dictate", "Message Chief", "Send"].map((label) => {
-      const element = composer.querySelector<HTMLElement>(`[aria-label="${label}"]`);
-      if (!element) throw new Error(`Missing composer control: ${label}`);
+    [
+      '[aria-label="Attach file"]',
+      '[aria-label="Dictate"]',
+      'textarea[name="chat-message"]',
+      '[aria-label="Send"]',
+    ].map((selector) => {
+      const element = composer.querySelector<HTMLElement>(selector);
+      if (!element) throw new Error(`Missing composer control: ${selector}`);
       const box = element.getBoundingClientRect();
       return box.top + box.height / 2;
     }),

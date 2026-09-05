@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
+import { useNativeTheme } from "../lib/theme";
 
 type AskAction = { id: string; label: string };
 
@@ -12,6 +13,7 @@ export function AskActions({
   disabled?: boolean;
   onAnswer: (answer: string) => Promise<void>;
 }) {
+  const native = useNativeTheme();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const submitting = pendingAction !== null;
 
@@ -35,22 +37,25 @@ export function AskActions({
       {actions.map((action) => (
         <Pressable
           key={action.id}
+          accessibilityRole="button"
           disabled={disabled || submitting}
           onPress={() => void submit(action.id)}
           style={{
             borderRadius: 11,
             paddingHorizontal: 14,
-            paddingVertical: 8,
+            paddingVertical: 12,
+            minHeight: 44,
             backgroundColor:
-              action.id === "allow" || action.id === "always" ? "#F1F1EF" : "transparent",
+              action.id === "allow" || action.id === "always" ? native.cream : "transparent",
             borderWidth: action.id === "deny" ? 1 : 0,
-            borderColor: "#26262A",
+            borderColor: native.hairlineStrong,
             opacity: disabled || submitting ? 0.5 : 1,
           }}
         >
           <Text
             style={{
-              color: action.id === "allow" || action.id === "always" ? "#17171A" : "#C9C9CE",
+              color:
+                action.id === "allow" || action.id === "always" ? native.creamInk : native.muted,
               fontSize: 14,
               fontWeight: action.id === "allow" || action.id === "always" ? "600" : "400",
             }}

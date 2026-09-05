@@ -1,16 +1,17 @@
 :root {
-  color-scheme: dark;
-  --bg: #050506;
-  --panel: #0f0f12;
-  --panel-raised: #17171c;
-  --border: #26262e;
-  --border-strong: #3a3a46;
-  --text: #f4f4f6;
-  --text-muted: #9a9aa8;
-  --accent: #2563eb;
-  --accent-hover: #3b76f2;
-  --danger: #f87171;
-  --ok: #4ade80;
+  color-scheme: light;
+  --bg: #faf9f5;
+  --panel: #ffffff;
+  --panel-raised: #f3f2ec;
+  --border: #e6e4da;
+  --border-strong: #d0cdc4;
+  --text: #141413;
+  --text-muted: #5f5e57;
+  --accent: #141413;
+  --accent-hover: #2a2926;
+  --accent-ink: #fff;
+  --danger: #ef4444;
+  --ok: #10b981;
 }
 
 * {
@@ -182,7 +183,7 @@ body {
   padding: 10px 12px;
   border-radius: 9px;
   border: 1px solid var(--border-strong);
-  background: #08080a;
+  background: #faf9f5;
   color: var(--text);
   font: inherit;
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, monospace;
@@ -252,7 +253,7 @@ body {
 
 .button-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 .button-primary:hover:not(:disabled) {
@@ -274,4 +275,20 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #050506;
+    --panel: #141416;
+    --panel-raised: #1a1a1d;
+    --border: #171719;
+    --border-strong: #202023;
+    --text: #ececee;
+    --text-muted: #85858a;
+    --accent: #f1f1ef;
+    --accent-hover: #dfdfe2;
+    --accent-ink: #1a1a1a;
+  }
 }

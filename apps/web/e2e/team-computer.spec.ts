@@ -137,6 +137,8 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
   await completeOnboarding(page);
   const chiefId = activeBotId(page);
 
+  // This journey needs a running computer. Plain text work now provisions lazily.
+  await rpc(page, "computer/boot", { botId: chiefId });
   await sendMessage(page, "keep working until I stop you");
   await expect
     .poll(async () => (await threadSnapshot(page, chiefId)).run?.status ?? "idle")
@@ -183,7 +185,7 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
 
   // Stop through the shell so the client refreshes computer status (API stop alone
   // does not emit a terminal thread event).
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByTestId("composer-bar").getByRole("button", { name: "Stop", exact: true }).click();
   await waitForIdle(page, chiefId);
   await expect
     .poll(

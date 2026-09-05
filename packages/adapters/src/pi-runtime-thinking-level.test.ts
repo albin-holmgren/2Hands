@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { builtinAgentTools } from "./builtin-tools.js";
 
 const fakeAgentState = vi.hoisted(() => ({
   thinkingLevels: [] as string[],
@@ -50,6 +51,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
 
 vi.mock("@earendil-works/pi-ai/providers/all", () => ({
   builtinModels: () => ({
+    setProvider: vi.fn(),
     getModel: (_provider: string, modelId: string) => {
       if (modelId === "reasoning-model") return { provider: "test", id: modelId, reasoning: true };
       if (modelId === "plain-model") return { provider: "test", id: modelId, reasoning: false };
@@ -104,7 +106,7 @@ async function runWithModel(
       prompt: "hello",
       instructions: "",
       history: [],
-      tools: [],
+      tools: builtinAgentTools,
       model: { provider, id: modelId, thinkingLevel },
       executeTool: vi.fn(async () => ({ ok: true })),
     },
@@ -172,12 +174,13 @@ describe("Pi agent thinking level", () => {
     expect(levels.every((level) => level !== "off")).toBe(true);
   });
 
-  it("uses the trimmed configured default for scripted requests", async () => {
+  it("rejects an unavailable provider without silently using the configured default", async () => {
     vi.stubEnv("PI_DEFAULT_MODEL", "  stealth/ox-alpha  ");
 
-    await runWithModel("scripted", "scripted");
-
-    expect(fakeAgentState.models[0]?.id).toBe("stealth/ox-alpha");
+    await expect(runWithModel("scripted", "scripted")).rejects.toThrow(
+      "MODEL_UNAVAILABLE: Unknown model scripted/scripted",
+    );
+    expect(fakeAgentState.models).toHaveLength(0);
   });
 
   it("removes the abort listener when prompting fails", async () => {

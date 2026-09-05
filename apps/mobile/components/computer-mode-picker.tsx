@@ -1,5 +1,6 @@
 import type { ComputerMode } from "@rakazo/contracts";
 import { Pressable, Text, View } from "react-native";
+import { useNativeTheme } from "../lib/theme";
 
 export function ComputerModePicker({
   value,
@@ -10,9 +11,10 @@ export function ComputerModePicker({
   onChange: (mode: ComputerMode) => void;
   disabled?: boolean;
 }) {
+  const native = useNativeTheme();
   return (
     <View style={{ marginTop: 16 }}>
-      <Text style={{ color: "#85858A", marginBottom: 8, fontSize: 14 }}>Computer</Text>
+      <Text style={{ color: native.muted, marginBottom: 8, fontSize: 14 }}>Computer</Text>
       <View style={{ flexDirection: "row", gap: 8 }}>
         {(["team", "dedicated"] as const).map((mode) => (
           <Pressable
@@ -25,14 +27,14 @@ export function ComputerModePicker({
               flex: 1,
               alignItems: "center",
               borderWidth: 1,
-              borderColor: value === mode ? "#6C6C70" : "#26262A",
-              backgroundColor: value === mode ? "#1A1A1D" : "transparent",
+              borderColor: value === mode ? native.hairlineStrong : native.hairlineStrong,
+              backgroundColor: value === mode ? native.surface2 : "transparent",
               borderRadius: 11,
               paddingVertical: 12,
               opacity: disabled ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: value === mode ? "#ECECEE" : "#85858A" }}>
+            <Text style={{ color: value === mode ? native.ink : native.muted }}>
               {mode === "team" ? "Team" : "Private"}
             </Text>
           </Pressable>

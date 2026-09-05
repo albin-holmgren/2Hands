@@ -10,8 +10,10 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { type MobileBot, rpc } from "../lib/api";
+import { useNativeTheme } from "../lib/theme";
 
 export default function NewBot() {
+  const native = useNativeTheme();
   const router = useRouter();
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -61,80 +63,82 @@ export default function NewBot() {
               accessibilityRole="button"
               accessibilityLabel="Cancel"
             >
-              <Text style={{ color: "#0A84FF", fontSize: 17 }}>Cancel</Text>
+              <Text style={{ color: native.accent, fontSize: 17 }}>Cancel</Text>
             </Pressable>
           ),
         }}
       />
       <ScrollView
-        style={{ flex: 1, backgroundColor: "#050506" }}
+        style={{ flex: 1, backgroundColor: native.page }}
         contentContainerStyle={{ padding: 24 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Text style={{ color: "#85858A", fontSize: 14 }}>Name</Text>
+        <Text style={{ color: native.muted, fontSize: 14 }}>Name</Text>
         <TextInput
           value={name}
           maxLength={BOT_NAME_MAX_LENGTH}
           onChangeText={setName}
           placeholder="Name this bot"
-          placeholderTextColor="#6C6C70"
+          placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: "#1A1A1D",
+            backgroundColor: native.surface2,
             borderRadius: 11,
             padding: 16,
-            color: "#ECECEE",
+            color: native.ink,
           }}
         />
-        <Text style={{ color: "#85858A", marginTop: 16, fontSize: 14 }}>Title</Text>
+        <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Title</Text>
         <TextInput
           value={title}
           maxLength={BOT_TITLE_MAX_LENGTH}
           onChangeText={setTitle}
           placeholder="Describe what this bot does"
-          placeholderTextColor="#6C6C70"
+          placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: "#1A1A1D",
+            backgroundColor: native.surface2,
             borderRadius: 11,
             padding: 16,
-            color: "#ECECEE",
+            color: native.ink,
           }}
         />
-        <Text style={{ color: "#85858A", marginTop: 16, fontSize: 14 }}>Description</Text>
+        <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Description</Text>
         <TextInput
           value={description}
           maxLength={BOT_DESCRIPTION_MAX_LENGTH}
           onChangeText={setDescription}
           placeholder="What this bot is for"
-          placeholderTextColor="#6C6C70"
+          placeholderTextColor={native.muted}
           multiline
           style={{
             marginTop: 8,
-            backgroundColor: "#1A1A1D",
+            backgroundColor: native.surface2,
             borderRadius: 11,
             padding: 16,
-            color: "#ECECEE",
+            color: native.ink,
             minHeight: 120,
             textAlignVertical: "top",
           }}
         />
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
-        {error ? <Text style={{ color: "#EF4444", marginTop: 16 }}>{error}</Text> : null}
+        {error ? <Text style={{ color: native.danger, marginTop: 16 }}>{error}</Text> : null}
         <Pressable
           onPress={() => void create()}
           disabled={!name.trim() || pending}
           style={{
             marginTop: 24,
-            backgroundColor: "#F1F1EF",
+            backgroundColor: native.cream,
             borderRadius: 11,
             padding: 16,
             alignItems: "center",
             opacity: !name.trim() || pending ? 0.4 : 1,
           }}
         >
-          <Text style={{ color: "#17171A", fontSize: 16 }}>{pending ? "Creating…" : "Create"}</Text>
+          <Text style={{ color: native.creamInk, fontSize: 16 }}>
+            {pending ? "Creating…" : "Create"}
+          </Text>
         </Pressable>
       </ScrollView>
     </>

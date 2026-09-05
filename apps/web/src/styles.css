@@ -11,8 +11,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background: #050506;
-  color: #dfdfe2;
+  background: var(--rk-page);
+  color: var(--rk-body);
   font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -72,4 +72,65 @@ body,
   50% {
     opacity: 0.3;
   }
+}
+
+/* Shared interaction treatment across the application, including native-sized touch targets. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--rk-accent);
+  outline-offset: 3px;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+[data-testid="transcript"] > [data-message-id] {
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+}
+[data-testid="composer-bar"] {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+[data-testid="composer-bar"]:focus-within {
+  border-color: var(--rk-muted-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rk-accent) 8%, transparent);
+}
+@media (max-width: 767px) {
+  [data-testid="composer-bar"] button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  [data-testid="bot-model-picker"] {
+    min-height: 40px;
+  }
+}
+
+.rk-balance-meter {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--rk-surface-2);
+}
+.rk-balance-meter::-webkit-meter-bar {
+  border: 0;
+  border-radius: 999px;
+  background: var(--rk-surface-2);
+}
+.rk-balance-meter::-webkit-meter-optimum-value {
+  border-radius: 999px;
+  background: var(--rk-accent);
+}
+.rk-balance-meter::-moz-meter-bar {
+  border-radius: 999px;
+  background: var(--rk-accent);
+}
+
+[data-testid="composer-bar"] textarea:focus-visible {
+  outline: none;
 }

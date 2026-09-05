@@ -10,5 +10,5 @@ export const native = {
   fillPressed: systemColor("secondarySystemFill", "#2C2C2E"),
   label: systemColor("label", "#FFFFFF"),
   secondaryLabel: systemColor("secondaryLabel", "#8E8E93"),
-  tertiaryLabel: systemColor("tertiaryLabel", "#6C6C70"),
+  tertiaryLabel: systemColor("tertiaryLabel", "#5F5E57"),
 } as const;

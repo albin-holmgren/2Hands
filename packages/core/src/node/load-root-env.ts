@@ -3,6 +3,7 @@ import path from "node:path";
 import { config } from "dotenv";
 
 export function loadRootEnv() {
+  if (process.env.RAKAZO_IGNORE_ENV_FILES === "1") return;
   let dir = process.cwd();
   for (let i = 0; i < 8; i += 1) {
     const candidate = path.join(dir, ".env");

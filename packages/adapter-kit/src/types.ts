@@ -57,6 +57,8 @@ export interface ComputerRef {
   providerRef: string;
   /** True when the provider created an empty replacement rather than reconnecting existing state. */
   fresh?: boolean;
+  /** Absolute provider lifetime bound, set only after hosted usage admission. */
+  expiresAt?: string;
 }
 
 export interface CommandRequest {
@@ -84,6 +86,8 @@ export interface ScreenRequest {
 export interface ScreenSession {
   url: string | null;
   mimeType: string;
+  /** Provider credentials for the server-side screen proxy. Never serialize to clients. */
+  upstreamHeaders?: Readonly<Record<string, string>>;
   close(): Promise<void>;
 }
 
@@ -164,6 +168,8 @@ export interface SandboxCapabilities {
   persistentHome: boolean;
   /** Distinct graphical screens for concurrent Team bots on one computer. */
   multiScreen?: boolean;
+  /** Enforces ComputerRef.expiresAt even if API/worker processes stop. */
+  boundedLifetime?: boolean;
 }
 
 export interface ConnectorTool {
@@ -328,6 +334,7 @@ export interface AgentRunRequest {
   model: {
     provider: string;
     id: string;
+    funding?: "hosted" | "byok";
     apiKey?: string;
     baseUrl?: string;
     /** Preferred thinking effort for reasoning models; clamped to the model’s supported set. */
@@ -355,6 +362,22 @@ export interface AgentRunRequest {
   ) => Promise<unknown>;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
+  /** Admission and settlement around every provider call, including nested agents. */
+  meterModelCall?: (request: {
+    provider: string;
+    model: string;
+    inputTokenLimit: number;
+    outputTokenLimit: number;
+    rates: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  }) => Promise<{
+    settle(usage: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    }): Promise<void>;
+    release(): Promise<void>;
+  }>;
 }
 
 export interface ScriptedTurn {

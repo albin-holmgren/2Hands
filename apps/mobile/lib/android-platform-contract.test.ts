@@ -102,7 +102,12 @@ describe("Android mobile platform contract", () => {
     expect(service).toContain('putString("rakazo.spaceId", run.spaceId)');
     expect(thread).toContain("export default function ThreadRoute()");
     expect(thread).toContain("selectSpace(requestedSpaceId)");
-    expect(thread).toContain("routeMatchesSelectedSpace) return <Thread />");
+    expect(thread).toMatch(
+      /routeMatchesSelectedSpace\)\s*return \([\s\S]*?<Thread\s+key=\{draftKey\}/,
+    );
+    expect(thread).toMatch(
+      /composerDraftKey\(\s*currentApiBase\(\),\s*accountId,\s*selectedSpaceId\(\)/,
+    );
     expect(service).toContain('if (run.groupId != null) put("groupId", run.groupId)');
     expect(service).toContain('if (message.optString("runId") != run.runId) continue');
     expect(service).toContain('if (block.optString("kind") == "handoff") return null');

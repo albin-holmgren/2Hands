@@ -1,73 +1,39 @@
-import {
-  type PlanId,
-  parsePlanId,
-  PLANS,
-  type PlanEntitlements,
-} from "@rakazo/core";
+import { CHIEF_OF_STAFF_SPAWN_KEY } from "@rakazo/core";
+import { ensureUsagePeriod, microsToUsd, withBillingLock } from "./billing-ledger.js";
 import type { PrismaClient } from "./client.js";
-
-const PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 
 export async function ensureOrganizationBilling(
   prisma: PrismaClient,
   organizationId: string,
-): Promise<{
-  organizationId: string;
-  plan: PlanId;
-  entitlements: PlanEntitlements;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  status: string;
-  currentPeriodEnd: Date | null;
-  computerSecondsUsed: number;
-  inputTokensUsed: number;
-  outputTokensUsed: number;
-  usagePeriodStart: Date;
-}> {
-  const existing = await prisma.organizationBilling.findUnique({
-    where: { organizationId },
-  });
-  const row =
-    existing ??
-    (await prisma.organizationBilling.create({
-      data: { organizationId, plan: "free", usagePeriodStart: new Date() },
-    }));
-  const reset = await maybeResetUsagePeriod(prisma, row);
-  const current = reset ?? row;
-  const plan = parsePlanId(current.plan);
-  return {
-    organizationId: current.organizationId,
-    plan,
-    entitlements: PLANS[plan],
-    stripeCustomerId: current.stripeCustomerId,
-    stripeSubscriptionId: current.stripeSubscriptionId,
-    status: current.status,
-    currentPeriodEnd: current.currentPeriodEnd,
-    computerSecondsUsed: current.computerSecondsUsed,
-    inputTokensUsed: current.inputTokensUsed,
-    outputTokensUsed: current.outputTokensUsed,
-    usagePeriodStart: current.usagePeriodStart,
-  };
-}
-
-async function maybeResetUsagePeriod(
-  prisma: PrismaClient,
-  row: {
-    organizationId: string;
-    usagePeriodStart: Date;
-    currentPeriodEnd: Date | null;
-  },
+  now = new Date(),
 ) {
-  const boundary = row.currentPeriodEnd ?? new Date(row.usagePeriodStart.getTime() + PERIOD_MS);
-  if (boundary > new Date()) return null;
-  return prisma.organizationBilling.update({
-    where: { organizationId: row.organizationId },
-    data: {
-      usagePeriodStart: new Date(),
-      computerSecondsUsed: 0,
-      inputTokensUsed: 0,
-      outputTokensUsed: 0,
-    },
+  return withBillingLock(prisma, organizationId, async (tx, row) => {
+    const { period, terms } = await ensureUsagePeriod(tx, row, now);
+    const samePeriod = row.usagePeriodStart.getTime() === period.startsAt.getTime();
+    const remaining = period.allowanceMicros - period.spentMicros - period.reservedMicros;
+    return {
+      organizationId: row.organizationId,
+      plan: terms.plan,
+      entitlements: terms.entitlements,
+      stripeCustomerId: row.stripeCustomerId,
+      stripeSubscriptionId: row.stripeSubscriptionId,
+      status: row.status,
+      currentPeriodEnd: row.currentPeriodEnd,
+      computerSecondsUsed: samePeriod ? row.computerSecondsUsed : 0,
+      inputTokensUsed: samePeriod ? row.inputTokensUsed : 0,
+      outputTokensUsed: samePeriod ? row.outputTokensUsed : 0,
+      usagePeriodStart: period.startsAt,
+      legacyUntil: terms.legacyUntil,
+      allowanceUsd: microsToUsd(period.allowanceMicros),
+      spentUsd: microsToUsd(period.spentMicros),
+      reservedUsd: microsToUsd(period.reservedMicros),
+      remainingUsd: microsToUsd(remaining > 0n ? remaining : 0n),
+      resetAt: period.endsAt.toISOString(),
+      exhausted: terms.legacyUntil
+        ? row.inputTokensUsed + row.outputTokensUsed >= terms.entitlements.monthlyTokens &&
+          row.computerSecondsUsed >= terms.entitlements.computerHours * 3600
+        : remaining <= 0n,
+    };
   });
 }
 
@@ -98,7 +64,7 @@ export async function recordTokenUsage(
 }
 
 export async function countOrganizationBots(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "space" | "bot">,
   organizationId: string,
 ): Promise<number> {
   const spaces = await prisma.space.findMany({
@@ -106,7 +72,11 @@ export async function countOrganizationBots(
     select: { id: true },
   });
   return prisma.bot.count({
-    where: { spaceId: { in: spaces.map((space) => space.id) }, archivedAt: null },
+    where: {
+      spaceId: { in: spaces.map((space) => space.id) },
+      archivedAt: null,
+      OR: [{ spawnKey: null }, { spawnKey: { not: CHIEF_OF_STAFF_SPAWN_KEY } }],
+    },
   });
 }
 

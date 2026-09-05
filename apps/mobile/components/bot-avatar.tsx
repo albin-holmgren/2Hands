@@ -119,7 +119,7 @@ export const BotAvatar = memo(function BotAvatar({
             ios="bell.slash.fill"
             android="notifications-off"
             size={Math.max(8, Math.round(size * 0.17))}
-            color="#ECECEE"
+            color="#141413"
           />
         </View>
       ) : null}

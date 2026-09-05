@@ -22,8 +22,10 @@ import {
   readScreenUrl,
   SCREEN_URL_OPEN_ATTEMPTS,
 } from "../lib/computer";
+import { useNativeTheme } from "../lib/theme";
 
 export default function Computer() {
+  const native = useNativeTheme();
   const navigation = useNavigation();
   const { botId, name: nameParam } = useLocalSearchParams<{ botId?: string; name?: string }>();
   const name = nameParam || "Bot";
@@ -171,20 +173,20 @@ export default function Computer() {
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0A0A0B", padding: 24 }}>
-      {error ? <Text style={{ color: "#85858A", marginBottom: 12 }}>{error}</Text> : null}
+    <View style={{ flex: 1, backgroundColor: native.surface, padding: 24 }}>
+      {error ? <Text style={{ color: native.muted, marginBottom: 12 }}>{error}</Text> : null}
       <View
         style={{
           flex: 1,
           minHeight: 220,
           borderRadius: 14,
           overflow: "hidden",
-          backgroundColor: "#0E0E10",
+          backgroundColor: native.surface,
         }}
       >
         {computerOpen ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#6C6C70" }}>Open in full window</Text>
+            <Text style={{ color: native.muted }}>Open in full window</Text>
           </View>
         ) : computer?.state === "running" && embeddedScreenUrl ? (
           <ScreenWebView
@@ -196,7 +198,7 @@ export default function Computer() {
           />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <Text style={{ color: "#6C6C70", textAlign: "center" }}>{placeholder}</Text>
+            <Text style={{ color: native.muted, textAlign: "center" }}>{placeholder}</Text>
           </View>
         )}
         <Pressable
@@ -214,7 +216,7 @@ export default function Computer() {
           gap: 12,
         }}
       >
-        <Text style={{ color: "#85858A", flex: 1 }}>{controlLabel(computer, name, botId)}</Text>
+        <Text style={{ color: native.muted, flex: 1 }}>{controlLabel(computer, name, botId)}</Text>
         {hasControl ? (
           <ComputerReleaseActions
             takeoverRequested={computer?.takeoverRequested ?? false}
@@ -224,13 +226,13 @@ export default function Computer() {
           <Pressable
             onPress={() => void openComputer()}
             style={{
-              backgroundColor: "#1A1A1D",
+              backgroundColor: native.surface2,
               paddingHorizontal: 14,
               paddingVertical: 10,
               borderRadius: 12,
             }}
           >
-            <Text style={{ color: "#ECECEE" }}>Take control</Text>
+            <Text style={{ color: native.ink }}>Take control</Text>
           </Pressable>
         )}
       </View>
@@ -255,13 +257,13 @@ export default function Computer() {
           marginTop: 18,
           borderRadius: 12,
           borderWidth: 1,
-          borderColor: "#232326",
+          borderColor: native.hairlineStrong,
           padding: 14,
           gap: 8,
         }}
       >
-        <Text style={{ color: "#85858A", fontSize: 14 }}>Teach a task</Text>
-        <Text style={{ color: "#6C6C70", fontSize: 13.5, lineHeight: 20 }}>
+        <Text style={{ color: native.muted, fontSize: 14 }}>Teach a task</Text>
+        <Text style={{ color: native.muted, fontSize: 13.5, lineHeight: 20 }}>
           Recording a live demonstration needs desktop or web with the full computer view. You can
           still ask this bot to run saved skills from chat.
         </Text>
@@ -289,7 +291,7 @@ export default function Computer() {
               }}
             >
               <Text
-                style={{ color: "#F1F1F2", fontSize: 19, fontWeight: "500", textAlign: "center" }}
+                style={{ color: native.ink, fontSize: 19, fontWeight: "500", textAlign: "center" }}
               >
                 Booting {label}
               </Text>
@@ -300,7 +302,7 @@ export default function Computer() {
                   maxWidth: 420,
                   overflow: "hidden",
                   borderRadius: 999,
-                  backgroundColor: "#232327",
+                  backgroundColor: native.surface2,
                 }}
               >
                 <View
@@ -308,13 +310,13 @@ export default function Computer() {
                     height: "100%",
                     width: "66%",
                     borderRadius: 999,
-                    backgroundColor: "#F1F1EF",
+                    backgroundColor: native.page,
                   }}
                 />
               </View>
             </SafeAreaView>
           ) : (
-            <View style={{ flex: 1, backgroundColor: "#050506" }}>
+            <View style={{ flex: 1, backgroundColor: native.page }}>
               <SafeAreaView
                 edges={["top", "left", "right"]}
                 style={{
@@ -323,7 +325,7 @@ export default function Computer() {
                   justifyContent: "space-between",
                   gap: 12,
                   borderBottomWidth: 1,
-                  borderBottomColor: "#171719",
+                  borderBottomColor: native.hairlineStrong,
                   paddingHorizontal: 18,
                   paddingVertical: 14,
                 }}
@@ -331,7 +333,7 @@ export default function Computer() {
                 <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
                   <Text
                     numberOfLines={1}
-                    style={{ color: "#ECECEE", fontSize: 15.5, fontWeight: "500" }}
+                    style={{ color: native.ink, fontSize: 15.5, fontWeight: "500" }}
                   >
                     {label}
                   </Text>
@@ -345,7 +347,9 @@ export default function Computer() {
                         paddingVertical: 4,
                       }}
                     >
-                      <Text style={{ color: "#4ECB71", fontSize: 13 }}>You have control</Text>
+                      <Text style={{ color: native.successSoft, fontSize: 13 }}>
+                        You have control
+                      </Text>
                     </View>
                   ) : null}
                 </View>
@@ -365,7 +369,7 @@ export default function Computer() {
                       hitSlop={8}
                       style={{
                         borderWidth: 1,
-                        borderColor: "#26262A",
+                        borderColor: native.hairlineStrong,
                         paddingHorizontal: 12,
                         paddingVertical: 8,
                         borderRadius: 10,
@@ -373,7 +377,7 @@ export default function Computer() {
                         justifyContent: "center",
                       }}
                     >
-                      <Text style={{ color: "#ECECEE" }}>Take control</Text>
+                      <Text style={{ color: native.ink }}>Take control</Text>
                     </Pressable>
                   )}
                   <Pressable
@@ -387,11 +391,11 @@ export default function Computer() {
                       justifyContent: "center",
                     }}
                   >
-                    <NativeSymbol ios="xmark" android="close" size={16} color="#85858A" />
+                    <NativeSymbol ios="xmark" android="close" size={16} color={native.muted} />
                   </Pressable>
                 </View>
               </SafeAreaView>
-              <View style={{ flex: 1, backgroundColor: "#0E0E10" }}>
+              <View style={{ flex: 1, backgroundColor: native.surface }}>
                 {computer?.state === "running" && embeddedScreenUrl ? (
                   <ScreenWebView
                     url={embeddedScreenUrl}
@@ -406,7 +410,7 @@ export default function Computer() {
                   <View
                     style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}
                   >
-                    <Text style={{ color: "#6C6C70", textAlign: "center" }}>
+                    <Text style={{ color: native.muted, textAlign: "center" }}>
                       {computer?.state === "suspended"
                         ? "Computer is asleep"
                         : computerLabel(computer?.mode, name)}
@@ -429,6 +433,7 @@ function ComputerReleaseActions({
   takeoverRequested: boolean;
   onRelease: (reason?: ComputerReleaseReason) => Promise<void>;
 }) {
+  const native = useNativeTheme();
   const actions: Array<{ label: string; reason?: ComputerReleaseReason; primary?: boolean }> =
     takeoverRequested
       ? [
@@ -448,14 +453,14 @@ function ComputerReleaseActions({
             minHeight: 44,
             justifyContent: "center",
             borderWidth: 1,
-            borderColor: action.primary ? "#F1F1EF" : "#26262A",
-            backgroundColor: action.primary ? "#F1F1EF" : "#1A1A1D",
+            borderColor: action.primary ? native.hairlineStrong : native.hairlineStrong,
+            backgroundColor: action.primary ? native.page : native.surface2,
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderRadius: 10,
           }}
         >
-          <Text style={{ color: action.primary ? "#17171A" : "#ECECEE" }}>{action.label}</Text>
+          <Text style={{ color: action.primary ? native.ink : native.ink }}>{action.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -471,11 +476,12 @@ function ScreenWebView({
   interactive: boolean;
   onError: () => void;
 }) {
+  const native = useNativeTheme();
   return (
     <WebView
       key={url}
       source={{ uri: url }}
-      style={{ flex: 1, backgroundColor: "#000" }}
+      style={{ flex: 1, backgroundColor: native.page }}
       pointerEvents={interactive ? "auto" : "none"}
       javaScriptEnabled
       domStorageEnabled

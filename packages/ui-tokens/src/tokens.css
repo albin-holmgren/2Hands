@@ -1,4 +1,6 @@
-:root {
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
   --rk-page: #050506;
   --rk-sidebar: #0b0b0c;
   --rk-main: #0d0d0e;
@@ -14,7 +16,15 @@
   --rk-cream: #f1f1ef;
   --rk-cream-ink: #1a1a1a;
   --rk-accent: #3ec5a8;
+  --rk-danger: #ef4444;
+  --rk-danger-strong: #dc2626;
+  --rk-danger-soft: #fca5a5;
+  --rk-success: #30a24b;
+  --rk-success-soft: #4ecb71;
+  --rk-danger-surface: #2a1717;
   --rk-radius: 0.75rem;
+  --rk-theme-color: #050506;
+  --rk-shadow-popover: 0 22px 50px rgba(0, 0, 0, 0.45);
   --background: 240 6% 4%;
   --foreground: 240 6% 93%;
   --card: 240 5% 8%;
@@ -34,4 +44,90 @@
   --input: 240 6% 14%;
   --ring: 240 5% 64%;
   --radius: 0.75rem;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --rk-page: #f6f6f3;
+  --rk-sidebar: #efefe9;
+  --rk-main: #fafaf7;
+  --rk-panel: #ffffff;
+  --rk-hairline: #e4e4de;
+  --rk-hairline-strong: #d4d4cc;
+  --rk-surface: #ffffff;
+  --rk-surface-2: #f1f1eb;
+  --rk-ink: #141413;
+  --rk-body: #2c2c28;
+  --rk-muted: #6b6b66;
+  --rk-muted-2: #76766f;
+  --rk-cream: #17171a;
+  --rk-cream-ink: #f7f7f5;
+  --rk-accent: #1f8f78;
+  --rk-danger: #c93838;
+  --rk-danger-strong: #af2727;
+  --rk-danger-soft: #9f2727;
+  --rk-success: #217b3a;
+  --rk-success-soft: #267c41;
+  --rk-danger-surface: #fff0ee;
+  --rk-theme-color: #f6f6f3;
+  --rk-shadow-popover: 0 12px 36px rgba(0, 0, 0, 0.12);
+  --background: 60 14% 96%;
+  --foreground: 60 6% 10%;
+  --card: 60 20% 100%;
+  --card-foreground: 60 6% 10%;
+  --popover: 60 20% 100%;
+  --popover-foreground: 60 6% 10%;
+  --primary: 240 6% 10%;
+  --primary-foreground: 60 8% 96%;
+  --secondary: 60 10% 94%;
+  --secondary-foreground: 60 6% 10%;
+  --muted: 60 10% 94%;
+  --muted-foreground: 60 4% 40%;
+  --accent: 60 10% 92%;
+  --accent-foreground: 60 6% 10%;
+  --destructive: 0 84% 40%;
+  --border: 60 8% 86%;
+  --input: 60 8% 88%;
+  --ring: 60 6% 40%;
+}
+
+a[href],
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="menuitem"],
+[role="option"],
+[role="tab"],
+[role="switch"],
+[role="checkbox"],
+[role="radio"],
+[role="combobox"],
+summary,
+label[for],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+input[type="image"],
+select,
+[aria-haspopup]:not(:disabled) {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:disabled,
+[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

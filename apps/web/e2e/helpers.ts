@@ -16,7 +16,14 @@ export function activeBotId(page: Page) {
 }
 
 export async function rpc<T>(page: Page, procedure: string, body: unknown): Promise<T> {
-  const response = await page.request.post(`/rpc/${procedure}`, { data: { json: body } });
+  const spaceId = await page.evaluate(
+    () =>
+      new URLSearchParams(location.search).get("space") ?? localStorage.getItem("rakazo:space-id"),
+  );
+  const response = await page.request.post(`/rpc/${procedure}`, {
+    data: { json: body },
+    headers: spaceId ? { "x-rakazo-space-id": spaceId } : {},
+  });
   const parsed = (await response.json()) as { json?: T; error?: { message?: string } };
   if (!response.ok() || parsed.error) {
     throw new Error(`${procedure} ${response.status()}: ${parsed.error?.message ?? "failed"}`);
@@ -27,7 +34,7 @@ export async function rpc<T>(page: Page, procedure: string, body: unknown): Prom
 export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
   const heading = page.getByRole("heading", { name: /Connect a model|Create your first bot/ });
-  const chief = page.getByText("Chief").first();
+  const chief = page.getByRole("combobox", { name: /^Message / });
   await heading.or(chief).waitFor({ timeout: 20_000 });
   if ((await chief.isVisible().catch(() => false)) && page.url().includes("/app")) return;
   if (
@@ -59,7 +66,7 @@ export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
     await page.waitForURL(/\/app\//, { timeout: 20_000 });
   }
   await page.waitForURL(/\/app/);
-  await expect(page.getByText("Chief").first()).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /^Message / })).toBeVisible();
   if (testInfo) await captureScreenshot(page, testInfo, "06-onboarding-complete");
 }
 

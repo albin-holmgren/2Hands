@@ -1,4 +1,5 @@
 import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import { decodeExecutionError, executionErrorCode } from "./execution-errors.js";
 
 export function projectMessages(
   events: Array<{
@@ -160,6 +161,10 @@ export function isRunTerminalEvent(event: { type: string }): boolean {
 
 const RUN_FAILURE_ERROR_MAX = 300;
 
+export function runFailureCode(event: { type: string; payload?: Record<string, unknown> }) {
+  return event.type === "run.failed" ? executionErrorCode(event.payload) : undefined;
+}
+
 /** Reason a run failed, clamped for display, or null when there is no usable error to show. */
 export function runFailureError(event: {
   type: string;
@@ -168,7 +173,7 @@ export function runFailureError(event: {
   if (event.type !== "run.failed") return null;
   const error = event.payload?.error;
   if (typeof error !== "string" || !error.trim()) return null;
-  const message = error.trim();
+  const message = decodeExecutionError(error).error.trim();
   // A provider can fail with a stack or a whole response body; the run record keeps the full
   // text while the UI shows a bounded first line.
   return message.length > RUN_FAILURE_ERROR_MAX

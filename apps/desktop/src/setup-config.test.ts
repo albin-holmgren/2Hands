@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_HOSTED_WEB_URL,
   DEFAULT_LOCAL_WEB_URL,
   isRakazoHealth,
   normalizeServerUrl,
@@ -104,6 +105,33 @@ describe("startup target", () => {
 
   it("runs setup on a first launch", () => {
     expect(resolveStartupTarget({})).toEqual({ kind: "setup" });
+  });
+
+  it("opens the hosted app only when the packaged composition root supplies it", () => {
+    expect(resolveStartupTarget({ hostedUrl: DEFAULT_HOSTED_WEB_URL })).toEqual({
+      kind: "app",
+      url: "https://2hands.ai",
+      source: "hosted",
+    });
+    expect(resolveStartupTarget({})).toEqual({ kind: "setup" });
+    expect(resolveStartupTarget({ hostedUrl: "http://example.com" })).toEqual({ kind: "setup" });
+  });
+
+  it("keeps explicit environments, saved servers, and Change Server ahead of hosted startup", () => {
+    expect(resolveStartupTarget({ hostedUrl: DEFAULT_HOSTED_WEB_URL, saved })).toMatchObject({
+      source: "saved",
+      url: saved.serverUrl,
+    });
+    expect(
+      resolveStartupTarget({
+        hostedUrl: DEFAULT_HOSTED_WEB_URL,
+        saved,
+        envUrl: "http://127.0.0.1:4321",
+      }),
+    ).toMatchObject({ source: "env" });
+    expect(
+      resolveStartupTarget({ hostedUrl: DEFAULT_HOSTED_WEB_URL, saved, forceSetup: true }),
+    ).toEqual({ kind: "setup" });
   });
 
   it("opens the saved instance on later launches", () => {

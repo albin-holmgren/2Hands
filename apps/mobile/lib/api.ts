@@ -11,16 +11,19 @@ import type {
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
+  executionErrorFromResponse,
   isRunTerminalEvent,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
   reduceLiveMessageBlocks,
+  runFailureCode,
   runFailureError,
   type ThreadHistory,
   upsertMessageById,
 } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
+import { clearComposerDrafts, composerSessionEpoch, setComposerAccount } from "./composer-drafts";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import { resumeLiveNotifications } from "./live-notifications";
 import {
@@ -305,6 +308,7 @@ async function authenticateWithEmail(
   if (!token)
     throw new Error(`${action === "sign-in" ? "Sign-in" : "Sign-up"} did not return a session`);
   if (!(await clearSpace())) throw new Error("Could not clear the previous space");
+  await clearComposerDrafts();
   await saveSessionToken(token);
 }
 
@@ -382,6 +386,8 @@ export async function rpc<T>(
     requestContext?: ApiRequestContext;
   } = {},
 ): Promise<T> {
+  const draftEpoch = composerSessionEpoch();
+  const requestBase = options.requestContext?.apiBase ?? currentApiBase();
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (options.signal?.aborted) abort();
@@ -389,7 +395,7 @@ export async function rpc<T>(
   const timer =
     options.timeoutMs === null ? undefined : setTimeout(abort, options.timeoutMs ?? RPC_TIMEOUT_MS);
   try {
-    const res = await fetch(`${options.requestContext?.apiBase ?? currentApiBase()}/rpc/${proc}`, {
+    const res = await fetch(`${requestBase}/rpc/${proc}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -400,7 +406,11 @@ export async function rpc<T>(
       signal: controller.signal,
     });
     const parsed = (await res.json()) as { json?: T; error?: { message?: string } };
-    if (!res.ok || parsed.error) throw new Error(parsed.error?.message ?? `rpc ${proc} failed`);
+    if (!res.ok || parsed.error) throw executionErrorFromResponse(parsed, `rpc ${proc} failed`);
+    if (proc === "me" && requestBase === currentApiBase()) {
+      const me = parsed.json as { userId?: unknown } | undefined;
+      if (typeof me?.userId === "string") setComposerAccount(requestBase, me.userId, draftEpoch);
+    }
     return parsed.json as T;
   } finally {
     if (timer) clearTimeout(timer);
@@ -425,7 +435,7 @@ export type MobileBot = Pick<
   | "updatedAt"
   | "computerMode"
 > &
-  Partial<Pick<Bot, "parentBotId" | "spaceId">>;
+  Partial<Pick<Bot, "parentBotId" | "spaceId" | "modelProvider" | "modelId" | "thinkingLevel">>;
 
 export type MobileBotSection = BotSection;
 
@@ -475,7 +485,13 @@ export type MobileSnapshot = {
   cursor?: number;
   messages: MobileMessage[];
   olderCursor: number | null;
-  run: { id: string; botId?: string; status: string; error?: string | null } | null;
+  run: {
+    id: string;
+    botId?: string;
+    status: string;
+    error?: string | null;
+    errorCode?: import("@rakazo/contracts").ExecutionErrorCode;
+  } | null;
   activeRuns?: Array<{ id: string; botId?: string; status: string }>;
   members?: MobileGroup["members"];
   computer?: {
@@ -678,7 +694,7 @@ export function applyMobileThreadEvent(
       // A failed run stays in run so the thread can say why it stopped (see reduceThreadSnapshot).
       run:
         endedRun && failure
-          ? { ...endedRun, status: "failed", error: failure }
+          ? { ...endedRun, status: "failed", error: failure, errorCode: runFailureCode(event) }
           : primaryEnded
             ? (activeRuns?.[0] ?? null)
             : prev.run,

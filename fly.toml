@@ -1,11 +1,21 @@
 # fly.toml app configuration file generated for 2hands
 # See https://fly.io/docs/reference/configuration/
+#
+# Live app is 2hands-computers (personal org). twohands-api could not be
+# created with the current Fly token (app-scoped writes only).
+#
+# The signed-in SPA is served from the API process (same origin as /rpc and
+# /api). Fly volumes cannot attach to two machines, so API + Graphile worker
+# share DATA_DIR on one Machine until homes move to object storage.
 
-app = "twohands-api"
+app = "2hands-computers"
 primary_region = "arn"
 
 [build]
   dockerfile = "infra/compose/Dockerfile"
+
+[deploy]
+  release_command = "pnpm --filter @rakazo/db migrate"
 
 [env]
   NODE_ENV = "production"
@@ -14,20 +24,28 @@ primary_region = "arn"
   DATA_DIR = "/data"
   SANDBOX_PROVIDER = "e2b"
   AGENT_RUNTIME = "pi"
+  BILLING_ENABLED = "true"
+  HOSTED_COMPUTER_USD_PER_HOUR = "0.15"
+  MAX_TOOL_CALLS_PER_TURN = "80"
+  SIGNUPS_ENABLED = "false"
+  SIGNUPS_LOCKED = "true"
   PI_DEFAULT_PROVIDER = "vercel-gateway"
   PI_DEFAULT_MODEL = "openai/gpt-4.1-mini"
   RAKAZO_OPENAI_COMPAT_ALLOW_PUBLIC = "1"
   VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1"
   WAKEUP_DRIVER = "graphile"
+  SERVE_WEB = "1"
+  WEB_ORIGIN = "https://2hands.ai"
+  BETTER_AUTH_URL = "https://2hands.ai"
+  API_URL = "https://2hands.ai"
 
 [processes]
-  api = "pnpm --filter @rakazo/api start"
-  worker = "pnpm --filter @rakazo/worker start"
+  api = "bash infra/fly/start.sh"
 
 [[mounts]]
   source = "twohands_data"
   destination = "/data"
-  processes = ["api", "worker"]
+  processes = ["api"]
 
 [http_service]
   internal_port = 3100
@@ -42,12 +60,14 @@ primary_region = "arn"
     hard_limit = 250
     soft_limit = 200
 
-[[vm]]
-  size = "shared-cpu-2x"
-  memory = "2048mb"
-  processes = ["api"]
+  [[http_service.checks]]
+    grace_period = "45s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
 
 [[vm]]
   size = "shared-cpu-2x"
-  memory = "2048mb"
-  processes = ["worker"]
+  memory = "4096mb"
+  processes = ["api"]

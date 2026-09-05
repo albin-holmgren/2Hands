@@ -21,6 +21,11 @@ export function signupsOpen(enabled: string | undefined): boolean {
   return enabled !== "false" && enabled !== "0";
 }
 
+/** Deployment lock takes precedence over the saved, mutable signup policy. */
+export function signupsLocked(value: string | undefined): boolean {
+  return value === "true" || value === "1";
+}
+
 export function signupPolicyFromEnv(input: {
   signupsEnabled: string | undefined;
   signupAllowlist: string | undefined;

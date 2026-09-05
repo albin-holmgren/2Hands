@@ -1,41 +1,55 @@
 appId: com.rakazo.app
-name: Rakazo mobile smoke
+name: 2hands native core workflow
 ---
 - launchApp:
     clearState: true
-
+    clearKeychain: true
 - assertVisible: "Sign in to 2hands"
-- assertVisible: "Sign up"
 - tapOn: "Sign up"
 - assertVisible: "Sign up for 2hands"
 - assertVisible: "Name"
 - tapOn: "Sign in"
-- assertVisible: "Sign in to 2hands"
 - tapOn: "Email"
 - inputText: ${RAKAZO_E2E_EMAIL}
 - tapOn: "Password"
 - inputText: ${RAKAZO_E2E_PASSWORD}
-- tapOn: "Sign in to 2hands"
-- tapOn: "Sign in"
-
+- hideKeyboard
+- tapOn:
+    id: "auth-submit"
+- tapOn:
+    text: "Not Now"
+    optional: true
 - extendedWaitUntil:
-    visible: "New bot"
+    visible: "Switch workspace"
     timeout: 30000
+- tapOn: "Switch workspace"
+- assertVisible: "Search workspaces"
+- takeScreenshot: screenshots/workspace-picker
+- tapOn: "Close workspaces"
+- tapOn: "Create"
 - tapOn: "New bot"
-- assertVisible: "Name this bot"
 - tapOn: "Name this bot"
 - inputText: ${RAKAZO_E2E_BOT_NAME}
 - hideKeyboard
 - tapOn: "Create"
-
 - extendedWaitUntil:
-    visible: "Message…"
+    visible:
+      id: "composer-input"
     timeout: 30000
-- tapOn: "Message…"
+- tapOn:
+    id: "composer-model-picker"
+- assertVisible: "Search models"
+- assertVisible: "Manage connections"
+- takeScreenshot: screenshots/model-picker
+- tapOn: "Close models"
+- tapOn:
+    id: "composer-input"
 - inputText: ${RAKAZO_E2E_MESSAGE}
-- pressKey: Enter
+- tapOn:
+    id: "composer-send"
 - assertVisible: ${RAKAZO_E2E_MESSAGE}
-
+- tapOn: ${RAKAZO_E2E_MESSAGE}
+- takeScreenshot: screenshots/conversation
 - tapOn: "Open computer →"
 - extendedWaitUntil:
     visible: "Open computer"

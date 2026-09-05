@@ -25,7 +25,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, ExecutionError } from "@rakazo/core";
 import { ComputerScreenUnavailableError, screenSessionKey } from "./computer-screens.js";
 import {
   boundedComputerActions,
@@ -195,18 +195,10 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     const screenKey = screenSessionKey(context);
     const layout = await this.resolveLayout(sandbox, screenKey, context.screenLeaseId);
     if (layout.isPrimary) {
-      await this.ensureDesktop(sandbox);
-      const preview = await this.screenPreview(sandbox, screenKey, layout.viewPort);
-      const url = new URL(preview.url);
-      url.pathname = "/vnc.html";
-      url.searchParams.set("autoconnect", "true");
-      url.searchParams.set("resize", "scale");
-      url.searchParams.set("view_only", request.interactive ? "false" : "true");
-      return {
-        url: url.toString(),
-        mimeType: "text/html",
-        close: async () => undefined,
-      };
+      throw new ExecutionError(
+        "COMPUTER_UNAVAILABLE",
+        "Daytona primary streaming is unavailable because the provider cannot isolate viewing from control.",
+      );
     }
     const viewPassword = await this.ensureExtraDisplay(sandbox, layout);
     if (request.interactive) {
@@ -221,7 +213,8 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       url.pathname = "/vnc.html";
       url.searchParams.set("autoconnect", "true");
       url.searchParams.set("resize", "scale");
-      url.searchParams.set("password", password);
+      url.searchParams.set("password", parseExtraDisplayViewPassword(result.result));
+      url.searchParams.set("view_only", "false");
       return {
         url: url.toString(),
         mimeType: "text/html",
@@ -252,7 +245,12 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     const screenKey = screenSessionKey(context);
     const layout = await this.resolveLayout(sandbox, screenKey, context.screenLeaseId);
     if (layout.isPrimary) {
-      await this.ensureDesktop(sandbox);
+      if (interactive) {
+        throw new ExecutionError(
+          "COMPUTER_UNAVAILABLE",
+          "Daytona primary streaming is unavailable because the provider cannot isolate viewing from control.",
+        );
+      }
       return;
     }
     await this.ensureExtraDisplay(sandbox, layout);
@@ -264,7 +262,10 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       );
       if (result.exitCode !== 0) throw new Error(result.result || "control stream failed to start");
     } else if (controlToken) {
-      await sandbox.process.executeCommand(extraDisplayControlStopCommand(layout, controlToken));
+      const result = await sandbox.process.executeCommand(
+        extraDisplayControlStopCommand(layout, controlToken),
+      );
+      if (result.exitCode !== 0) throw new Error("Computer control could not be revoked");
     }
   }
 

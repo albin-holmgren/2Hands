@@ -4,7 +4,9 @@ import {
   resolveEncryptionKey,
   resolveScreenProxySecret,
   resolveSupervisorToken,
+  signupsLocked,
 } from "@rakazo/core";
+import { resolveServeWeb } from "./web-static.js";
 
 export { resolveSandboxProvider } from "@rakazo/adapters";
 
@@ -18,6 +20,7 @@ export interface AppEnv {
   apiUrl: string;
   apiHost: string;
   signupsEnabled: string | undefined;
+  signupsLocked?: string;
   signupAllowlist: string | undefined;
   encryptionKey: string;
   dataDir: string;
@@ -68,6 +71,9 @@ export interface AppEnv {
   updaterToken: string | undefined;
   /** Current application image tag; used for compose manual-upgrade command selection. */
   imageTag: string | undefined;
+  /** Serve apps/web/dist from this process (Fly same-origin). Off for local Vite. */
+  serveWeb: boolean;
+  webDist: string | undefined;
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
@@ -86,6 +92,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     apiUrl: source.API_URL ?? "http://127.0.0.1:3100",
     apiHost: source.API_HOST ?? "127.0.0.1",
     signupsEnabled: source.SIGNUPS_ENABLED,
+    signupsLocked: source.SIGNUPS_LOCKED,
     signupAllowlist: source.SIGNUP_ALLOWLIST,
     encryptionKey: resolveEncryptionKey(source),
     dataDir: source.DATA_DIR ?? "./data",
@@ -124,7 +131,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     whatsappVerifyToken: optional(source.WHATSAPP_VERIFY_TOKEN),
     telegramBotToken: optional(source.TELEGRAM_BOT_TOKEN),
     telegramWebhookSecret: optional(source.TELEGRAM_WEBHOOK_SECRET_TOKEN),
-    messagingOpenSignup: source.MESSAGING_OPEN_SIGNUP === "true",
+    messagingOpenSignup:
+      source.MESSAGING_OPEN_SIGNUP === "true" && !signupsLocked(source.SIGNUPS_LOCKED),
     defaultProvider: deploymentModel.provider,
     defaultModel: deploymentModel.model,
     wakeupDriver: source.WAKEUP_DRIVER ?? "graphile",
@@ -138,6 +146,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     updaterUrl,
     updaterToken,
     imageTag: optional(source.RAKAZO_IMAGE_TAG),
+    serveWeb: resolveServeWeb(source),
+    webDist: optional(source.WEB_DIST),
   };
 }
 

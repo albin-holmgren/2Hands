@@ -6,10 +6,17 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { computerSleepJob } from "@rakazo/adapter-kit";
 import { ACTIVE_RUN_STATUSES, screenLeaseId } from "@rakazo/core";
 import { type PrismaClient, parseComputerMode, type ThreadEvents } from "@rakazo/db";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
+import {
+  ensureComputerUsageCoverage,
+  releaseUnusedComputerUsage,
+  settleComputerUsage,
+  suspendComputerForBudget,
+} from "./computer-usage.js";
 import {
   checkpointAndRecordComputerWorkspace,
   ensureComputerWorkspaceLayout,
@@ -74,18 +81,40 @@ export async function provisionComputer(
     },
     data: { state: "booting" },
   });
-  if (claimed.count !== 1) throw new ComputerBusyError();
+  if (claimed.count !== 1) {
+    // Parallel bots can both read "stopped" before one claims the shared boot.
+    // Join that boot instead of failing the second bot's first lazy computer operation.
+    const ready = await waitForComputerReady(deps.prisma, computerId, context);
+    if (ready.state === "running" && ready.providerRef) {
+      if (context.botId) {
+        const bot = await deps.prisma.bot.findFirst({
+          where: { id: context.botId, computerId, archivedAt: null },
+          select: { id: true },
+        });
+        if (!bot) throw new ComputerBusyError();
+      }
+      return reconnectComputer(deps, ready, homePath, context);
+    }
+    throw new ComputerBusyError();
+  }
   let provisioned: ComputerRef | undefined;
+  let dispatched = false;
   try {
+    const expiresAt = await ensureComputerUsageCoverage(deps, computerId);
+    if (expiresAt)
+      await deps.jobs.enqueue(computerSleepJob(computerId, new Date(Date.now() + 60_000)));
+    dispatched = true;
     const ref = await deps.sandbox.provision(
       {
         botId: existing.homeKey,
         homePath,
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
+        expiresAt,
       },
       context,
     );
+    ref.expiresAt = expiresAt;
     provisioned = ref;
     await deps.sandbox.prepare(ref, context);
     const replacement =
@@ -133,6 +162,13 @@ export async function provisionComputer(
     const rollbackError = provisioned
       ? await rollbackProvisionedComputer(deps.sandbox, provisioned, context, error)
       : undefined;
+    if (!dispatched)
+      await releaseUnusedComputerUsage(
+        deps.prisma,
+        computerId,
+        existing.billingReservationId ?? null,
+      );
+    else if (provisioned && !rollbackError) await settleComputerUsage(deps.prisma, computerId);
     try {
       await deps.prisma.computer.updateMany({
         where: { id: computerId, state: "booting" },
@@ -164,6 +200,7 @@ async function reconnectComputer(
     prisma: PrismaClient;
     sandbox: SandboxProvider;
     home: AgentHomeStore;
+    jobs: JobPublisher;
     dataDir?: string;
   },
   computer: {
@@ -176,15 +213,26 @@ async function reconnectComputer(
   homePath: string,
   context: AdapterContext,
 ): Promise<ComputerRef> {
+  let expiresAt: string | undefined;
+  try {
+    expiresAt = await ensureComputerUsageCoverage(deps, computer.id);
+    if (expiresAt)
+      await deps.jobs.enqueue(computerSleepJob(computer.id, new Date(Date.now() + 60_000)));
+  } catch (error) {
+    await suspendComputerForBudget(deps, computer.id);
+    throw error;
+  }
   const ref = await deps.sandbox.provision(
     {
       botId: computer.homeKey,
       homePath,
       providerRef: computer.providerRef ?? undefined,
       providerKind: computer.kind as ComputerRef["kind"],
+      expiresAt,
     },
     context,
   );
+  ref.expiresAt = expiresAt;
   await deps.sandbox.prepare(ref, context);
   await ensureComputerWorkspaceLayout(
     deps.sandbox,
@@ -468,6 +516,7 @@ export async function replaceComputer(
       await deps.sandbox.releaseScreen?.(oldRef, context).catch(() => undefined);
       try {
         await deps.sandbox.destroy(oldRef, context);
+        await settleComputerUsage(deps.prisma, computerId);
       } catch (error) {
         if (mode !== "recover" && !isUnrecoverableSandboxError(error)) throw error;
       }

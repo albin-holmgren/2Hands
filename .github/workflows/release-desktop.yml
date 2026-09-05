@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -59,6 +60,11 @@ jobs:
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$tag_sha" origin/main; then
             echo "Desktop releases must point to a commit already on main." >&2
+            exit 1
+          fi
+          verified="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${tag_sha}&status=success" --jq '.workflow_runs | any(.event == "push" and .head_branch == "main")')"
+          if [[ "$verified" != "true" ]]; then
+            echo "The tagged revision must pass the complete main-branch CI workflow before release." >&2
             exit 1
           fi
           if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
@@ -146,13 +152,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="apps/desktop/out/mac-universal/Rakazo.app"
+          app="apps/desktop/out/mac-universal/2hands.app"
           codesign --verify --deep --strict --verbose=2 "$app"
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=2 "$app"
           grep -Fqx "provider: github" "$app/Contents/Resources/app-update.yml"
-          grep -Fqx "owner: elie222" "$app/Contents/Resources/app-update.yml"
-          grep -Fqx "repo: rakazo" "$app/Contents/Resources/app-update.yml"
+          grep -Fqx "owner: albin-holmgren" "$app/Contents/Resources/app-update.yml"
+          grep -Fqx "repo: 2Hands" "$app/Contents/Resources/app-update.yml"
 
       - name: Require Windows signing credentials
         if: runner.os == 'Windows'
@@ -193,7 +199,7 @@ jobs:
             throw "Windows update config is not bound to the signing publisher."
           }
           $feed = Get-Content -Raw $config
-          foreach ($expected in @("provider: github", "owner: elie222", "repo: rakazo")) {
+          foreach ($expected in @("provider: github", "owner: albin-holmgren", "repo: 2Hands")) {
             if ($feed -notmatch "(?m)^$([regex]::Escape($expected))\r?$") {
               throw "Windows update config missing '$expected'."
             }
@@ -218,10 +224,38 @@ jobs:
           test -n "$config"
           test -f "$config"
           grep -Fqx "provider: github" "$config"
-          grep -Fqx "owner: elie222" "$config"
-          grep -Fqx "repo: rakazo" "$config"
+          grep -Fqx "owner: albin-holmgren" "$config"
+          grep -Fqx "repo: 2Hands" "$config"
           test -f apps/desktop/out/latest-linux.yml
           grep -Fqx "version: $RELEASE_VERSION" apps/desktop/out/latest-linux.yml
+
+      - name: Verify the packaged renderer without opening desktop windows
+        shell: bash
+        env:
+          RAKAZO_ELECTRON_E2E: "1"
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            macOS) executable="out/mac-universal/2hands.app/Contents/MacOS/2hands" ;;
+            Windows) executable="out/win-unpacked/2hands.exe" ;;
+            Linux) executable="out/linux-unpacked/2hands" ;;
+          esac
+          cd apps/desktop
+          export RAKAZO_ELECTRON_EXECUTABLE="$(node -e 'console.log(require("node:path").resolve(process.argv[1]))' "$executable")"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a pnpm exec playwright test --config e2e/playwright.config.ts packaged.spec.ts
+          else
+            pnpm exec playwright test --config e2e/playwright.config.ts packaged.spec.ts
+          fi
+
+      - name: Retain packaged verification screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification-desktop-${{ matrix.artifact }}-${{ needs.validate.outputs.sha }}
+          path: apps/desktop/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Retain installers and updater metadata
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -306,7 +340,7 @@ jobs:
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: >-
           gh release create "$RELEASE_TAG" release-artifacts/*
-          --draft --generate-notes --title "Rakazo $RELEASE_TAG" --verify-tag
+          --draft --generate-notes --title "2hands $RELEASE_TAG" --verify-tag
       - name: Publish the completed release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

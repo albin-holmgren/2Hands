@@ -4,11 +4,12 @@ import type { DesktopSetup } from "@rakazo/contracts";
 
 /** Where `pnpm dev` serves the Rakazo web app on this machine. */
 export const DEFAULT_LOCAL_WEB_URL = "http://127.0.0.1:5173";
+export const DEFAULT_HOSTED_WEB_URL = "https://2hands.ai";
 
 export const SETUP_FILE_NAME = "setup.json";
 
 export type StartupTarget =
-  | { kind: "app"; url: string; source: "env" | "saved" }
+  | { kind: "app"; url: string; source: "env" | "saved" | "hosted" }
   | { kind: "setup" };
 
 const SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
@@ -81,6 +82,7 @@ export function resolveStartupTarget(input: {
   envUrl?: string;
   saved?: DesktopSetup | null;
   forceSetup?: boolean;
+  hostedUrl?: string;
 }): StartupTarget {
   if (input.forceSetup === true) return { kind: "setup" };
 
@@ -91,6 +93,8 @@ export function resolveStartupTarget(input: {
     const saved = parseSetupInput(input.saved);
     if (saved !== null) return { kind: "app", url: saved.serverUrl, source: "saved" };
   }
+  const hostedUrl = input.hostedUrl ? normalizeServerUrl(input.hostedUrl) : null;
+  if (hostedUrl?.startsWith("https://")) return { kind: "app", url: hostedUrl, source: "hosted" };
   return { kind: "setup" };
 }
 

@@ -5,7 +5,11 @@ import { authClient } from "../lib/auth";
 import { clearSpaceSelection } from "../lib/rpc";
 
 type AuthMode = "in" | "up" | "forgot";
-type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: string | null };
+type AuthCapabilities = {
+  passwordReset: boolean;
+  resetUrl: string | null;
+  signupsEnabled?: boolean;
+};
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const { t } = useLingui();
@@ -17,7 +21,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [reset, setReset] = useState<PasswordResetCapabilities | null>(null);
+  const [reset, setReset] = useState<AuthCapabilities | null>(null);
   const passwordFieldId = mode === "in" ? "current-password" : "new-password";
   const title =
     mode === "in" ? (
@@ -29,17 +33,18 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     );
 
   useEffect(() => {
-    if (mode === "up") return;
     let active = true;
     void fetch("/api/auth/capabilities")
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load authentication capabilities");
-        return (await response.json()) as PasswordResetCapabilities;
+        return (await response.json()) as AuthCapabilities;
       })
       .then((capabilities) => {
         if (active) setReset(capabilities);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setReset({ passwordReset: false, resetUrl: null });
+      });
     return () => {
       active = false;
     };
@@ -47,6 +52,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode === "up" && reset?.signupsEnabled === false) return;
     setPending(true);
     setError(null);
     try {
@@ -88,29 +94,41 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#F7F7F4] px-6 py-16 text-[#1B1B1E]">
+    <div className="flex min-h-full items-center justify-center bg-[var(--rk-page)] px-6 py-16 text-[var(--rk-ink)]">
       <form onSubmit={submit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[#16161A]">
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
+        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[var(--rk-cream)]">
+          <span className="h-5 w-[9px] rounded-full bg-[var(--rk-page)]" />
+          <span className="h-5 w-[9px] rounded-full bg-[var(--rk-page)]" />
         </div>
         <h1 className="mb-[38px] mt-[30px] text-[38px] tracking-[-0.02em]">{title}</h1>
-        {sent ? (
+        {mode === "up" && reset?.signupsEnabled === false ? (
           <div role="status" className="w-full text-center">
-            <p className="text-[17px] text-[#1B1B1E]">
+            <p className="text-[17px] text-[var(--rk-ink)]">
+              <Trans>Registration is currently unavailable</Trans>
+            </p>
+            <Link
+              to="/sign-in"
+              className="mt-6 inline-block rounded-full bg-[var(--rk-cream)] px-6 py-3 font-medium text-[var(--rk-cream-ink)]"
+            >
+              <Trans>Sign in</Trans>
+            </Link>
+          </div>
+        ) : sent ? (
+          <div role="status" className="w-full text-center">
+            <p className="text-[17px] text-[var(--rk-ink)]">
               <Trans>Check your email</Trans>
             </p>
-            <p className="mt-3 text-[15px] leading-relaxed text-[#6E6E68]">
+            <p className="mt-3 text-[15px] leading-relaxed text-[var(--rk-muted)]">
               <Trans>If an account exists for that address, we sent a password reset link.</Trans>
             </p>
-            <Link to="/sign-in" className="mt-6 inline-block font-medium text-[#1B1B1E]">
+            <Link to="/sign-in" className="mt-6 inline-block font-medium text-[var(--rk-ink)]">
               <Trans>Back to sign in</Trans>
             </Link>
           </div>
         ) : (
           <>
             {mode === "up" ? (
-              <label className="mb-4 w-full text-[16px] text-[#6E6E68]">
+              <label className="mb-4 w-full text-[16px] text-[var(--rk-muted)]">
                 <Trans>Name</Trans>
                 <input
                   id="name"
@@ -119,11 +137,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t`Your name`}
-                  className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+                  className="mt-2 w-full rounded-[13px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-[18px] py-[17px] text-[17px] text-[var(--rk-ink)] outline-none"
                 />
               </label>
             ) : null}
-            <label className="w-full text-[16px] text-[#6E6E68]">
+            <label className="w-full text-[16px] text-[var(--rk-muted)]">
               <Trans>Email</Trans>
               <input
                 id="email"
@@ -134,11 +152,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 placeholder={t`Your email address`}
                 type="email"
                 required
-                className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+                className="mt-2 w-full rounded-[13px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-[18px] py-[17px] text-[17px] text-[var(--rk-ink)] outline-none"
               />
             </label>
             {mode !== "forgot" ? (
-              <div className="mt-4 w-full text-[16px] text-[#6E6E68]">
+              <div className="mt-4 w-full text-[16px] text-[var(--rk-muted)]">
                 <label htmlFor={passwordFieldId}>
                   <Trans>Password</Trans>
                 </label>
@@ -152,15 +170,15 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     placeholder={t`Password`}
                     type={showPassword ? "text" : "password"}
                     required
-                    minLength={8}
-                    className="w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] py-[17px] pl-[18px] pr-[52px] text-[17px] text-[#1B1B1E] outline-none"
+                    minLength={mode === "in" ? 7 : 8}
+                    className="w-full rounded-[13px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] py-[17px] pl-[18px] pr-[52px] text-[17px] text-[var(--rk-ink)] outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((shown) => !shown)}
                     aria-label={showPassword ? t`Hide password` : t`Show password`}
                     aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-0 flex items-center px-[18px] text-[#8C8C86] hover:text-[#1B1B1E]"
+                    className="absolute inset-y-0 right-0 flex items-center px-[18px] text-[var(--rk-muted)] hover:text-[var(--rk-ink)]"
                   >
                     {showPassword ? (
                       <svg
@@ -199,7 +217,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 </div>
                 {mode === "in" && reset?.passwordReset ? (
                   <div className="mt-2 text-right text-[14px]">
-                    <Link to="/forgot-password" className="font-medium text-[#1B1B1E]">
+                    <Link to="/forgot-password" className="font-medium text-[var(--rk-ink)]">
                       <Trans>Forgot password?</Trans>
                     </Link>
                   </div>
@@ -207,14 +225,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               </div>
             ) : null}
             {error ? (
-              <p role="alert" className="mt-3 w-full text-sm text-[#B91C1C]">
+              <p role="alert" className="mt-3 w-full text-sm text-[var(--rk-danger)]">
                 {error}
               </p>
             ) : null}
             <button
               type="submit"
-              disabled={pending}
-              className="mt-3 w-full rounded-[13px] bg-[#121215] py-[18px] text-center text-[17px] font-medium text-[#FBFBF9] hover:bg-[#26262B]"
+              disabled={pending || ((mode === "up" || mode === "forgot") && reset === null)}
+              className="mt-3 w-full rounded-[13px] bg-[var(--rk-cream)] py-[18px] text-center text-[17px] font-medium text-[var(--rk-cream-ink)] hover:opacity-90 disabled:opacity-50"
             >
               {pending ? (
                 <Trans>Working…</Trans>
@@ -226,23 +244,23 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <Trans>Create account</Trans>
               )}
             </button>
-            <p className="mt-[30px] text-[16px] text-[#8C8C86]">
+            <p className="mt-[30px] text-[16px] text-[var(--rk-muted)]">
               {mode === "in" ? (
                 <>
                   <Trans>Don’t have an account?</Trans>{" "}
-                  <Link to="/sign-up" className="font-medium text-[#1B1B1E]">
+                  <Link to="/sign-up" className="font-medium text-[var(--rk-ink)]">
                     <Trans>Sign up</Trans>
                   </Link>
                 </>
               ) : mode === "up" ? (
                 <>
                   <Trans>Already have an account?</Trans>{" "}
-                  <Link to="/sign-in" className="font-medium text-[#1B1B1E]">
+                  <Link to="/sign-in" className="font-medium text-[var(--rk-ink)]">
                     <Trans>Sign in</Trans>
                   </Link>
                 </>
               ) : (
-                <Link to="/sign-in" className="font-medium text-[#1B1B1E]">
+                <Link to="/sign-in" className="font-medium text-[var(--rk-ink)]">
                   <Trans>Back to sign in</Trans>
                 </Link>
               )}
@@ -290,11 +308,11 @@ export function PasswordResetPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#F7F7F4] px-6 py-16 text-[#1B1B1E]">
+    <div className="flex min-h-full items-center justify-center bg-[var(--rk-page)] px-6 py-16 text-[var(--rk-ink)]">
       <form onSubmit={submit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[#16161A]">
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
+        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[var(--rk-cream)]">
+          <span className="h-5 w-[9px] rounded-full bg-[var(--rk-page)]" />
+          <span className="h-5 w-[9px] rounded-full bg-[var(--rk-page)]" />
         </div>
         <h1 className="mb-[38px] mt-[30px] text-[38px] tracking-[-0.02em]">
           <Trans>Choose a new password</Trans>
@@ -324,7 +342,7 @@ export function PasswordResetPage() {
               className="mt-4"
             />
             {error ? (
-              <p role="alert" className="mt-3 w-full text-sm text-[#B91C1C]">
+              <p role="alert" className="mt-3 w-full text-sm text-[var(--rk-danger)]">
                 {error}
               </p>
             ) : null}
@@ -359,7 +377,7 @@ function PasswordField({
   className?: string;
 }) {
   return (
-    <label htmlFor={id} className={`w-full text-[16px] text-[#6E6E68] ${className}`}>
+    <label htmlFor={id} className={`w-full text-[16px] text-[var(--rk-muted)] ${className}`}>
       {label}
       <input
         id={id}
@@ -370,7 +388,7 @@ function PasswordField({
         minLength={8}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+        className="mt-2 w-full rounded-[13px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-[18px] py-[17px] text-[17px] text-[var(--rk-ink)] outline-none"
       />
     </label>
   );

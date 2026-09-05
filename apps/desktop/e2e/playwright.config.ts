@@ -1,4 +1,7 @@
 import { defineConfig } from "@playwright/test";
+import { assertElectronE2EOptIn } from "../src/e2e-policy.js";
+
+assertElectronE2EOptIn(process.env);
 
 export default defineConfig({
   testDir: ".",

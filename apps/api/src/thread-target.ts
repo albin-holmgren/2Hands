@@ -4,6 +4,7 @@ import {
   type Actor,
   GROUP_MEMBER_MIN,
   type GroupMember,
+  type Run,
   type RunStatus,
   type ThreadSnapshot,
 } from "@rakazo/contracts";
@@ -12,6 +13,7 @@ import {
   isActive,
   projectMessages,
   resolveGroupTargetBotIds,
+  runFailureCode,
   runFailureError,
 } from "@rakazo/core";
 import {
@@ -496,11 +498,12 @@ function mapRun(run: {
   routineId: string | null;
   modelProvider: string | null;
   modelId: string | null;
+  modelFunding?: string | null;
   error: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
-}) {
+}): Run {
   return {
     id: run.id,
     botId: run.botId,
@@ -511,6 +514,12 @@ function mapRun(run: {
     routineId: run.routineId ?? null,
     modelProvider: run.modelProvider,
     modelId: run.modelId,
+    modelFunding:
+      run.modelFunding === "hosted" || run.modelFunding === "byok" ? run.modelFunding : null,
+    ...(run.status === "failed" &&
+    runFailureCode({ type: "run.failed", payload: { error: run.error } })
+      ? { errorCode: runFailureCode({ type: "run.failed", payload: { error: run.error } }) }
+      : {}),
     // Same display clamp as live run.failed events so a huge stored error cannot bypass it.
     error:
       run.status === "failed"
