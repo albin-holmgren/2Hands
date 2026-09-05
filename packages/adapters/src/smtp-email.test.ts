@@ -1,8 +1,42 @@
 import { createServer } from "node:net";
+import type { TransactionalEmail } from "@rakazo/adapter-kit";
+import nodemailer from "nodemailer";
 import { describe, expect, it, vi } from "vitest";
 import { SmtpEmailProvider } from "./smtp-email.js";
 
 describe("SmtpEmailProvider", () => {
+  it("renders transactional mail with the real transport without forwarding raw content options", async () => {
+    const transport = nodemailer.createTransport({
+      streamTransport: true,
+      buffer: true,
+      newline: "unix",
+      disableFileAccess: true,
+      disableUrlAccess: true,
+    });
+    const sendMail = vi.spyOn(transport, "sendMail");
+    const provider = new SmtpEmailProvider(
+      { url: "smtps://smtp.example.test:465", from: "2hands <no-reply@example.test>" },
+      { transport },
+    );
+    await provider.send({
+      to: "ada@example.test",
+      subject: "Workspace invitation",
+      text: "Join the test workspace.",
+      html: "<p>Join the test workspace.</p>",
+      raw: { path: "/synthetic-mail-option-must-not-be-read" },
+    } as TransactionalEmail);
+    await provider.drain();
+
+    const result = await sendMail.mock.results[0]!.value;
+    const mime = result.message.toString();
+    expect(mime).toContain("From: 2hands <no-reply@example.test>");
+    expect(mime).toContain("To: ada@example.test");
+    expect(mime).toContain("Subject: Workspace invitation");
+    expect(mime).toContain("Join the test workspace.");
+    expect(mime).toContain("<p>Join the test workspace.</p>");
+    expect(sendMail.mock.calls[0]![0]).not.toHaveProperty("raw");
+  });
+
   it("delivers product-authored content through the injected transport", async () => {
     const sendMail = vi.fn(async () => ({ messageId: "message-1" }));
     const provider = new SmtpEmailProvider(

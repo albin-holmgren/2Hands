@@ -495,17 +495,10 @@ export function RoutineEditor({
         </button>
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-[13px] text-[#EF6461]">
+        <p role="alert" className="mt-3 text-[13px] text-[var(--rk-danger)]">
           {error}
         </p>
       ) : null}
-
-      <div className="mt-8 text-[14px] text-[var(--rk-muted)]">
-        <Trans>Run history</Trans>
-        <p className="mt-2 text-[13.5px] text-[var(--rk-muted-2)]">
-          <Trans>No runs yet</Trans>
-        </p>
-      </div>
     </div>
   );
 }

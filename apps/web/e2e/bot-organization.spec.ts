@@ -124,8 +124,12 @@ test("bots can be reordered by drag or keyboard and keep that order", async ({ p
 
   const betaRow = sidebar.locator(`[data-roster-bot-id="${beta.id}"]`);
   await betaRow.focus();
+  const keyboardReorderSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/reorder") && response.ok(),
+  );
   await page.keyboard.press("Alt+ArrowDown");
   await expect.poll(order).toEqual([chiefId, beta.id, alpha.id]);
+  await keyboardReorderSaved;
   await page.reload();
   await expect.poll(order).toEqual([chiefId, beta.id, alpha.id]);
 

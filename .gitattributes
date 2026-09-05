@@ -6,3 +6,6 @@ infra/sandboxes/computer/fluxbox.* text eol=lf
 *.png binary
 *.jpg binary
 *.ico binary
+
+# Unified patches retain upstream indentation and blank context lines.
+patches/*.patch -whitespace

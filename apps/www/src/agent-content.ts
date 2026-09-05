@@ -1,4 +1,4 @@
-import { HOSTED_PREVIEW_NOTICE, PRIVACY_PREVIEW_NOTICE } from "./site";
+import { HOSTED_PREVIEW_NOTICE, PRIVACY_PREVIEW_NOTICE } from "./site.js";
 
 export const HOME_MARKDOWN = `# 2hands
 

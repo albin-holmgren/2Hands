@@ -861,7 +861,10 @@ function WorkspaceShell({
     const queuedScrollTop = queuedElement.scrollTop;
     window.requestAnimationFrame(() => {
       const element = messageScroll.current;
-      if (transcriptCanSnapAfterFrame(element, queuedElement, queuedScrollTop)) {
+      if (
+        currentThreadView.following !== false &&
+        transcriptCanSnapAfterFrame(element, queuedElement, queuedScrollTop)
+      ) {
         queuedElement.scrollTop = queuedElement.scrollHeight;
       }
     });
@@ -890,6 +893,7 @@ function WorkspaceShell({
     // Keep the search-jump viewport; expandedHistoryThread merge still accepts live messages.
     if (
       stickToEnd &&
+      currentThreadView.following !== false &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -928,6 +932,7 @@ function WorkspaceShell({
     cacheComputerFor(id, { computer: reconciled.computer });
     if (
       stickToEnd &&
+      currentThreadView.following !== false &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -1007,7 +1012,9 @@ function WorkspaceShell({
       updateSnapshot((prev) => prependThreadMessagePage(prev, page));
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
-        if (element) element.scrollTop += element.scrollHeight - previousHeight;
+        if (epoch === historyEpoch.current && element && element === scrollElement) {
+          element.scrollTop += element.scrollHeight - previousHeight;
+        }
       });
     } finally {
       setLoadingOlder(false);
@@ -1658,6 +1665,7 @@ function WorkspaceShell({
   }
 
   async function jumpToMessage(target: { botId?: string; groupId?: string; messageId: string }) {
+    currentThreadView.following = false;
     const threadTarget = searchHitThreadTarget(target);
     const epoch = historyEpoch.current;
     jumpGeneration.current += 1;
@@ -1711,6 +1719,7 @@ function WorkspaceShell({
     window.requestAnimationFrame(() => {
       if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
       if (!targetInPage) {
+        currentThreadView.following = true;
         const element = messageScroll.current;
         if (element) {
           element.scrollTop = element.scrollHeight;
@@ -4212,7 +4221,6 @@ const Transcript = memo(function Transcript({
 }) {
   const { t } = useLingui();
   const [atEnd, setAtEnd] = useState(true);
-  const following = useRef(view.following ?? true);
   const autoScrolling = useRef(false);
   const lastScrollTop = useRef<number | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);
@@ -4229,17 +4237,17 @@ const Transcript = memo(function Transcript({
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
-    following.current = true;
+    view.following = true;
     autoScrolling.current = false;
     setAtEnd(true);
     element.scrollTo({ top: element.scrollHeight, behavior: "auto" });
-  }, [scrollRef]);
+  }, [scrollRef, view]);
 
   const jumpToLatest = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    following.current = true;
+    view.following = true;
     autoScrolling.current = !reducedMotion;
     setAtEnd(true);
     element.scrollTo({
@@ -4254,11 +4262,11 @@ const Transcript = memo(function Transcript({
       },
       reducedMotion ? 0 : 2_000,
     );
-  }, [scrollRef]);
+  }, [scrollRef, view]);
 
   useLayoutEffect(() => {
-    if (following.current) snapToEnd();
-  }, [messages, running, snapToEnd]);
+    if (view.following !== false) snapToEnd();
+  }, [messages, running, snapToEnd, view]);
 
   useLayoutEffect(() => {
     const button = jumpButtonRef.current;
@@ -4268,21 +4276,31 @@ const Transcript = memo(function Transcript({
   }, [atEnd]);
 
   const loadOlder = useCallback(() => {
-    const wasFollowing = following.current;
+    const wasFollowing = view.following !== false;
     // Prepend must not race the messages-driven snap-to-end follow path.
-    following.current = false;
+    view.following = false;
     autoScrolling.current = false;
     const pending = onLoadOlder();
     if (!pending) return;
     return Promise.resolve(pending).catch((error) => {
       const element = scrollRef.current;
       if (wasFollowing && element && transcriptIsNearEnd(element)) {
-        following.current = true;
+        view.following = true;
         setAtEnd(true);
       }
       throw error;
     });
-  }, [onLoadOlder, scrollRef]);
+  }, [onLoadOlder, scrollRef, view]);
+
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      view.following = false;
+      autoScrolling.current = false;
+      window.clearTimeout(autoScrollTimer.current);
+      onJumpToMessage(messageId);
+    },
+    [onJumpToMessage, view],
+  );
 
   useEffect(
     () => () => {
@@ -4299,18 +4317,18 @@ const Transcript = memo(function Transcript({
         onPointerDown={(event) => {
           lastScrollTop.current = event.currentTarget.scrollTop;
           autoScrolling.current = false;
-          following.current = false;
+          view.following = false;
         }}
         onTouchStart={(event) => {
           lastScrollTop.current = event.currentTarget.scrollTop;
           autoScrolling.current = false;
-          following.current = false;
+          view.following = false;
         }}
         onWheel={(event) => {
           if (event.deltaY < 0) {
             lastScrollTop.current = event.currentTarget.scrollTop;
             autoScrolling.current = false;
-            following.current = false;
+            view.following = false;
           }
         }}
         onScroll={(event) => {
@@ -4321,16 +4339,15 @@ const Transcript = memo(function Transcript({
           lastScrollTop.current = event.currentTarget.scrollTop;
           const nearEnd = transcriptIsNearEnd(event.currentTarget);
           view.scrollTop = event.currentTarget.scrollTop;
-          view.following = nearEnd;
           setAtEnd(nearEnd);
           if (nearEnd) {
-            if (scrolledDown) following.current = true;
+            if (scrolledDown) view.following = true;
             if (autoScrolling.current) {
               autoScrolling.current = false;
               window.clearTimeout(autoScrollTimer.current);
             }
           } else if (!autoScrolling.current) {
-            following.current = false;
+            view.following = false;
           }
         }}
         className="rk-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
@@ -4376,7 +4393,7 @@ const Transcript = memo(function Transcript({
                   message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
                 }
                 replyToMessageId={message.replyToMessageId}
-                onJumpToMessage={onJumpToMessage}
+                onJumpToMessage={jumpToMessage}
                 onRefresh={onRefresh}
                 onBotChanged={onBotChanged}
                 onAddRoutine={onAddRoutine}

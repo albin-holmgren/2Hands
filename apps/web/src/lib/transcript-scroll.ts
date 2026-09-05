@@ -13,5 +13,5 @@ export function transcriptCanSnapAfterFrame(
 }
 
 export function transcriptMovedDown(previousScrollTop: number | null, scrollTop: number): boolean {
-  return previousScrollTop !== null && scrollTop >= previousScrollTop;
+  return previousScrollTop !== null && scrollTop > previousScrollTop;
 }
