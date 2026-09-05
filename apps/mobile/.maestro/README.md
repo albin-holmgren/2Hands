@@ -29,5 +29,9 @@ account, server, workspace, and conversation. Attachment bytes stay in private p
 OS clears a cache file, its draft asks the user to attach it again. Signing out removes draft records.
 The restart sequence follows [Maestro's process-death guidance](https://docs.maestro.dev/reference/commands-available/killapp).
 
+`preview-recovery.yaml` uses the same signed-in fixture and primary thread link with the fake sandbox's
+unsupported screen URL. It checks the themed unavailable state, retry, and takeover/release controls.
+This verifies failure recovery, not a live computer stream.
+
 Run both flows in the light and dark appearance settings from Account. Native UI screenshots require
 an iOS Simulator or Android emulator; web CI screenshots do not represent these screens.

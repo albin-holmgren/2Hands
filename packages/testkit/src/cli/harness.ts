@@ -56,7 +56,7 @@ async function main() {
   const suppliedDatabase = testDatabaseUrl(process.env.TEST_DATABASE_URL);
   const container = suppliedDatabase
     ? undefined
-    : await new PostgreSqlContainer("postgres:16-alpine").start();
+    : await new PostgreSqlContainer("postgres:16-alpine").withDatabase("rakazo_test").start();
   try {
     const databaseUrl = suppliedDatabase ?? container!.getConnectionUri();
     const apiPort = Number(process.env.API_PORT ?? 3110);

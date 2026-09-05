@@ -32,6 +32,7 @@ export default function Computer() {
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const [screenError, setScreenError] = useState<string | null>(null);
+  const [retryingScreen, setRetryingScreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [booting, setBooting] = useState(false);
@@ -40,8 +41,12 @@ export default function Computer() {
   const autoBooted = useRef<string | null>(null);
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl, currentApiBase());
+  const previewUnavailable =
+    !booting && computer?.state === "running" && (!embeddedScreenUrl || Boolean(screenError));
   const hasControl = computer?.controlHolder === "user" && computer.controlBotId === botId;
   const label = computerLabel(computer?.mode, name);
+
+  useEffect(() => setScreenError(null), [embeddedScreenUrl]);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: label });
@@ -67,6 +72,22 @@ export default function Computer() {
     await refreshScreen(options?.screenAttempts ?? 1);
     setReady(true);
     return status;
+  }
+
+  async function retryPreview() {
+    if (!botId || retryingScreen) return;
+    setRetryingScreen(true);
+    try {
+      const url = await readScreenUrl(() => rpc("computer/screenUrl", { botId }), {
+        attempts: SCREEN_URL_OPEN_ATTEMPTS,
+      });
+      setScreenUrl(url);
+      setScreenError(null);
+    } catch {
+      setScreenError("Preview unavailable");
+    } finally {
+      setRetryingScreen(false);
+    }
   }
 
   useEffect(() => {
@@ -169,8 +190,39 @@ export default function Computer() {
     }
   }
 
-  const placeholder =
-    screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
+  const placeholder = previewPlaceholder(
+    computer?.state,
+    booting,
+    name,
+    computer?.mode,
+    previewUnavailable,
+  );
+
+  const previewFallback = (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16, gap: 16 }}>
+      <Text style={{ color: native.muted, textAlign: "center" }}>{placeholder}</Text>
+      {previewUnavailable ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retry preview"
+          disabled={retryingScreen}
+          onPress={() => void retryPreview()}
+          style={{
+            backgroundColor: native.surface2,
+            paddingHorizontal: 16,
+            minHeight: 44,
+            justifyContent: "center",
+            borderRadius: 12,
+            opacity: retryingScreen ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ color: native.ink }}>
+            {retryingScreen ? "Retrying…" : "Retry preview"}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: native.surface, padding: 24 }}>
@@ -188,24 +240,22 @@ export default function Computer() {
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: native.muted }}>Open in full window</Text>
           </View>
-        ) : computer?.state === "running" && embeddedScreenUrl ? (
+        ) : computer?.state === "running" && embeddedScreenUrl && !screenError ? (
           <ScreenWebView
             url={embeddedScreenUrl}
             interactive={false}
-            onError={() =>
-              setScreenError("Could not load the desktop. This device cannot reach the screen URL.")
-            }
+            onError={() => setScreenError("Preview unavailable")}
           />
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <Text style={{ color: native.muted, textAlign: "center" }}>{placeholder}</Text>
-          </View>
+          previewFallback
         )}
-        <Pressable
-          accessibilityLabel="Open computer"
-          onPress={() => void openComputer()}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        />
+        {!previewUnavailable ? (
+          <Pressable
+            accessibilityLabel="Open computer"
+            onPress={() => void openComputer()}
+            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+        ) : null}
       </View>
       <View
         style={{
@@ -283,7 +333,7 @@ export default function Computer() {
               edges={["top", "left", "right"]}
               style={{
                 flex: 1,
-                backgroundColor: "rgba(4,4,5,0.96)",
+                backgroundColor: native.page,
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 22,
@@ -396,26 +446,14 @@ export default function Computer() {
                 </View>
               </SafeAreaView>
               <View style={{ flex: 1, backgroundColor: native.surface }}>
-                {computer?.state === "running" && embeddedScreenUrl ? (
+                {computer?.state === "running" && embeddedScreenUrl && !screenError ? (
                   <ScreenWebView
                     url={embeddedScreenUrl}
                     interactive={hasControl}
-                    onError={() =>
-                      setScreenError(
-                        "Could not load the desktop. This device cannot reach the screen URL.",
-                      )
-                    }
+                    onError={() => setScreenError("Preview unavailable")}
                   />
                 ) : (
-                  <View
-                    style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}
-                  >
-                    <Text style={{ color: native.muted, textAlign: "center" }}>
-                      {computer?.state === "suspended"
-                        ? "Computer is asleep"
-                        : computerLabel(computer?.mode, name)}
-                    </Text>
-                  </View>
+                  previewFallback
                 )}
               </View>
             </View>
@@ -494,6 +532,7 @@ function ScreenWebView({
       overScrollMode="never"
       onError={onError}
       onHttpError={onError}
+      renderError={() => <View style={{ flex: 1, backgroundColor: native.surface }} />}
     />
   );
 }
