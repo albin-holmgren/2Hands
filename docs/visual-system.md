@@ -35,7 +35,9 @@ Dark mode uses neutral charcoal surfaces with readable text and a restrained lil
 - Native rendering: `apps/mobile/components/brand-mark.tsx` and `bot-avatar.tsx`.
 - The existing Beautiful UI ports remain the source for cards, loading, activity, and approval patterns.
 
-The logo restores the original 2hands gesture: two groups of three rounded strokes, with a raised middle stroke in each. The paired rhythm suggests two hands without detailed anatomy. Each group has one restrained blue or coral gradient; the same geometry also works in a single color. The character family keeps distinct shapes, steady eyes, and soft blue/lilac/coral shading. Characters are the default on web and native; the saved classic robot preference and custom bot colors remain supported.
+The logo is a compact numeral 2 formed by two complementary open hands. Broad palms, curved thumbs, and two finger gaps per hand make the gesture readable without detailed anatomy. A four-unit central gap on the 64-unit grid keeps both hands distinct in monochrome; the blue-periwinkle and muted coral version adds warmth. Use the same geometry at every size, with clear space of at least one finger width. Do not add outlines, shadows, or extra symbols. Color, single-ink, and reversed SVGs are generated together.
+
+The character family keeps distinct shapes, steady eyes, and soft blue/lilac/coral shading. Characters are the default on web and native; the saved classic robot preference and custom bot colors remain supported.
 
 ## Generated app assets
 

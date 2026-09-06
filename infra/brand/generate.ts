@@ -14,16 +14,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const background = "#FAFAFC";
 
 function mark(monochrome?: string) {
-  const defs = brandMark.gradients
-    .map(
-      ([start, end], i) =>
-        `<linearGradient id="mark-${i}" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient>`,
-    )
-    .join("");
-  return `<defs>${defs}</defs>${brandMark.paths.map((path, i) => `<path d="${path}" fill="${monochrome ?? `url(#mark-${i})`}"/>`).join("")}`;
+  const defs = monochrome
+    ? ""
+    : `<defs>${brandMark.gradients
+        .map(
+          ([start, end], i) =>
+            `<linearGradient id="mark-${i}" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient>`,
+        )
+        .join("")}</defs>`;
+  return `${defs}${brandMark.paths.map((path, i) => `<path d="${path}" fill="${monochrome ?? `url(#mark-${i})`}"/>`).join("")}`;
 }
 
-function svg(mode: "mark" | "app" | "mac" | "adaptive" | "mono" | "notification") {
+function svg(mode: "mark" | "app" | "mac" | "adaptive" | "mono" | "notification", ink?: string) {
   const size =
     mode === "mark" || mode === "notification"
       ? 64
@@ -37,7 +39,7 @@ function svg(mode: "mark" | "app" | "mac" | "adaptive" | "mono" | "notification"
       : mode === "mac"
         ? `<rect x="3" y="3" width="74" height="74" rx="17" fill="${background}"/>`
         : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" fill="none"><title>2hands</title>${bg}<g transform="translate(${inset} ${inset})">${mark(mode === "mono" || mode === "notification" ? "#FFFFFF" : undefined)}</g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" fill="none"><title>2hands</title>${bg}<g transform="translate(${inset} ${inset})">${mark(ink ?? (mode === "mono" || mode === "notification" ? "#FFFFFF" : undefined))}</g></svg>\n`;
 }
 
 async function put(path: string, data: string | Buffer) {
@@ -74,6 +76,8 @@ async function ico() {
 for (const app of ["web", "www"]) {
   const base = `apps/${app}/public`;
   await put(`${base}/brand/twohands-mark.svg`, svg("mark"));
+  await put(`${base}/brand/twohands-mark-mono.svg`, svg("mark", "#252529"));
+  await put(`${base}/brand/twohands-mark-reversed.svg`, svg("mark", "#FFFFFF"));
   await put(`${base}/favicon.svg`, svg("mark"));
   await put(`${base}/favicon.ico`, await ico());
   for (const [name, size] of [
