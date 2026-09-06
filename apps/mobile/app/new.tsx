@@ -10,7 +10,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { type MobileBot, rpc } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 
 export default function NewBot() {
   const native = useNativeTheme();
@@ -83,10 +83,7 @@ export default function NewBot() {
           placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
           }}
         />
         <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Title</Text>
@@ -98,10 +95,7 @@ export default function NewBot() {
           placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
           }}
         />
         <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Description</Text>
@@ -114,10 +108,7 @@ export default function NewBot() {
           multiline
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
             minHeight: 120,
             textAlignVertical: "top",
           }}

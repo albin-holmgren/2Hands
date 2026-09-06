@@ -1,22 +1,47 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+function isNonproductionHost(hostname: string): boolean {
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (/^(localhost|.+\.(localhost|local|test|invalid))$/.test(host)) return true;
+  if (!host.includes(".") && !host.includes(":")) return true;
+  if (host.includes(":")) {
+    return /^(::(?:1)?$|::ffff:|f[cd]|fe[89ab])/.test(host);
+  }
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(host)) return false;
+  const [first = 0, second = 0] = host.split(".").map(Number);
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  );
+}
+
 export function mobileBuildConfig(
   config: ExpoConfig,
   environment: Record<string, string | undefined>,
 ): ExpoConfig {
   const storeBuild = environment.EAS_BUILD_PROFILE === "production";
+  const iosStoreBuild = storeBuild && environment.EAS_BUILD_PLATFORM !== "android";
+  const androidStoreBuild = storeBuild && environment.EAS_BUILD_PLATFORM !== "ios";
   const production = storeBuild || environment.TWOHANDS_PRODUCTION_UPDATE === "1";
   const owner = environment.EAS_OWNER?.trim();
   const projectId = environment.EAS_PROJECT_ID?.trim();
   const iosId = environment.EAS_IOS_BUNDLE_IDENTIFIER?.trim();
   const androidId = environment.EAS_ANDROID_PACKAGE?.trim();
-  if ((storeBuild || iosId) && (!iosId || !/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(iosId))) {
+  if ((iosStoreBuild || iosId) && (!iosId || !/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(iosId))) {
     throw new Error(
       "Set EAS_IOS_BUNDLE_IDENTIFIER to an iOS application identifier owned by the release operator.",
     );
   }
   if (
-    (storeBuild || androidId) &&
+    (androidStoreBuild || androidId) &&
     (!androidId || !/^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(androidId))
   ) {
     throw new Error(
@@ -54,10 +79,11 @@ export function mobileBuildConfig(
       parsed.password ||
       parsed.search ||
       parsed.hash ||
-      parsed.pathname !== "/"
+      parsed.pathname !== "/" ||
+      isNonproductionHost(parsed.hostname)
     ) {
       throw new Error(
-        "EXPO_PUBLIC_API_URL must be an HTTPS origin without credentials, paths, or query parameters.",
+        "EXPO_PUBLIC_API_URL must be a public HTTPS origin without credentials, paths, or query parameters.",
       );
     }
   }

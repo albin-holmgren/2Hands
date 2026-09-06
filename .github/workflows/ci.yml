@@ -282,7 +282,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: production
-      url: https://2hands.ai
+      url: https://app.2hands.ai
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
@@ -306,4 +306,4 @@ jobs:
           '
           flyctl deploy --app 2hands-computers --remote-only --build-arg "GIT_SHA=$GITHUB_SHA"
       - name: Verify deployed revision and account recovery
-        run: node infra/fly/verify-deployment.mjs --origin https://2hands.ai --revision "$GITHUB_SHA" --mode controlled
+        run: node infra/fly/verify-deployment.mjs --origin https://app.2hands.ai --revision "$GITHUB_SHA" --mode controlled

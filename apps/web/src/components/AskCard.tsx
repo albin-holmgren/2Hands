@@ -73,7 +73,7 @@ export function AskCard({
   }
 
   return (
-    <div className="max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]">
+    <div className="max-w-[74%] rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-5 py-[17px]">
       <div className="text-[15.5px] leading-[1.5] text-[var(--rk-ink)]">
         <ChatMarkdown>{block.text}</ChatMarkdown>
       </div>
@@ -135,7 +135,7 @@ export function AskCard({
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
             placeholder={t`Code`}
-            className="rounded-[11px] border border-[#303035] bg-[var(--rk-panel)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[#66666D]"
+            className="rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-panel)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[var(--rk-focus-ring)]"
           />
           <button
             type="submit"
@@ -158,7 +158,7 @@ export function AskCard({
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
             placeholder={t`Type your answer`}
-            className="rounded-[11px] border border-[#303035] bg-[var(--rk-panel)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[#66666D]"
+            className="rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-panel)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[var(--rk-focus-ring)]"
           />
           <div className="flex gap-2">
             <button

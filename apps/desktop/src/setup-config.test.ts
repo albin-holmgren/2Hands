@@ -110,7 +110,7 @@ describe("startup target", () => {
   it("opens the hosted app only when the packaged composition root supplies it", () => {
     expect(resolveStartupTarget({ hostedUrl: DEFAULT_HOSTED_WEB_URL })).toEqual({
       kind: "app",
-      url: "https://2hands.ai",
+      url: "https://app.2hands.ai",
       source: "hosted",
     });
     expect(resolveStartupTarget({})).toEqual({ kind: "setup" });
@@ -140,6 +140,49 @@ describe("startup target", () => {
       url: "https://rakazo.example.com",
       source: "saved",
     });
+  });
+
+  it("migrates the saved official apex after the app moves to its own subdomain", () => {
+    for (const serverUrl of ["https://2hands.ai", "https://2hands.ai/"]) {
+      const old = { mode: "existing", serverUrl } as const;
+      expect(parseStoredSetup(JSON.stringify(old))).toEqual({
+        ...old,
+        serverUrl: DEFAULT_HOSTED_WEB_URL,
+      });
+      expect(resolveStartupTarget({ saved: old })).toEqual({
+        kind: "app",
+        url: DEFAULT_HOSTED_WEB_URL,
+        source: "saved",
+      });
+    }
+  });
+
+  it("keeps explicit overrides and unrelated saved targets out of the hosted migration", () => {
+    for (const envUrl of [
+      "https://2hands.ai",
+      "https://2hands.ai/custom",
+      "https://selfhost.example.test/app",
+    ]) {
+      expect(resolveStartupTarget({ envUrl, saved })).toEqual({
+        kind: "app",
+        url: envUrl,
+        source: "env",
+      });
+    }
+    for (const serverUrl of [
+      "https://selfhost.example.test",
+      "https://2hands.ai:8443",
+      "https://2hands.ai.example.test",
+    ]) {
+      expect(parseStoredSetup(JSON.stringify({ mode: "existing", serverUrl }))).toEqual({
+        mode: "existing",
+        serverUrl,
+      });
+    }
+    // Saved paths retain their existing normalization, without becoming aliases.
+    expect(
+      resolveStartupTarget({ saved: { mode: "existing", serverUrl: "https://2hands.ai/custom" } }),
+    ).toMatchObject({ url: "https://2hands.ai" });
   });
 
   it("lets RAKAZO_WEB_URL point the shell anywhere without touching saved setup", () => {

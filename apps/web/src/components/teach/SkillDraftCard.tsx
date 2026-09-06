@@ -74,7 +74,7 @@ export function SkillDraftCard({
   return (
     <div
       data-testid="skill-draft-card"
-      className="w-[min(520px,92%)] rounded-[20px] border border-[#242428] bg-[#141417] px-[18px] py-4"
+      className="w-[min(520px,92%)] rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-[18px] py-4"
     >
       <div className="text-[15px] font-medium text-[var(--rk-ink)]">
         <Trans>Draft skill</Trans>

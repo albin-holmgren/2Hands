@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 
@@ -22,11 +24,17 @@ const fixture = `<!doctype html>
 </html>`;
 
 test("an active Electron window keeps header dragging selection-free and controls clickable", async () => {
+  test.skip(
+    process.env.RAKAZO_ELECTRON_HIDDEN === "1",
+    "Native focus/drag requires an explicitly visible test run.",
+  );
+  const userData = await mkdtemp(path.join(tmpdir(), "2hands-desktop-drag-"));
   const app = await electron.launch({
     args: ["."],
     cwd: path.resolve(import.meta.dirname, ".."),
     env: {
       ...process.env,
+      RAKAZO_PERFORMANCE_USER_DATA: userData,
       RAKAZO_WEB_URL: `data:text/html;charset=utf-8,${encodeURIComponent(fixture)}`,
     },
   });
@@ -66,5 +74,6 @@ test("an active Electron window keeps header dragging selection-free and control
     await expect(page.locator("#result")).toHaveText("opened");
   } finally {
     await app.close();
+    await rm(userData, { recursive: true, force: true });
   }
 });

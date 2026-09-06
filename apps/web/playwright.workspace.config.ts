@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "workspace-offline.spec.ts",
+  testMatch: ["workspace-offline.spec.ts", "auth-offline.spec.ts"],
   fullyParallel: false,
   timeout: 45_000,
   expect: { timeout: 10_000 },
@@ -19,6 +19,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       RAKAZO_IGNORE_ENV_FILES: "1",
+      WEB_PORT: "5193",
       SCREEN_PROXY_SECRET: "offline-screen-fixture-secret-with-more-than-32-characters",
       API_PROXY_TARGET: "http://127.0.0.1:1",
     },

@@ -4,20 +4,21 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "./lib/utils.js";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[13px] text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--rk-radius)] text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-[#121215] text-[#FBFBF9] hover:bg-[#26262B]",
-        cream: "bg-[#F1F1EF] text-[#17171A] hover:opacity-90",
-        outline: "border border-[#26262A] text-[#ECECEE] hover:bg-[#1A1A1D]",
-        ghost: "text-[#C9C9CE] hover:bg-[#131315]",
-        pill: "rounded-full bg-[#1B1B1F] text-[#F2F2F3] hover:bg-[#26262B] hover:scale-[1.04]",
+        default: "bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] hover:opacity-90",
+        cream: "bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] hover:opacity-90",
+        outline:
+          "border border-[var(--rk-hairline-strong)] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)]",
+        ghost: "text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)]",
+        pill: "rounded-full bg-[var(--rk-surface-2)] text-[var(--rk-ink)] hover:bg-[var(--rk-selected)]",
       },
       size: {
         default: "h-10 px-4",
         sm: "h-8 px-3 text-[13px]",
-        lg: "h-12 px-6 text-[17px]",
+        lg: "h-12 px-6 text-[15px]",
         icon: "h-9 w-9",
       },
     },

@@ -14,6 +14,7 @@ export type SessionGate = "loading" | "unreachable" | "authenticated" | "anonymo
  * out a user whose cookie is still valid, so it is reported separately.
  */
 export function sessionGate(session: SessionGateInput): SessionGate {
+  if (session.error?.status === 401) return "anonymous";
   if (session.data?.user) return "authenticated";
   if (session.isPending) return "loading";
   // 401 is the server answering: there is genuinely no session.

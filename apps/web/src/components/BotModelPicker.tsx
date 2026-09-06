@@ -275,7 +275,9 @@ export function BotModelPicker({
                 <span className="min-w-0 truncate">
                   {defaultLabel ? t`Space default · ${defaultLabel}` : t`Space default`}
                 </span>
-                {!selectedKey ? <Check size={14} className="shrink-0 text-[#3EC5A8]" /> : null}
+                {!selectedKey ? (
+                  <Check size={14} className="shrink-0 text-[var(--rk-accent)]" />
+                ) : null}
               </button>
               {shown.map((option) => {
                 const current = option.key === selectedKey;
@@ -308,7 +310,9 @@ export function BotModelPicker({
                         {rates ? ` · ${rates}` : ""}
                       </span>
                     </span>
-                    {current ? <Check size={14} className="shrink-0 text-[#3EC5A8]" /> : null}
+                    {current ? (
+                      <Check size={14} className="shrink-0 text-[var(--rk-accent)]" />
+                    ) : null}
                   </button>
                 );
               })}

@@ -17,6 +17,7 @@ export interface AppEnv {
   authSecret: string;
   authUrl: string;
   webOrigin: string;
+  trustedWebOrigins?: string[];
   apiUrl: string;
   apiHost: string;
   signupsEnabled: string | undefined;
@@ -89,6 +90,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     authSecret,
     authUrl: source.BETTER_AUTH_URL ?? source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
     webOrigin: source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
+    trustedWebOrigins: parseTrustedWebOrigins(source.TRUSTED_WEB_ORIGINS),
     apiUrl: source.API_URL ?? "http://127.0.0.1:3100",
     apiHost: source.API_HOST ?? "127.0.0.1",
     signupsEnabled: source.SIGNUPS_ENABLED,
@@ -160,4 +162,35 @@ function required(source: NodeJS.ProcessEnv, key: string): string {
 function optional(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function parseTrustedWebOrigins(value: string | undefined): string[] {
+  return [
+    ...new Set(
+      (value ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+        .map((origin) => {
+          let parsed: URL;
+          try {
+            parsed = new URL(origin);
+          } catch {
+            throw new Error("TRUSTED_WEB_ORIGINS must contain comma-separated HTTP(S) origins");
+          }
+          if (
+            !["https:", "http:"].includes(parsed.protocol) ||
+            parsed.origin !== origin ||
+            parsed.hostname.includes("*") ||
+            parsed.username ||
+            parsed.password
+          ) {
+            throw new Error(
+              "TRUSTED_WEB_ORIGINS must contain only complete HTTP(S) origins without paths or credentials",
+            );
+          }
+          return parsed.origin;
+        }),
+    ),
+  ];
 }

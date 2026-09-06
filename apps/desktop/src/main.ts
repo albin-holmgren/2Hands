@@ -17,6 +17,7 @@ import {
   immutableRendererAsset,
   isRendererAssetMiss,
 } from "./renderer-assets.js";
+import { defaultSessionHasOriginData } from "./session-storage.js";
 import {
   DEFAULT_HOSTED_WEB_URL,
   DEFAULT_LOCAL_WEB_URL,
@@ -49,6 +50,7 @@ let openAppPromise: Promise<boolean> | null = null;
 /** Prior app window kept until setup is persisted (or the switch is abandoned). */
 let pendingPreviousWindow: BrowserWindow | null = null;
 let quitting = false;
+let startupInProgress = true;
 let warmWindowTimer: NodeJS.Timeout | undefined;
 const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS);
 
@@ -74,6 +76,9 @@ if (PERFORMANCE_USER_DATA) {
   app.setPath("userData", PERFORMANCE_USER_DATA);
   app.setPath("sessionData", path.join(PERFORMANCE_USER_DATA, "session"));
 }
+// Capture before Chromium initializes cookies/storage for this launch; those
+// newly-created files do not indicate a legacy profile.
+const hadDefaultSessionProfile = defaultSessionProfileExists();
 app.once("will-finish-launching", () => markOnce("rk:main:will-finish-launching"));
 app.once("ready", () => markOnce("rk:main:ready"));
 
@@ -112,6 +117,21 @@ function legacyDefaultSessionFlag(partition: string) {
   );
 }
 
+function isolatedSessionFlag(partition: string) {
+  return path.join(
+    app.getPath("userData"),
+    `isolated-${partition.replace(/[^a-zA-Z0-9_-]/g, "_")}.flag`,
+  );
+}
+
+async function rememberSessionChoice(flag: string) {
+  try {
+    await writeFile(flag, new Date().toISOString(), "utf8");
+  } catch {
+    // A read-only profile must not change the session chosen for this launch.
+  }
+}
+
 /**
  * Prefer the default session when that origin already has cookies or site
  * storage there, so upgrades keep localStorage/IndexedDB. Fresh origins get
@@ -125,31 +145,31 @@ async function resolveSessionForTarget(targetUrl: string) {
   if (existsSync(legacyDefaultSessionFlag(partition))) {
     return { partition: null, value: session.defaultSession };
   }
+  if (existsSync(isolatedSessionFlag(partition))) {
+    return { partition, value: session.fromPartition(partition) };
+  }
   const origin = safeOrigin(targetUrl);
   if (origin !== null) {
     try {
       const defaultCookies = await session.defaultSession.cookies.get({ url: origin });
       if (defaultCookies.length > 0) {
-        await writeFile(legacyDefaultSessionFlag(partition), new Date().toISOString(), "utf8");
+        await rememberSessionChoice(legacyDefaultSessionFlag(partition));
         return { partition: null, value: session.defaultSession };
       }
     } catch {
       // Continue with a storage probe when the profile looks pre-partition.
     }
-    if (defaultSessionProfileExists() && (await defaultSessionHasOriginData(origin))) {
-      try {
-        await writeFile(legacyDefaultSessionFlag(partition), new Date().toISOString(), "utf8");
-      } catch {
-        // Flag is best-effort; still stay on the default session this launch.
-      }
+    if (hadDefaultSessionProfile && (await defaultSessionHasOriginData(origin))) {
+      await rememberSessionChoice(legacyDefaultSessionFlag(partition));
       return { partition: null, value: session.defaultSession };
     }
   }
+  await rememberSessionChoice(isolatedSessionFlag(partition));
   return { partition, value: session.fromPartition(partition) };
 }
 
 function defaultSessionProfileExists() {
-  const root = app.getPath("userData");
+  const root = app.getPath("sessionData");
   return (
     existsSync(path.join(root, "Local Storage")) ||
     existsSync(path.join(root, "IndexedDB")) ||
@@ -157,43 +177,6 @@ function defaultSessionProfileExists() {
     existsSync(path.join(root, "Network", "Cookies")) ||
     existsSync(path.join(root, "Cache Storage"))
   );
-}
-
-/** Page storage in the default session means a pre-partition install for this origin. */
-async function defaultSessionHasOriginData(origin: string): Promise<boolean> {
-  const probe = new BrowserWindow({
-    show: false,
-    width: 1,
-    height: 1,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-    },
-  });
-  try {
-    await probe.loadURL(origin);
-    return (await probe.webContents.executeJavaScript(`(async () => {
-      if (localStorage.length > 0 || sessionStorage.length > 0) return true;
-      if (typeof indexedDB !== "undefined" && indexedDB.databases) {
-        try {
-          const databases = await indexedDB.databases();
-          if (databases.length > 0) return true;
-        } catch {}
-      }
-      if (typeof caches !== "undefined") {
-        try {
-          const keys = await caches.keys();
-          if (keys.length > 0) return true;
-        } catch {}
-      }
-      return false;
-    })()`)) as boolean;
-  } catch {
-    return false;
-  } finally {
-    if (!probe.isDestroyed()) probe.destroy();
-  }
 }
 
 function createWindow(url: string, partition: string | null) {
@@ -337,9 +320,14 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
 
   return new Promise<void>((resolve, reject) => {
     let settled = false;
+    const loadTimer = setTimeout(
+      () => settle(new Error("Page failed to load. Timed out waiting for the server.")),
+      PROBE_TIMEOUT_MS,
+    );
     const settle = (error?: Error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(loadTimer);
       contents.removeListener("did-fail-load", onFail);
       // Keep render-process-gone until document readiness finishes so a crash
       // during mount still fails the switch.
@@ -423,6 +411,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
           performance.getEntriesByName("rk:renderer:shell-ready").length > 0,
       );
       const authOrWelcomeSurface = Boolean(
+        document.querySelector('[data-rakazo-route-ready="true"]') ||
         document.querySelector(
           'form input[type="email"], form input[name="email"], form input#email',
         ) ||
@@ -721,10 +710,10 @@ function openFailureDetail(error: unknown): string {
 }
 
 async function openAppOnce(targetUrl: string) {
-  const target = await resolveSessionForTarget(targetUrl);
   const previous = mainWindow;
   let win: BrowserWindow | null = null;
   try {
+    const target = await resolveSessionForTarget(targetUrl);
     const documentError = await probeDocument(targetUrl);
     if (documentError !== null) {
       throw new Error(documentError);
@@ -1016,7 +1005,7 @@ app.whenReady().then(async () => {
       presentWindow(mainWindow);
       return;
     }
-    if (openAppPromise !== null) return;
+    if (startupInProgress || openAppPromise !== null) return;
     if (currentTargetUrl === null) showSetupWindow(setupError);
     else
       void openApp(currentTargetUrl).then((opened) => {
@@ -1042,10 +1031,19 @@ app.whenReady().then(async () => {
       destroySetupWindow();
     }
   }
+  startupInProgress = false;
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // Failed startup/switch windows are replaced by setup in the same operation.
+  // Their disposal must not quit Windows/Linux before recovery can be shown.
+  if (
+    process.platform !== "darwin" &&
+    !startupInProgress &&
+    openAppPromise === null &&
+    !setupSaveInProgress
+  )
+    app.quit();
 });
 
 app.on("before-quit", () => {

@@ -4,14 +4,14 @@
 
 | Layer | Where | Notes |
 |---|---|---|
-| Marketing (`apps/www`) | Parked / not on the apex | Do not attach `2hands.ai` to Vercel. The signed-in product owns the apex. |
-| Signed-in app + API + worker | **Fly.io** app `2hands-computers` (`fly.toml`) | One Machine. API serves the SPA on the same origin as `/rpc` and `/api`. Customer URL is `https://2hands.ai`. |
+| Marketing (`apps/www`) | **Vercel** | `https://2hands.ai`; `www.2hands.ai` redirects to the website. |
+| Signed-in app + API + worker | **Fly.io** app `2hands-computers` (`fly.toml`) | One Machine. API serves the SPA on the same origin as `/rpc` and `/api`. Customer URL is `https://app.2hands.ai`. |
 | Bot computers | **E2B Desktop** | `SANDBOX_PROVIDER=e2b` plus `E2B_API_KEY`. Without the key, health reports `sandbox: none`. |
 | Database | Operator-managed PostgreSQL | Postgres only. Keep Better Auth + Prisma. |
 | Models | Vercel AI Gateway `https://ai-gateway.vercel.sh/v1` | `AI_GATEWAY_API_KEY`, `PI_DEFAULT_PROVIDER=vercel-gateway`. |
 | Payments | Stripe | Plus / Pro / Ultra prices. Free is the DB default. Needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. |
 
-Public product origin: `https://2hands.ai` (same origin for the SPA, `/rpc`, and `/api`). `www.2hands.ai` CNAME to the same Fly app; the next image 308s www to the apex. Do not send customers to `app.2hands.ai` or `2hands-computers.fly.dev`.
+Public product origin: `https://app.2hands.ai` (same origin for the SPA, `/rpc`, and `/api`). The website and its legal pages live at `https://2hands.ai`. Keep the long-running API and worker on Fly; only the static marketing application runs on Vercel.
 
 ## Database connections
 
@@ -47,12 +47,12 @@ fly secrets set \
   STRIPE_PRICE_ULTRA=... \
   SMTP_URL=... \
   EMAIL_FROM=... \
-  WEB_ORIGIN=https://2hands.ai \
-  BETTER_AUTH_URL=https://2hands.ai \
-  API_URL=https://2hands.ai
+  WEB_ORIGIN=https://app.2hands.ai \
+  BETTER_AUTH_URL=https://app.2hands.ai \
+  API_URL=https://app.2hands.ai
 ```
 
-Point Stripe webhooks at `https://2hands.ai/api/stripe/webhook`.
+Point new Stripe webhook endpoints at `https://app.2hands.ai/api/stripe/webhook`. Preserve delivery to the previous apex endpoint during the hostname transition; verify its external rewrite before moving DNS.
 
 The `ci` workflow deploys to this Fly app only after all checks pass on the exact
 current `main` revision. Configure the repository's `FLY_API_TOKEN` secret and
@@ -64,7 +64,7 @@ have a separate operator-owned Expo configuration and opt-in; see
 After a controlled deployment, verify its identity and public HTTP composition:
 
 ```sh
-pnpm release:check --origin https://2hands.ai --revision "$(git rev-parse HEAD)" --mode controlled
+pnpm release:check --origin https://app.2hands.ai --revision "$(git rev-parse HEAD)" --mode controlled
 ```
 
 This is a read-only HTTP smoke check. It rejects an old image, missing computer
@@ -74,14 +74,14 @@ computer access/recovery, payment delivery, or native interaction. Complete thos
 separate gates before enabling public registration. Then run the same command
 with `--mode public` against the exact approved revision.
 
-DNS is **Vercel DNS** for the registered domain. Apex + `www` must resolve to Fly, not the Vercel edge:
+DNS is **Vercel DNS** for the registered domain. Bring the app subdomain online and verify its Fly certificate before moving the website's apex records:
 
-- Apex A `66.241.125.54` and AAAA `2a09:8280:1::155:85a8:0`
-- `www` CNAME `26gymrj.2hands-computers.fly.dev`
-- Ownership TXT `_fly-ownership` = `app-26gymrj`
-- ACME CNAME `_acme-challenge` → `2hands.ai.26gymrj.flydns.net.`
+- `app` CNAME to the value returned by `fly certs show app.2hands.ai`.
+- Add the corresponding `_fly-ownership.app` TXT and `_acme-challenge.app` CNAME when required by Fly.
+- Attach `2hands.ai` and `www.2hands.ai` to the existing Vercel marketing project and use its current recommended DNS records. Redirect `www` to the apex.
+- Preserve unrelated email, verification, and service records. Verify transactional-email DKIM/SPF independently.
 
-Then set `WEB_ORIGIN` / `BETTER_AUTH_URL` / `API_URL` to `https://2hands.ai`.
+Set `WEB_ORIGIN` / `BETTER_AUTH_URL` / `API_URL` to `https://app.2hands.ai`. Existing Fly secrets override `fly.toml`; update these three values together without replacing authentication or encryption secrets. Users may need to sign in again on the new origin; do not broaden session cookies across the marketing domain.
 
 The SPA talks to `/rpc` on the app origin.
 
@@ -93,7 +93,7 @@ Keep the existing Vercel project linked to `albin-holmgren/2Hands`. Set:
 - Root Directory: `apps/www`
 - Production branch: `main`
 
-`apps/www/vercel.json` is committed. Do not deploy `apps/api` or `apps/web` to Vercel. Do not attach `2hands.ai` or `www.2hands.ai` to a Vercel project.
+`apps/www/vercel.json` is committed. Do not deploy `apps/api` or `apps/web` to Vercel. Attach `2hands.ai` and `www.2hands.ai` to this marketing project once the app subdomain and compatibility routes have passed their live checks.
 
 ## Stripe products
 
@@ -126,7 +126,7 @@ file: changes on disk do not protect an older running image. If the older image
 lacks the lock, disable registration through its existing deployment settings
 before preparing the controlled update. Preserve existing users' access.
 
-The parked marketing site currently shows preview notices for support and privacy.
+The marketing site shows preview notices for support and privacy until those policies are approved.
 Those are not a hosted privacy policy. Replace them with the operator's approved
 policy and working private support contact before public signup, and publish them
 on routes reachable from the signed-in product. Keep upstream Rakazo attribution

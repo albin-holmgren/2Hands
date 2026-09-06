@@ -298,7 +298,7 @@ export default function Home() {
             justifyContent: "center",
           }}
         >
-          <Text numberOfLines={1} style={{ color: native.label, fontSize: 18, fontWeight: "600" }}>
+          <Text numberOfLines={1} style={{ color: native.label, fontSize: 16, fontWeight: "600" }}>
             {spaces.find((space) => space.id === me?.spaceId)?.name ?? "Personal"} ⌄
           </Text>
         </Pressable>
@@ -313,7 +313,7 @@ export default function Home() {
               ios={activityMode ? "bell.fill" : "bell"}
               android={activityMode ? "notifications" : "notifications-outline"}
               size={17}
-              color={activityMode ? native.ink : native.muted}
+              color={activityMode ? native.selectedInk : native.muted}
             />
           </CircleButton>
           <CircleButton
@@ -373,7 +373,7 @@ export default function Home() {
         }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
-        indicatorStyle="white"
+        indicatorStyle={native.theme === "dark" ? "white" : "black"}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
@@ -787,12 +787,12 @@ const makeStyles = (native: NativeTheme) =>
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
+      gap: 4,
     },
     circleButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 14,
       backgroundColor: native.surface2,
       alignItems: "center",
       justifyContent: "center",
@@ -802,7 +802,7 @@ const makeStyles = (native: NativeTheme) =>
       backgroundColor: native.fillPressed,
     },
     circleAccent: {
-      backgroundColor: native.accent,
+      backgroundColor: native.selected,
     },
     profileInitials: {
       color: native.label,
@@ -812,12 +812,12 @@ const makeStyles = (native: NativeTheme) =>
     searchField: {
       marginHorizontal: 16,
       marginBottom: 8,
-      height: 36,
-      borderRadius: 10,
+      height: 44,
+      borderRadius: 12,
       backgroundColor: native.fill,
       color: native.label,
       paddingHorizontal: 12,
-      fontSize: 17,
+      fontSize: 16,
       writingDirection: "auto",
     },
     error: {
@@ -843,7 +843,7 @@ const makeStyles = (native: NativeTheme) =>
       gap: 12,
     },
     rowPressed: {
-      opacity: 0.55,
+      backgroundColor: native.selected,
     },
     rowBody: {
       flex: 1,
@@ -870,7 +870,7 @@ const makeStyles = (native: NativeTheme) =>
     name: {
       flexShrink: 1,
       color: native.label,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "600",
       writingDirection: "auto",
     },
@@ -883,17 +883,17 @@ const makeStyles = (native: NativeTheme) =>
     },
     tagLabel: {
       color: native.secondaryLabel,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: "500",
       writingDirection: "auto",
     },
     time: {
       color: native.secondaryLabel,
-      fontSize: 15,
+      fontSize: 12,
     },
     preview: {
       color: native.secondaryLabel,
-      fontSize: 15,
+      fontSize: 14,
       lineHeight: 20,
       writingDirection: "auto",
     },
@@ -905,7 +905,7 @@ const makeStyles = (native: NativeTheme) =>
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#8B5CF6",
+      backgroundColor: native.accent,
     },
     sectionHeading: {
       color: native.secondaryLabel,
@@ -928,14 +928,14 @@ const makeStyles = (native: NativeTheme) =>
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#8B5CF6",
+      backgroundColor: native.accent,
       marginTop: 6,
     },
     groupAvatar: {
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: "#E6E4DA",
+      backgroundColor: native.surface2,
       alignItems: "center",
       justifyContent: "center",
     },

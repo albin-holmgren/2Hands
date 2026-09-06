@@ -114,10 +114,10 @@ export function VoiceSettingsOverlay({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(4,4,5,.62)] p-4 sm:p-10">
+    <div className="absolute inset-0 z-30 flex items-center justify-center rk-overlay-backdrop p-4 sm:p-10">
       <div
         data-testid="voice-settings"
-        className="flex h-[min(680px,100%)] w-[920px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[#232326] bg-[var(--rk-surface)] shadow-[0_40px_90px_rgba(0,0,0,.55)]"
+        className="flex h-[min(680px,100%)] w-[920px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[var(--rk-shadow-popover)]"
       >
         <div className="flex items-start justify-between px-6 pt-6 sm:px-8 sm:pt-7">
           <div>
@@ -183,7 +183,9 @@ export function VoiceSettingsOverlay({ onClose }: { onClose: () => void }) {
                       void refresh(entry.id);
                     }}
                     className={`flex w-full items-center gap-3 border-b border-[var(--rk-hairline-strong)] px-3.5 py-3 text-start last:border-0 ${
-                      entry.id === provider ? "bg-[var(--rk-surface-2)]" : "hover:bg-[#161618]"
+                      entry.id === provider
+                        ? "bg-[var(--rk-surface-2)]"
+                        : "hover:bg-[var(--rk-surface-2)]"
                     }`}
                   >
                     <span className="min-w-0 flex-1">

@@ -1,13 +1,21 @@
 {
-  "name": "Rakazo",
-  "short_name": "Rakazo",
-  "description": "Your team of always-on agents.",
+  "name": "2hands",
+  "short_name": "2hands",
+  "description": "Your AI workspace. Built on Rakazo.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050506",
-  "theme_color": "#050506",
+  "background_color": "#FAFAFC",
+  "theme_color": "#FAFAFC",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }

@@ -252,12 +252,12 @@ export default function Account() {
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: 12,
-                  backgroundColor: appearance === value ? native.cream : native.fill,
+                  backgroundColor: appearance === value ? native.selected : native.fill,
                 }}
               >
                 <Text
                   style={{
-                    color: appearance === value ? native.creamInk : native.ink,
+                    color: appearance === value ? native.selectedInk : native.ink,
                     textTransform: "capitalize",
                   }}
                 >
@@ -310,12 +310,12 @@ export default function Account() {
         <View accessibilityLabel="Avatar style" style={styles.avatarSection}>
           <Text style={styles.settingsTitle}>Avatars</Text>
           <View style={styles.avatarOptions}>
-            {(["robot", "organic"] as const).map((style) => {
+            {(["organic", "robot"] as const).map((style) => {
               const selected = avatarStyle === style;
               return (
                 <Pressable
                   key={style}
-                  accessibilityLabel={`${style === "robot" ? "Robot" : "Organic"} avatars`}
+                  accessibilityLabel={`${style === "robot" ? "Classic robot" : "Character"} avatars`}
                   accessibilityRole="button"
                   accessibilityState={{ selected, disabled: avatarPending }}
                   disabled={avatarPending}
@@ -327,12 +327,14 @@ export default function Account() {
                   ]}
                 >
                   <BotAvatar
-                    color={style === "robot" ? "#8B5CF6" : "#D62F8B"}
+                    color={style === "robot" ? "#8876DC" : "#4B73FF"}
                     identity="avatar-preview"
                     size={42}
                     variant={style}
                   />
-                  <Text style={styles.avatarLabel}>{style === "robot" ? "Robot" : "Organic"}</Text>
+                  <Text style={styles.avatarLabel}>
+                    {style === "robot" ? "Classic robots" : "Characters"}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -592,11 +594,13 @@ const makeStyles = (native: NativeTheme) =>
     content: {
       flexGrow: 1,
       padding: 20,
-      gap: 20,
+      gap: 16,
     },
     profile: {
       borderRadius: 16,
-      backgroundColor: native.fill,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       padding: 18,
       gap: 4,
     },
@@ -618,12 +622,14 @@ const makeStyles = (native: NativeTheme) =>
     },
     buttonLabel: {
       color: native.label,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "600",
     },
     archivedSection: {
       borderRadius: 16,
-      backgroundColor: native.fill,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       padding: 18,
       gap: 14,
     },
@@ -654,7 +660,9 @@ const makeStyles = (native: NativeTheme) =>
     settingsButton: {
       minHeight: 62,
       borderRadius: 14,
-      backgroundColor: native.fill,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       paddingHorizontal: 16,
       paddingVertical: 12,
       flexDirection: "row",
@@ -663,7 +671,9 @@ const makeStyles = (native: NativeTheme) =>
     },
     avatarSection: {
       borderRadius: 16,
-      backgroundColor: native.fill,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       padding: 18,
       gap: 14,
     },
@@ -682,8 +692,8 @@ const makeStyles = (native: NativeTheme) =>
       gap: 8,
     },
     avatarOptionSelected: {
-      borderColor: native.label,
-      backgroundColor: native.fillPressed,
+      borderColor: native.focusRing,
+      backgroundColor: native.selected,
     },
     avatarLabel: {
       color: native.label,
@@ -692,7 +702,7 @@ const makeStyles = (native: NativeTheme) =>
     },
     settingsTitle: {
       color: native.label,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "600",
     },
     settingsExplanation: {
@@ -701,9 +711,12 @@ const makeStyles = (native: NativeTheme) =>
       marginTop: 3,
     },
     accountPassword: {
-      minHeight: 46,
+      minHeight: 48,
+      fontSize: 16,
       borderRadius: 12,
-      backgroundColor: native.fillPressed,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.page,
       color: native.label,
       paddingHorizontal: 14,
       marginTop: 8,
@@ -740,7 +753,7 @@ const makeStyles = (native: NativeTheme) =>
     },
     dangerTitle: {
       color: native.danger,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "600",
     },
     explanation: {
@@ -768,11 +781,11 @@ const makeStyles = (native: NativeTheme) =>
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "#C9363E",
+      backgroundColor: native.dangerStrong,
       marginTop: 14,
     },
     deleteLabel: {
-      color: native.ink,
+      color: native.creamInk,
       fontSize: 16,
       fontWeight: "700",
     },

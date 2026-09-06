@@ -66,7 +66,12 @@ import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
 import { createMessagingInboundHandler } from "./messaging-inbound.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
-import { canonicalHostRedirect, publicRequestUrl, trustedBrowserOrigins } from "./public-origin.js";
+import {
+  canonicalHostRedirect,
+  publicRequestUrl,
+  trustedAuthOrigins,
+  trustedBrowserOrigins,
+} from "./public-origin.js";
 import { createRouter } from "./router.js";
 import { mountStripeWebhook } from "./stripe-webhook.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
@@ -232,19 +237,7 @@ export async function createApp(
     signupAllowlist: env.signupAllowlist,
     email,
     onEmailError: (error) => console.error("transactional email delivery failed", error),
-    extraOrigins: [
-      "rakazo://",
-      "2hands://",
-      "exp://",
-      "exp://*",
-      "http://localhost:8081",
-      "http://127.0.0.1:8081",
-      "http://localhost:19006",
-      "http://127.0.0.1:19006",
-      ...trustedBrowserOrigins(env).filter(
-        (origin) => origin !== env.webOrigin && origin !== env.authUrl,
-      ),
-    ],
+    extraOrigins: trustedAuthOrigins(env),
     beforeDeleteUser: async (userId) => {
       const bots = await prisma.bot.findMany({
         where: { userId },
@@ -501,12 +494,12 @@ function isTrustedOrigin(origin: string, env: AppEnv) {
   if (
     origin.startsWith("rakazo://") ||
     origin.startsWith("2hands://") ||
-    origin.startsWith("exp://")
+    (["development", "test"].includes(env.nodeEnv) && origin.startsWith("exp://"))
   )
     return true;
   try {
     const host = new URL(origin).hostname;
-    return isLoopbackHost(host);
+    return ["development", "test"].includes(env.nodeEnv) && isLoopbackHost(host);
   } catch {
     return false;
   }

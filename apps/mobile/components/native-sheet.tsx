@@ -1,3 +1,4 @@
+import { fontSizes, lineHeights } from "@rakazo/ui-tokens";
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +25,9 @@ export function NativeSheet({
             style={{
               paddingHorizontal: 20,
               paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: native.hairline,
+              marginBottom: 16,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
@@ -31,7 +35,13 @@ export function NativeSheet({
           >
             <Text
               accessibilityRole="header"
-              style={{ color: native.ink, fontSize: 22, fontWeight: "600" }}
+              style={{
+                color: native.ink,
+                fontSize: fontSizes.title,
+                lineHeight: lineHeights.title,
+                fontWeight: "600",
+                letterSpacing: -0.3,
+              }}
             >
               {title}
             </Text>
@@ -46,7 +56,7 @@ export function NativeSheet({
                 justifyContent: "center",
               }}
             >
-              <Text style={{ color: native.ink, fontSize: 16 }}>Done</Text>
+              <Text style={{ color: native.accent, fontSize: 14, fontWeight: "600" }}>Done</Text>
             </Pressable>
           </View>
           {children}

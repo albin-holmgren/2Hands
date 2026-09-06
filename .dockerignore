@@ -3,6 +3,8 @@
 .vercel
 .turbo
 .cache
+.tmp
+.deepsec
 .DS_Store
 .env
 .env.*
@@ -14,6 +16,8 @@ node_modules
 **/out
 **/.expo
 **/.astro
+apps/mobile/ios
+apps/mobile/android
 coverage
 data
 artifacts
@@ -21,6 +25,8 @@ backups
 design
 PRODUCT_PLAN.md
 playwright-report
+**/playwright-report*
+**/test-results*
 test-results
 verify-report
 *.log

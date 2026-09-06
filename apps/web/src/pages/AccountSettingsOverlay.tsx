@@ -143,7 +143,7 @@ export function AccountSettingsOverlay({
     "rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-panel)] px-4 py-4";
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(4,4,5,.62)] p-4 sm:p-10">
+    <div className="absolute inset-0 z-30 flex items-center justify-center rk-overlay-backdrop p-4 sm:p-10">
       <div
         ref={panelRef}
         data-testid="user-settings"
@@ -151,7 +151,7 @@ export function AccountSettingsOverlay({
         aria-modal="true"
         aria-labelledby="account-settings-title"
         tabIndex={-1}
-        className="flex max-h-[min(720px,100%)] w-[min(860px,100%)] overflow-hidden rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[0_40px_90px_rgba(0,0,0,.45)]"
+        className="flex max-h-[min(720px,100%)] w-[min(860px,100%)] overflow-hidden rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[var(--rk-shadow-popover)]"
       >
         <nav
           aria-label={t`Settings`}
@@ -169,7 +169,7 @@ export function AccountSettingsOverlay({
                 onClick={() => setSection(item.id)}
                 className={`flex min-h-11 items-center gap-2.5 rounded-[12px] px-3 text-start text-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rk-accent)] ${
                   current
-                    ? "bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
+                    ? "bg-[var(--rk-selected)] text-[var(--rk-selected-ink)]"
                     : "text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
                 }`}
               >
@@ -201,7 +201,7 @@ export function AccountSettingsOverlay({
                 onClick={() => setSection(item.id)}
                 className={`min-h-9 rounded-full px-3 text-[13px] ${
                   section === item.id
-                    ? "bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
+                    ? "bg-[var(--rk-selected)] text-[var(--rk-selected-ink)]"
                     : "text-[var(--rk-muted)]"
                 }`}
               >
@@ -282,7 +282,11 @@ export function AccountSettingsOverlay({
                           variant={style}
                         />
                         <span>
-                          {style === "robot" ? <Trans>Robot</Trans> : <Trans>Organic</Trans>}
+                          {style === "robot" ? (
+                            <Trans>Classic robots</Trans>
+                          ) : (
+                            <Trans>Characters</Trans>
+                          )}
                         </span>
                       </button>
                     );
@@ -603,7 +607,7 @@ function UiLocalePicker({
           id={listboxId}
           role="listbox"
           aria-label={t`Language`}
-          className="rk-scroll absolute left-0 right-0 top-full z-20 mt-2 overflow-y-auto rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-1 shadow-[0_20px_45px_rgba(0,0,0,.35)]"
+          className="rk-scroll absolute left-0 right-0 top-full z-20 mt-2 overflow-y-auto rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-1 shadow-[var(--rk-shadow-popover)]"
         >
           {UI_LOCALES.map((code, index) => (
             <button

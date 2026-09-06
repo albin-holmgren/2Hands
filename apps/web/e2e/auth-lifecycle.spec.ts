@@ -93,7 +93,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   await expect(page.getByTestId("transcript").getByText(message, { exact: true })).toBeVisible();
 });
 
-test("changes and recovers an email password", async ({ page }, testInfo) => {
+test("changes and recovers an email password", async ({ page, browser }, testInfo) => {
   const stamp = Date.now();
   const email = `password-recovery-${stamp}@rakazo.test`;
   const originalPassword = "password12";
@@ -116,6 +116,13 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await expect(settings.getByText("Password updated")).toBeVisible();
   await captureScreenshot(page, testInfo, "41-password-changed");
   await settings.getByRole("button", { name: "Close user settings" }).click();
+  // A distinct browser session remains active until the reset revokes it.
+  const otherSession = await browser.newContext();
+  const authOrigin = new URL(page.url()).origin;
+  const secondSignIn = await otherSession.request.post(`${authOrigin}/api/auth/sign-in/email`, {
+    data: { email, password: changedPassword },
+  });
+  expect(secondSignIn.ok()).toBe(true);
 
   await page.getByRole("button", { name: new RegExp(userName, "i") }).click();
   await page.getByRole("menuitem", { name: "Log out" }).click();
@@ -149,7 +156,16 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await page.getByLabel("Confirm password").fill(resetPassword);
   await page.getByRole("button", { name: "Reset password" }).click();
   await expect(page.getByText("Password updated")).toBeVisible();
-  await page.getByRole("link", { name: "Sign in" }).click();
+  const revoked = await otherSession.request.get(`${authOrigin}/api/auth/get-session`);
+  expect(await revoked.json()).toBeNull();
+  const oldPassword = await otherSession.request.post(`${authOrigin}/api/auth/sign-in/email`, {
+    data: { email, password: changedPassword },
+  });
+  expect(oldPassword.status()).toBe(401);
+  await otherSession.close();
+  await page.goto(resetUrl!);
+  await expect(page.getByRole("alert")).toContainText("invalid or expired");
+  await page.getByRole("link", { name: "Back to sign in" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(resetPassword);
   await page.getByRole("button", { name: "Continue with email" }).click();

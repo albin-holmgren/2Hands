@@ -66,6 +66,7 @@ import {
 import {
   AvatarStyleProvider,
   BotAvatar,
+  BrandMark,
   Button,
   GroupAvatar,
   type GroupAvatarMember,
@@ -2504,21 +2505,25 @@ function WorkspaceShell({
           type="button"
           aria-label={t`Close navigation`}
           onClick={() => setMobileSidebarOpen(false)}
-          className="absolute inset-y-0 end-0 start-[min(calc(100%-48px),316px)] z-30 bg-black/60 md:hidden"
+          className="absolute inset-y-0 end-0 start-[min(calc(100%-48px),272px)] z-30 bg-black/60 md:hidden"
         />
       ) : null}
       <aside
-        className={`absolute inset-y-0 start-0 z-40 flex w-[calc(100%-48px)] max-w-[316px] shrink-0 flex-col border-e border-[var(--rk-hairline)] bg-[var(--rk-sidebar)] transition-transform md:static md:z-auto md:w-[316px] md:translate-x-0 ${
+        className={`rk-shell-sidebar absolute inset-y-0 start-0 z-40 flex w-[calc(100%-48px)] max-w-[272px] shrink-0 flex-col border-e border-[var(--rk-hairline)] bg-[var(--rk-sidebar)] transition-transform md:static md:z-auto md:w-[272px] md:translate-x-0 ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
         }`}
       >
         <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
           <WindowChrome />
+          <div className="app-no-drag flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[var(--rk-ink)]">
+            <BrandMark size={26} />
+            <span>2hands</span>
+          </div>
           <div className="relative flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setCreateMenuOpen((open) => !open)}
-              className="app-no-drag text-[21px] text-[var(--rk-muted)] hover:text-[var(--rk-body)]"
+              className="app-no-drag grid size-8 place-items-center rounded-lg text-[21px] text-[var(--rk-muted)] hover:text-[var(--rk-body)]"
               title={t`Create`}
             >
               +
@@ -2597,7 +2602,7 @@ function WorkspaceShell({
                       <div className="pt-2">
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--rk-muted-2)] hover:bg-[var(--rk-surface-2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#8B5CF6]"
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--rk-muted-2)] hover:bg-[var(--rk-surface-2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--rk-focus-ring)]"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2698,7 +2703,7 @@ function WorkspaceShell({
                               position: { x: event.clientX, y: event.clientY },
                             });
                           }}
-                          className={`flex w-full gap-3 rounded-xl px-2.5 py-[11px] text-start ${
+                          className={`rk-roster-row flex w-full gap-2.5 rounded-xl px-2.5 py-2.5 text-start ${
                             item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""
                           }`}
                           style={{
@@ -2707,7 +2712,7 @@ function WorkspaceShell({
                             background:
                               (item.kind === "bot" && !inGroup && active?.id === item.chat.id) ||
                               (item.kind === "group" && inGroup && activeGroup?.id === item.chat.id)
-                                ? "var(--rk-surface-2)"
+                                ? "var(--rk-selected)"
                                 : "transparent",
                           }}
                         >
@@ -2715,7 +2720,7 @@ function WorkspaceShell({
                             <BotAvatar
                               color={item.chat.color}
                               identity={item.chat.id}
-                              size={38}
+                              size={34}
                               status={item.chat.status}
                             />
                           ) : (
@@ -2725,7 +2730,7 @@ function WorkspaceShell({
                                   ? (activeSnapshot.members ?? item.chat.members)
                                   : item.chat.members
                               }
-                              size={38}
+                              size={34}
                             />
                           )}
                           <div className="min-w-0 flex-1">
@@ -2733,7 +2738,7 @@ function WorkspaceShell({
                               <span
                                 dir="auto"
                                 data-roster-bot-name={item.kind === "bot" ? "" : undefined}
-                                className={`truncate text-[15px] text-[var(--rk-ink)] ${
+                                className={`truncate text-[14px] text-[var(--rk-ink)] ${
                                   item.chat.unread ? "font-semibold" : "font-medium"
                                 }`}
                               >
@@ -2751,16 +2756,18 @@ function WorkspaceShell({
                                 {item.chat.unread ? (
                                   <span
                                     aria-hidden="true"
-                                    className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
+                                    className="inline-block h-2 w-2 rounded-full bg-[var(--rk-accent)]"
                                   />
                                 ) : null}
                               </span>
                             </div>
-                            {item.kind === "bot" && item.chat.title ? (
+                            {item.kind === "bot" &&
+                            item.chat.title &&
+                            item.chat.title.trim() !== item.chat.name.trim() ? (
                               <>
                                 <div
                                   dir="auto"
-                                  className={`mt-0.5 truncate text-[13.5px] ${
+                                  className={`mt-0.5 truncate text-[13px] ${
                                     item.chat.unread
                                       ? "font-medium text-[var(--rk-body)]"
                                       : "text-[var(--rk-muted)]"
@@ -2780,7 +2787,7 @@ function WorkspaceShell({
                             ) : (
                               <div
                                 dir="auto"
-                                className={`mt-0.5 truncate text-[13.5px] ${
+                                className={`mt-0.5 truncate text-[13px] ${
                                   item.chat.unread
                                     ? "font-medium text-[var(--rk-body)]"
                                     : "text-[var(--rk-muted)]"
@@ -2834,7 +2841,7 @@ function WorkspaceShell({
                         onClick={() =>
                           void rpc.bots.restore({ botId: bot.id }).then(() => refreshBots(true))
                         }
-                        className="text-[12.5px] text-[var(--rk-body)] hover:text-white"
+                        className="text-[12.5px] text-[var(--rk-body)] hover:text-[var(--rk-ink)]"
                       >
                         <Trans>Restore</Trans>
                       </button>
@@ -2864,7 +2871,7 @@ function WorkspaceShell({
                             .restore({ groupId: group.id })
                             .then(() => refreshBots(true))
                         }
-                        className="text-[12.5px] text-[var(--rk-body)] hover:text-white"
+                        className="text-[12.5px] text-[var(--rk-body)] hover:text-[var(--rk-ink)]"
                       >
                         <Trans>Restore</Trans>
                       </button>
@@ -2900,7 +2907,7 @@ function WorkspaceShell({
             <div
               role="menu"
               aria-label={t`Account`}
-              className="absolute inset-x-3 bottom-14 rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-2 shadow-[0_22px_50px_rgba(0,0,0,.4)]"
+              className="absolute inset-x-3 bottom-14 rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-2 shadow-[var(--rk-shadow-popover)]"
             >
               <button
                 type="button"
@@ -3029,7 +3036,7 @@ function WorkspaceShell({
         inert={mobileSidebarOpen}
         className="flex min-w-0 flex-1 flex-col bg-[var(--rk-main)]"
       >
-        <div className="app-drag flex items-center justify-between border-b border-[var(--rk-hairline)] px-3 py-[17px] md:px-[22px]">
+        <div className="app-drag flex items-center justify-between border-b border-[var(--rk-hairline)] px-3 py-3 md:px-6 rk-conversation-header">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -3065,7 +3072,7 @@ function WorkspaceShell({
               ) : null}
               <span className="min-w-0">
                 <span
-                  className="block truncate text-[16px] font-medium text-[var(--rk-ink)]"
+                  className="block truncate text-[14px] font-medium text-[var(--rk-ink)]"
                   dir="auto"
                 >
                   {inGroup
@@ -3965,7 +3972,7 @@ function WorkspaceShell({
             email={session.data?.user.email}
             usage={usage}
             focusUsage={accountSettingsFocusUsage}
-            avatarStyle={bootstrapMe?.avatarStyle ?? "robot"}
+            avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
             sandboxProvider={bootstrapMe?.sandboxProvider}
             messagingEnabled={messagingSurfaceEnabled}
@@ -4115,7 +4122,7 @@ function WorkspaceShell({
           {sendError ? (
             <div
               role="alert"
-              className="border-b border-[#5A2A2A] bg-[#2A1717] px-[18px] py-2 text-[13px] text-[var(--rk-danger-soft)]"
+              className="border-b border-[var(--rk-danger)] bg-[var(--rk-danger-surface)] px-[18px] py-2 text-[13px] text-[var(--rk-danger-soft)]"
             >
               {sendError}
             </div>
@@ -4164,7 +4171,7 @@ function WorkspaceShell({
   );
 
   return (
-    <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "robot"}>{shell}</AvatarStyleProvider>
+    <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "organic"}>{shell}</AvatarStyleProvider>
   );
 }
 
@@ -4350,7 +4357,7 @@ const Transcript = memo(function Transcript({
             view.following = false;
           }
         }}
-        className="rk-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
+        className="rk-transcript rk-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
       >
         {olderCursor != null ? (
           <button
@@ -4368,7 +4375,8 @@ const Transcript = memo(function Transcript({
             <div
               key={message.id}
               data-message-id={message.id}
-              className={peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"}
+              data-message-role={message.role}
+              className={peerReceipt ? "relative py-0.5" : "group/message relative pt-8 hover:z-20"}
             >
               {peerReceipt ? null : (
                 <MessageHoverActions message={message} onReply={onReply} onReact={onReact} />
@@ -4756,8 +4764,8 @@ const Composer = memo(function Composer({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative z-30 m-0 min-w-0 border-0 px-3 pb-4 pt-3 md:px-6 md:pb-6 ${
-        draggingFiles ? "rounded-[14px] ring-2 ring-inset ring-[#8B5CF6]" : ""
+      className={`rk-composer-region relative z-30 m-0 min-w-0 border-0 px-3 pb-4 pt-3 md:px-6 md:pb-6 ${
+        draggingFiles ? "rounded-[14px] ring-2 ring-inset ring-[var(--rk-focus-ring)]" : ""
       }`}
     >
       {sendError || dictationError || runError ? (
@@ -4929,7 +4937,7 @@ const Composer = memo(function Composer({
       </div>
       <div
         data-testid="composer-bar"
-        className="flex items-center gap-3.5 rounded-full border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] py-[9px] pe-2.5 ps-3"
+        className="rk-composer grid items-end gap-x-2 gap-y-3 border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-3"
       >
         <input
           ref={fileInputRef}
@@ -4973,7 +4981,7 @@ const Composer = memo(function Composer({
         >
           <Mic size={16} strokeWidth={1.8} />
         </button>
-        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
+        <div className="rk-composer-input flex min-w-0 flex-wrap items-end gap-1.5">
           {selectedSkill ? (
             <span
               data-testid="skill-chip"
@@ -5093,7 +5101,7 @@ const Composer = memo(function Composer({
               aria-label={t`Send`}
               disabled={sending || !canSend || disabled}
               onClick={send}
-              className="grid h-10 w-10 place-items-center rounded-full bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A6A6AD] disabled:opacity-50"
+              className="rk-composer-send grid h-10 w-10 place-items-center rounded-xl bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rk-focus-ring)] disabled:opacity-50"
             >
               <ArrowUp size={18} strokeWidth={2} />
             </button>
@@ -5102,7 +5110,7 @@ const Composer = memo(function Composer({
               aria-label={t`Stop`}
               disabled={sending}
               onClick={() => void onStop()}
-              className="grid h-10 w-10 place-items-center rounded-full border border-[var(--rk-hairline-strong)] text-[var(--rk-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A6A6AD] disabled:opacity-50"
+              className="rk-composer-stop grid h-10 w-10 place-items-center rounded-xl border border-[var(--rk-hairline-strong)] text-[var(--rk-body)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rk-focus-ring)] disabled:opacity-50"
             >
               <Square size={12} strokeWidth={0} fill="currentColor" />
             </button>
@@ -5113,7 +5121,7 @@ const Composer = memo(function Composer({
             aria-label={t`Send`}
             disabled={sending || !canSend || disabled}
             onClick={send}
-            className="grid h-9 w-9 place-items-center rounded-full bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] disabled:opacity-50"
+            className="rk-composer-send grid h-9 w-9 place-items-center rounded-xl bg-[var(--rk-cream)] text-[var(--rk-cream-ink)] disabled:opacity-50"
           >
             <ArrowUp size={18} strokeWidth={2} />
           </button>
@@ -5145,14 +5153,14 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
   }
   if (mention.kind === "group") {
     return (
-      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#2A2A2E] text-[9px] text-[var(--rk-body)]">
+      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--rk-surface-2)] text-[9px] text-[var(--rk-body)]">
         G
       </span>
     );
   }
   if (mention.kind === "everyone") {
     return (
-      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#2A2A2E] text-[9px] text-[var(--rk-body)]">
+      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--rk-surface-2)] text-[9px] text-[var(--rk-body)]">
         @
       </span>
     );
@@ -5169,7 +5177,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
   }
   if (mention.kind === "group" || mention.kind === "everyone") {
     return (
-      <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#2A2A2E] text-[9px] text-[var(--rk-body)]">
+      <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--rk-surface-2)] text-[9px] text-[var(--rk-body)]">
         {mention.kind === "group" ? "G" : "@"}
       </span>
     );
@@ -5219,7 +5227,7 @@ function MessageHoverActions({
           type="button"
           aria-label={t`Reply`}
           onClick={() => onReply(message)}
-          className="grid h-7 w-7 place-items-center rounded-full text-[var(--rk-body)] hover:bg-[#2A2A2F] hover:text-[var(--rk-ink)]"
+          className="grid h-7 w-7 place-items-center rounded-full text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
         >
           <Reply size={14} strokeWidth={1.8} />
         </button>
@@ -5229,7 +5237,7 @@ function MessageHoverActions({
             aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
             aria-pressed={Boolean(message.thumbsUp)}
             onClick={() => void onReact(message)}
-            className={`grid h-7 w-7 place-items-center rounded-full hover:bg-[#2A2A2F] hover:text-[var(--rk-ink)] ${
+            className={`grid h-7 w-7 place-items-center rounded-full hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)] ${
               message.thumbsUp ? "text-[#E9C46A]" : "text-[var(--rk-body)]"
             }`}
           >
@@ -5240,7 +5248,7 @@ function MessageHoverActions({
           type="button"
           aria-label={t`Copy`}
           onClick={copyMessage}
-          className="grid h-7 w-7 place-items-center rounded-full text-[var(--rk-body)] hover:bg-[#2A2A2F] hover:text-[var(--rk-ink)]"
+          className="grid h-7 w-7 place-items-center rounded-full text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
         >
           <Copy size={14} strokeWidth={1.8} />
         </button>
@@ -5362,7 +5370,7 @@ const MessageView = memo(function MessageView({
           data-testid="reply-parent-preview"
           aria-label={t`Jump to replied message`}
           onClick={() => onJumpToMessage?.(parentJumpId)}
-          className="mb-2 block max-w-[74%] truncate rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3 py-2 text-start text-[12.5px] text-[var(--rk-muted)] hover:border-[#34343B] hover:text-[var(--rk-body)]"
+          className="mb-2 block max-w-[74%] truncate rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3 py-2 text-start text-[12.5px] text-[var(--rk-muted)] hover:border-[var(--rk-hairline-strong)] hover:text-[var(--rk-body)]"
           dir="auto"
         >
           {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
@@ -5375,10 +5383,7 @@ const MessageView = memo(function MessageView({
       <>
         {messageContext}
         <div className="flex justify-start">
-          <div
-            className="max-w-[74%] space-y-2.5 rounded-[20px] bg-[var(--rk-surface-2)] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[var(--rk-body)]"
-            dir="auto"
-          >
+          <div className="rk-assistant-message space-y-2.5" dir="auto">
             {message.blocks.map((block, i) => {
               if (block.kind === "steps") {
                 const isCurrentBlock = isLive && i === message.blocks.length - 1;
@@ -5480,10 +5485,7 @@ const MessageView = memo(function MessageView({
         if (block.kind === "progress") {
           return (
             <div key={i} className="flex justify-start">
-              <div
-                className="max-w-[74%] rounded-[20px] bg-[var(--rk-surface-2)] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[var(--rk-body)]"
-                dir="auto"
-              >
+              <div className="rk-assistant-message" dir="auto">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -5492,10 +5494,7 @@ const MessageView = memo(function MessageView({
         if (block.kind === "steps") {
           return (
             <div key={i} className="flex justify-start">
-              <div
-                className="max-w-[74%] space-y-1.5 rounded-[20px] bg-[var(--rk-surface-2)] px-[18px] py-3"
-                dir="ltr"
-              >
+              <div className="rk-assistant-message space-y-1.5" dir="ltr">
                 <ToolActivityDisclosure
                   live={isLive}
                   label={isLive ? t`Working…` : toolActivityLabel(block.durationMs, false)}
@@ -5515,7 +5514,7 @@ const MessageView = memo(function MessageView({
           return (
             <div
               key={i}
-              className="w-[min(420px,90%)] rounded-[18px] border border-[#232326] bg-[var(--rk-surface)] px-[18px] py-4"
+              className="w-[min(420px,90%)] rounded-[18px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-[18px] py-4"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[15px] font-medium text-[var(--rk-ink)]" dir="auto">
@@ -5555,7 +5554,7 @@ const MessageView = memo(function MessageView({
               type="button"
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
-              className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[var(--rk-surface)] px-[18px] py-4 text-start disabled:opacity-60"
+              className="w-[min(340px,90%)] rounded-[18px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-[18px] py-4 text-start disabled:opacity-60"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[15px] font-medium text-[var(--rk-ink)]" dir="auto">
@@ -5655,10 +5654,7 @@ const MessageView = memo(function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={i} className="flex justify-end">
-              <div
-                className="max-w-[70%] whitespace-pre-wrap rounded-[20px] bg-[var(--rk-cream)] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[var(--rk-cream-ink)]"
-                dir="auto"
-              >
+              <div className="rk-user-message whitespace-pre-wrap" dir="auto">
                 {block.text}
               </div>
             </div>
@@ -5667,10 +5663,7 @@ const MessageView = memo(function MessageView({
         if (block.kind === "text") {
           return (
             <div key={i} className="flex justify-start">
-              <div
-                className="max-w-[74%] rounded-[20px] bg-[var(--rk-surface-2)] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[var(--rk-body)]"
-                dir="auto"
-              >
+              <div className="rk-assistant-message" dir="auto">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
                 {voiceReady ? (
                   <button
@@ -5692,8 +5685,8 @@ const MessageView = memo(function MessageView({
               <div className="flex flex-col gap-2 rounded-[20px] bg-[var(--rk-surface-2)] px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
-                    <span className="text-[#30A24B]">✓</span>
-                    <span className="font-semibold text-white">{line.k}</span>
+                    <span className="text-[var(--rk-success)]">✓</span>
+                    <span className="font-semibold text-[var(--rk-ink)]">{line.k}</span>
                     <span className="text-[var(--rk-muted)]">→</span>
                     <span>{line.v}</span>
                   </div>
@@ -5723,7 +5716,7 @@ const MessageView = memo(function MessageView({
           return (
             <div
               key={i}
-              className="w-[340px] rounded-[18px] border border-[#232326] bg-[var(--rk-surface)] px-[18px] py-4"
+              className="w-[340px] rounded-[18px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-[18px] py-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[15px] font-medium text-[var(--rk-ink)]">
@@ -5766,7 +5759,7 @@ function ComputerModePicker({
             onClick={() => onChange(mode)}
             className={`rounded-[11px] border px-3.5 py-3 text-[14px] capitalize ${
               value === mode
-                ? "border-[#6C6C70] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
+                ? "border-[var(--rk-focus-ring)] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
                 : "border-[var(--rk-hairline-strong)] text-[var(--rk-muted)]"
             }`}
           >
@@ -6128,7 +6121,7 @@ function BotSettings({
                   onClick={() => setMemoryScope(option.value)}
                   className={`flex-1 rounded-[11px] border px-3 py-2 text-[13px] ${
                     memoryScope === option.value
-                      ? "border-[#4A4A50] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
+                      ? "border-[var(--rk-focus-ring)] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
                       : "border-[var(--rk-hairline-strong)] text-[var(--rk-muted)]"
                   }`}
                 >
@@ -6314,7 +6307,7 @@ function NewSpaceDialog({
               if (event.key === "Escape" && !saving) onCancel();
             }}
             placeholder={t`Customer support`}
-            className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[#66666D]"
+            className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[var(--rk-focus-ring)]"
           />
         </label>
         {error ? <p className="mt-3 text-[13.5px] text-[var(--rk-danger)]">{error}</p> : null}
@@ -6391,7 +6384,7 @@ function NewBotSectionDialog({
             maxLength={60}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[#66666D]"
+            className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14.5px] text-[var(--rk-ink)] outline-none focus:border-[var(--rk-focus-ring)]"
           />
         </label>
         {error ? <p className="mt-3 text-[13.5px] text-[var(--rk-danger)]">{error}</p> : null}
@@ -6400,7 +6393,7 @@ function NewBotSectionDialog({
             type="button"
             disabled={saving}
             onClick={onCancel}
-            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[#29292D] disabled:opacity-40"
+            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
           >
             <Trans>Cancel</Trans>
           </button>
@@ -6472,7 +6465,7 @@ function ClearConversationDialog({
             type="button"
             disabled={clearing}
             onClick={onCancel}
-            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[#29292D] disabled:opacity-40"
+            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
           >
             <Trans>Cancel</Trans>
           </button>
@@ -6487,7 +6480,7 @@ function ClearConversationDialog({
                 setClearing(false);
               });
             }}
-            className="rounded-[10px] bg-[#DC2626] px-3.5 py-2 text-[14px] font-medium text-white disabled:opacity-40"
+            className="rounded-[10px] bg-[var(--rk-danger-strong)] px-3.5 py-2 text-[14px] font-medium text-[var(--rk-cream-ink)] disabled:opacity-40"
           >
             {clearing ? <Trans>Clearing…</Trans> : <Trans>Clear</Trans>}
           </button>
@@ -6590,7 +6583,7 @@ function DeleteBotDialog({
             type="button"
             disabled={deleting}
             onClick={onCancel}
-            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[#29292D] disabled:opacity-40"
+            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
           >
             <Trans>Cancel</Trans>
           </button>
@@ -6605,7 +6598,7 @@ function DeleteBotDialog({
                 setDeleting(false);
               });
             }}
-            className="rounded-[10px] bg-[#DC2626] px-3.5 py-2 text-[14px] font-medium text-white disabled:opacity-40"
+            className="rounded-[10px] bg-[var(--rk-danger-strong)] px-3.5 py-2 text-[14px] font-medium text-[var(--rk-cream-ink)] disabled:opacity-40"
           >
             {deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
           </button>
@@ -6669,7 +6662,7 @@ function DeleteItemDialog({
             type="button"
             disabled={deleting}
             onClick={onCancel}
-            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[#29292D] disabled:opacity-40"
+            className="rounded-[10px] px-3.5 py-2 text-[14px] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
           >
             <Trans>Cancel</Trans>
           </button>
@@ -6690,7 +6683,7 @@ function DeleteItemDialog({
                 setDeleting(false);
               });
             }}
-            className="rounded-[10px] bg-[#DC2626] px-3.5 py-2 text-[14px] font-medium text-white disabled:opacity-40"
+            className="rounded-[10px] bg-[var(--rk-danger-strong)] px-3.5 py-2 text-[14px] font-medium text-[var(--rk-cream-ink)] disabled:opacity-40"
           >
             {deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
           </button>
@@ -6801,7 +6794,7 @@ function ChoiceCard({
               </button>
             ))}
         </div>
-        {error ? <p className="mt-2 text-xs text-[#F07178]">{error}</p> : null}
+        {error ? <p className="mt-2 text-xs text-[var(--rk-danger)]">{error}</p> : null}
       </div>
     </div>
   );
@@ -6878,7 +6871,7 @@ function AppConnectCard({
             className="h-10 w-10 rounded-[10px] bg-white object-contain p-1"
           />
         ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[#30356A] text-[15px] text-[#E2E4FF]">
+          <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-[var(--rk-selected)] text-[15px] text-[var(--rk-selected-ink)]">
             {block.name.slice(0, 1).toUpperCase()}
           </span>
         )}
@@ -6898,7 +6891,7 @@ function AppConnectCard({
           </BuiButton>
         )}
       </div>
-      {error ? <p className="mt-2 text-xs text-[#F07178]">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-[var(--rk-danger)]">{error}</p> : null}
     </BuiCard>
   );
 }
@@ -6956,7 +6949,7 @@ function ChartCanvas({
   }, [spec, data, width, height, t]);
   if (error)
     return (
-      <div className="text-[13px] text-[#F3A2AA]">
+      <div className="text-[13px] text-[var(--rk-danger)]">
         <Trans>Chart failed to render: {error}</Trans>
       </div>
     );
@@ -6970,7 +6963,7 @@ function ChartCanvas({
           {meta.swatches.map((swatch) => (
             <span
               key={swatch.label}
-              className="flex items-center gap-1.5 text-[12px] text-[#A6A6AD]"
+              className="flex items-center gap-1.5 text-[12px] text-[var(--rk-muted)]"
             >
               <span
                 className="h-[10px] w-[10px] rounded-[3px]"
@@ -7037,7 +7030,7 @@ function McpApprovalCard({
   return (
     <BuiCard className="max-w-[74%] p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#30356A] text-xs text-[#E2E4FF]">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--rk-selected)] text-xs text-[var(--rk-selected-ink)]">
           M
         </span>
         <span className="text-[14.5px] font-medium" style={{ color: "var(--bui-ink)" }}>
@@ -7054,7 +7047,7 @@ function McpApprovalCard({
               ? t`This server uses browser sign-in. Authorize it to let your agents use its tools — a popup will open.`
               : t`Approve this server to let your agent use its tools.`}
           </p>
-          {error ? <p className="mt-2 text-xs text-[#F07178]">{error}</p> : null}
+          {error ? <p className="mt-2 text-xs text-[var(--rk-danger)]">{error}</p> : null}
           <div className="mt-3 flex gap-2">
             <BuiButton
               tone="accent"
@@ -7120,7 +7113,7 @@ function ChartBlockView({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="absolute end-3 top-3 rounded-lg border border-[#34343B] bg-[var(--rk-surface-2)] px-2.5 py-1 text-[11px] text-[var(--rk-body)] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A6A6AD]"
+          className="absolute end-3 top-3 rounded-lg border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-2.5 py-1 text-[11px] text-[var(--rk-body)] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rk-focus-ring)]"
         >
           <Trans>Expand</Trans>
         </button>
@@ -7138,7 +7131,7 @@ function ChartBlockView({
             if (event.key === "Escape") setExpanded(false);
           }}
         >
-          <div className="max-h-[92vh] w-[min(1320px,94vw)] overflow-auto rounded-[24px] border border-[#2A2A31] bg-[var(--rk-surface)] p-8 shadow-[0_40px_90px_rgba(0,0,0,.6)]">
+          <div className="max-h-[92vh] w-[min(1320px,94vw)] overflow-auto rounded-[24px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-8 shadow-[0_40px_90px_rgba(0,0,0,.6)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[13px] text-[var(--rk-muted)]">{name}</span>
               <button

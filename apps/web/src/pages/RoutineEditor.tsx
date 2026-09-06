@@ -101,7 +101,7 @@ export function RoutineListHeader({ onCreate }: { onCreate: () => void }) {
         aria-label={t`Create Routine`}
         title={t`Create Routine`}
         onClick={onCreate}
-        className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--rk-surface-2)] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#3A3A3E]"
+        className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--rk-surface-2)] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--rk-focus-ring)]"
       >
         <Plus size={15} strokeWidth={1.9} />
       </button>
@@ -121,7 +121,7 @@ export function RoutineListRow({
   onStop: () => void;
 }) {
   return (
-    <div className="flex w-full items-center gap-2 rounded-[11px] px-2.5 py-2.5 hover:bg-[#121214]">
+    <div className="flex w-full items-center gap-2 rounded-[11px] px-2.5 py-2.5 hover:bg-[var(--rk-surface-2)]">
       <button
         type="button"
         onClick={onOpen}
@@ -274,7 +274,7 @@ export function RoutineEditor({
             aria-checked={draft.active}
             onClick={() => onChange({ ...draft, active: !draft.active })}
             className={`relative h-[22px] w-[40px] rounded-full transition-colors ${
-              draft.active ? "bg-[#3B82F6]" : "bg-[#2A2A2E]"
+              draft.active ? "bg-[#3B82F6]" : "bg-[var(--rk-surface-2)]"
             }`}
           >
             <span
@@ -311,7 +311,7 @@ export function RoutineEditor({
           value={draft.name}
           placeholder={t`Name this routine`}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-transparent px-3.5 py-3 text-[var(--rk-ink)] placeholder:text-[#5C5C62]"
+          className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-transparent px-3.5 py-3 text-[var(--rk-ink)] placeholder:text-[var(--rk-muted)]"
         />
       </label>
 
@@ -322,14 +322,14 @@ export function RoutineEditor({
           placeholder={t`What should this routine do each time it runs?`}
           onChange={(e) => onChange({ ...draft, prompt: e.target.value })}
           rows={4}
-          className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-transparent px-3.5 py-3 text-[var(--rk-ink)] placeholder:text-[#5C5C62]"
+          className="mt-2 w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-transparent px-3.5 py-3 text-[var(--rk-ink)] placeholder:text-[var(--rk-muted)]"
         />
       </label>
 
       <div className="mt-5 text-[14px] text-[var(--rk-muted)]">
         <div className="flex items-baseline gap-2">
           <Trans>When to run</Trans>
-          <span className="text-[12.5px] text-[#6E6E74]">{timezone}</span>
+          <span className="text-[12.5px] text-[var(--rk-muted)]">{timezone}</span>
         </div>
 
         <div className="mt-2 space-y-2">
@@ -395,7 +395,7 @@ export function RoutineEditor({
               setMenuOpen((open) => !open);
               setScheduleOpen(false);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-[13px] border border-[var(--rk-hairline-strong)] px-3.5 py-3 text-[14.5px] text-[var(--rk-ink)] hover:bg-[#121214]"
+            className="flex w-full items-center justify-center gap-2 rounded-[13px] border border-[var(--rk-hairline-strong)] px-3.5 py-3 text-[14.5px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)]"
           >
             <Plus size={16} strokeWidth={1.8} />
             <Trans>Add trigger</Trans>
@@ -405,7 +405,7 @@ export function RoutineEditor({
             <div
               role="menu"
               aria-labelledby={addTriggerId}
-              className="absolute right-0 bottom-full z-20 mb-2 min-w-[220px] rounded-[14px] border border-[#2A2A2E] bg-[#16161A] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
+              className="absolute right-0 bottom-full z-20 mb-2 min-w-[220px] rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
             >
               <div className="relative">
                 <button
@@ -414,7 +414,7 @@ export function RoutineEditor({
                   onMouseEnter={() => setScheduleOpen(true)}
                   onFocus={() => setScheduleOpen(true)}
                   onClick={() => setScheduleOpen((open) => !open)}
-                  className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22]"
+                  className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)]"
                 >
                   <span className="flex items-center gap-2.5">
                     <ClockIcon />
@@ -425,7 +425,7 @@ export function RoutineEditor({
                 {scheduleOpen ? (
                   <div
                     role="menu"
-                    className="absolute top-0 right-full mr-1.5 min-w-[170px] overflow-hidden rounded-[14px] border border-[#2A2A2E] bg-[#16161A] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
+                    className="absolute top-0 right-full mr-1.5 min-w-[170px] overflow-hidden rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
                   >
                     {SCHEDULE_PRESETS.map((freq) => (
                       <button
@@ -433,7 +433,7 @@ export function RoutineEditor({
                         type="button"
                         role="menuitem"
                         onClick={() => addSchedule(freq)}
-                        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22]"
+                        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)]"
                       >
                         {schedulePresetLabel(freq)}
                         {freq === "Every day" || freq === "Weekdays" ? (
@@ -468,7 +468,7 @@ export function RoutineEditor({
                 role="menuitem"
                 disabled={draft.webhookEnabled}
                 onClick={() => void addWebhook()}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22] disabled:text-[var(--rk-muted-2)]"
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)] disabled:text-[var(--rk-muted-2)]"
               >
                 <GlobeIcon />
                 <Trans>Webhook</Trans>
@@ -478,7 +478,7 @@ export function RoutineEditor({
         </div>
 
         {!hasTriggers ? (
-          <p className="mt-2 text-[12.5px] text-[#6E6E74]">
+          <p className="mt-2 text-[12.5px] text-[var(--rk-muted)]">
             <Trans>Add a schedule or webhook to run this routine.</Trans>
           </p>
         ) : null}
@@ -549,10 +549,10 @@ function WebhookTriggerCard({
           <X size={14} strokeWidth={1.8} />
         </button>
       </div>
-      <div className="mt-2.5 space-y-2.5 rounded-[11px] bg-[#16161A] px-2.5 py-2.5 text-[13.5px]">
+      <div className="mt-2.5 space-y-2.5 rounded-[11px] bg-[var(--rk-surface-2)] px-2.5 py-2.5 text-[13.5px]">
         <div className="block text-[var(--rk-muted)]">
           <Trans>POST to</Trans>
-          <div className="mt-1 break-all rounded-lg bg-[#24242A] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
+          <div className="mt-1 break-all rounded-lg bg-[var(--rk-surface-2)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
             {postValue}
           </div>
         </div>
@@ -560,13 +560,13 @@ function WebhookTriggerCard({
           <span className="shrink-0">
             <Trans>key</Trans>
           </span>
-          <div className="min-w-0 flex-1 break-all rounded-lg bg-[#24242A] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
+          <div className="min-w-0 flex-1 break-all rounded-lg bg-[var(--rk-surface-2)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
             {keyValue}
           </div>
         </div>
         <div className="block text-[var(--rk-muted)]">
           <Trans>header</Trans>
-          <div className="mt-1 break-all rounded-lg bg-[#24242A] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
+          <div className="mt-1 break-all rounded-lg bg-[var(--rk-surface-2)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--rk-body)]">
             {headerValue}
           </div>
         </div>

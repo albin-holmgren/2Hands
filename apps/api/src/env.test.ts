@@ -212,3 +212,28 @@ describe("loadEnv", () => {
     expect(loadEnv({ ...base, NODE_ENV: "development" }).nodeEnv).toBe("development");
   });
 });
+
+it("accepts only explicit complete compatibility origins", () => {
+  const base = {
+    NODE_ENV: "test",
+    DATABASE_URL: "postgres://local/test",
+    SANDBOX_PROVIDER: "none",
+  };
+  expect(
+    loadEnv({
+      ...base,
+      TRUSTED_WEB_ORIGINS:
+        "https://old.example.test, https://www.old.example.test,https://old.example.test",
+    }).trustedWebOrigins,
+  ).toEqual(["https://old.example.test", "https://www.old.example.test"]);
+  expect(loadEnv(base).trustedWebOrigins).toEqual([]);
+  for (const value of [
+    "*",
+    "https://*.example.test",
+    "https://old.example.test/path",
+    "https://user:password@old.example.test",
+    "javascript:alert(1)",
+  ]) {
+    expect(() => loadEnv({ ...base, TRUSTED_WEB_ORIGINS: value })).toThrow("TRUSTED_WEB_ORIGINS");
+  }
+});

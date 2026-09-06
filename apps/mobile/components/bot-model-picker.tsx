@@ -10,7 +10,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { type MobileMe, rpc } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 import { NativeSheet } from "./native-sheet";
 
 export function BotModelPicker({
@@ -71,6 +71,17 @@ export function BotModelPicker({
   const selected = options.find(
     (entry) => entry.key === modelOptionKey(provider ?? "", model ?? ""),
   );
+  const catalogLabel = catalog.find(
+    (entry) => entry.provider === provider && entry.id === model,
+  )?.label;
+  const modelLabel =
+    selected?.label ??
+    catalogLabel ??
+    (bot && !bot.modelProvider && !bot.modelId ? "Workspace default" : model) ??
+    "Choose model";
+  const defaultLabel = catalog.find(
+    (entry) => entry.provider === me?.defaultProvider && entry.id === me?.defaultModel,
+  )?.label;
   const visible = options.filter((entry) =>
     `${entry.label} ${entry.modelId} ${entry.providerLabel}`
       .toLowerCase()
@@ -124,8 +135,8 @@ export function BotModelPicker({
           flexShrink: 1,
         }}
       >
-        <Text numberOfLines={1} style={{ color: native.muted, fontSize: 12.5 }}>
-          {selected?.label ?? model ?? "Choose model"}
+        <Text numberOfLines={1} style={{ color: native.ink, fontSize: 14 }}>
+          {modelLabel}
           {bot?.thinkingLevel ? ` · ${bot.thinkingLevel}` : ""} ⌄
         </Text>
       </Pressable>
@@ -142,12 +153,9 @@ export function BotModelPicker({
             autoCorrect={false}
             keyboardAppearance={native.theme}
             style={{
+              ...nativeInputStyle(native),
               marginHorizontal: 20,
               marginBottom: 12,
-              padding: 14,
-              borderRadius: 12,
-              color: native.ink,
-              backgroundColor: native.surface2,
             }}
           />
           {error ? (
@@ -192,7 +200,7 @@ export function BotModelPicker({
                 Workspace default {!bot.modelProvider && !bot.modelId ? "✓" : ""}
               </Text>
               <Text style={{ color: native.muted, fontSize: 12, marginTop: 4 }}>
-                {me?.defaultModel ?? "Default model"}
+                {defaultLabel ?? me?.defaultModel ?? "Default model"}
               </Text>
             </Pressable>
           ) : null}
@@ -217,12 +225,12 @@ export function BotModelPicker({
                       paddingHorizontal: 12,
                       justifyContent: "center",
                       backgroundColor:
-                        bot?.thinkingLevel === level ? native.cream : native.surface2,
+                        bot?.thinkingLevel === level ? native.selected : native.surface2,
                     }}
                   >
                     <Text
                       style={{
-                        color: bot?.thinkingLevel === level ? native.creamInk : native.ink,
+                        color: bot?.thinkingLevel === level ? native.selectedInk : native.ink,
                         textTransform: "capitalize",
                       }}
                     >
@@ -263,9 +271,13 @@ export function BotModelPicker({
                     padding: 14,
                     borderRadius: 14,
                     marginBottom: 6,
-                    backgroundColor: active || pressed ? native.surface2 : native.page,
+                    backgroundColor: active
+                      ? native.selected
+                      : pressed
+                        ? native.surface2
+                        : native.page,
                     borderWidth: 1,
-                    borderColor: active ? native.hairlineStrong : "transparent",
+                    borderColor: "transparent",
                     opacity: pending ? 0.6 : 1,
                   })}
                 >
@@ -278,7 +290,12 @@ export function BotModelPicker({
                     }}
                   >
                     <Text
-                      style={{ color: native.ink, fontSize: 16, fontWeight: "500", flexShrink: 1 }}
+                      style={{
+                        color: active ? native.selectedInk : native.ink,
+                        fontSize: 16,
+                        fontWeight: "500",
+                        flexShrink: 1,
+                      }}
                     >
                       {item.label}
                     </Text>

@@ -151,7 +151,7 @@ async function fixture(
       computerHost: null,
       canChooseHostComputer: false,
       sandboxProvider: computerAvailable ? "e2b" : "none",
-      avatarStyle: "robot",
+      avatarStyle: "organic",
     };
     function snapshot(): ThreadSnapshot {
       return {
@@ -241,6 +241,7 @@ async function fixture(
       };
     else if (path === "onboarding/ensureChiefOfStaff") {
       const next = bot("project-chief", space, "Chief");
+      next.title = next.name;
       bots.push(next);
       result = next;
     } else if (path === "threads/get") {
@@ -463,6 +464,25 @@ test("model picker, work pane and allowance remain usable in both themes and nar
 }, testInfo) => {
   const control = await fixture(page, { theme: "light", exhausted: true });
   await page.goto("/app/chief?space=personal");
+  await expect(page.getByTestId("transcript")).toContainText("thoughtful product launch");
+  const assistantReply = page.locator('[data-message-role="bot"] .rk-assistant-message').first();
+  await expect(assistantReply).toBeVisible();
+  await expect(page.locator(".rk-shell-sidebar [data-avatar-family]").first()).toBeVisible();
+  await expect(page.locator(".rk-shell-sidebar .rakazo-bot-avatar-visor")).toHaveCount(0);
+  await expect(assistantReply).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(assistantReply).toHaveCSS("box-shadow", "none");
+  await expect(page.locator(".rk-user-message").first()).toHaveCSS(
+    "background-color",
+    "rgb(255, 255, 255)",
+  );
+  await captureScreenshot(page, testInfo, "workspace-light-conversation");
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
+  await captureScreenshot(page, testInfo, "workspace-dark-conversation");
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light";
+  });
   await page.getByTestId("bot-model-picker").click();
   const picker = page.getByRole("dialog", { name: "Choose model" });
   await picker.getByRole("textbox", { name: "Search models" }).fill("reasoning");
@@ -490,6 +510,7 @@ test("model picker, work pane and allowance remain usable in both themes and nar
   });
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "workspace-mobile-light-chat");
   await page.getByTestId("bot-model-picker").click();
   await expect(picker).toBeVisible();
   expect(await page.locator("body").evaluate((body) => body.scrollWidth)).toBe(390);
@@ -519,11 +540,63 @@ test("model picker, work pane and allowance remain usable in both themes and nar
   expect(control.errors).toEqual([]);
 });
 
+test("system theme is applied before the renderer starts and respects an explicit choice", async ({
+  page,
+}) => {
+  await page.route(/\/(?:src\/main\.tsx|assets\/index-[^/]+\.js)(?:\?|$)/, (route) =>
+    route.abort("blockedbyclient"),
+  );
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await page.locator("#root").textContent()).toBe("");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.evaluate(() => localStorage.setItem("rakazo.ui-theme", "light"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("account entry uses the shared brand and remains usable in both system themes", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/auth/**", (route) =>
+    route.fulfill({
+      json: route.request().url().includes("get-session")
+        ? { user: null, session: null }
+        : { passwordReset: false, resetUrl: null, signupsEnabled: true },
+    }),
+  );
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "A workspace for your AI." })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await captureScreenshot(page, testInfo, `welcome-${theme}`);
+    await page.getByRole("link", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Sign in to 2hands" })).toBeVisible();
+    await page.getByLabel("Email", { exact: true }).fill("alex@example.test");
+    await page.getByLabel("Password", { exact: true }).fill("offline-example-password");
+    await captureScreenshot(page, testInfo, `sign-in-${theme}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.locator("body").evaluate((body) => body.scrollWidth)).toBe(390);
+    await expect(
+      page.getByRole("button", { name: "Continue with email", exact: true }),
+    ).toBeEnabled();
+    await captureScreenshot(page, testInfo, `sign-in-mobile-${theme}`);
+  }
+});
+
 test("empty workspaces open a starter assistant without credentials", async ({
   page,
 }, testInfo) => {
   await fixture(page);
   await page.goto("/app/chief?space=personal");
+  await expect(page.locator('[data-roster-bot-id="chief"]')).toContainText(
+    "Research and everyday work",
+  );
   await page.getByTestId("workspace-switcher").click();
   await page
     .getByRole("dialog", { name: "Workspaces" })
@@ -532,6 +605,9 @@ test("empty workspaces open a starter assistant without credentials", async ({
   await expect(page.getByRole("combobox", { name: "Message Chief" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Connect a model" })).toHaveCount(0);
   await expect(page.getByTestId("workspace-switcher")).toContainText("New project");
+  const starterRow = page.locator('[data-roster-bot-id="project-chief"]');
+  await expect(starterRow.getByText("Chief", { exact: true })).toHaveCount(1);
+  await expect(starterRow).toContainText("Your next idea starts here");
   await captureScreenshot(page, testInfo, "workspace-empty-starter");
 });
 

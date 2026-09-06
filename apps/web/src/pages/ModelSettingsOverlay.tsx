@@ -297,8 +297,8 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(4,4,5,.62)] p-4 sm:p-10">
-      <div className="flex h-[min(760px,100%)] w-[1080px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[#232326] bg-[var(--rk-surface)] shadow-[0_40px_90px_rgba(0,0,0,.55)]">
+    <div className="absolute inset-0 z-30 flex items-center justify-center rk-overlay-backdrop p-4 sm:p-10">
+      <div className="flex h-[min(760px,100%)] w-[1080px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[var(--rk-shadow-popover)]">
         <div className="flex items-start justify-between px-6 pt-6 sm:px-8 sm:pt-7">
           <div>
             <div className="text-2xl font-medium text-[var(--rk-ink)]">
@@ -349,7 +349,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
               value={providerQuery}
               onChange={(event) => setProviderQuery(event.target.value)}
               placeholder={t`Search providers`}
-              className="w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14px] text-[var(--rk-ink)] outline-none placeholder:text-[var(--rk-muted-2)] focus:border-[#4A4A50]"
+              className="w-full rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-2.5 text-[14px] text-[var(--rk-ink)] outline-none placeholder:text-[var(--rk-muted-2)] focus:border-[var(--rk-focus-ring)]"
             />
             <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-[13px] border border-[var(--rk-hairline-strong)] md:min-h-0 md:max-h-none md:flex-1">
               {filteredGroups.length ? (
@@ -361,7 +361,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                       type="button"
                       onClick={() => chooseProvider(group.id)}
                       className={`flex w-full items-center gap-3 border-b border-[var(--rk-hairline-strong)] px-3.5 py-3 text-start last:border-0 ${
-                        group.id === provider ? "bg-[var(--rk-surface-2)]" : "hover:bg-[#161618]"
+                        group.id === provider
+                          ? "bg-[var(--rk-surface-2)]"
+                          : "hover:bg-[var(--rk-surface-2)]"
                       }`}
                     >
                       <span className="min-w-0 flex-1">
@@ -916,7 +918,7 @@ function ModelPicker({
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex w-full items-center justify-between rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-3 text-start text-[var(--rk-ink)] outline-none focus-visible:border-[#4A4A50]"
+        className="flex w-full items-center justify-between rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-3 text-start text-[var(--rk-ink)] outline-none focus-visible:border-[var(--rk-focus-ring)]"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onTriggerKeyDown}
       >
@@ -926,7 +928,7 @@ function ModelPicker({
         </span>
       </button>
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[0_20px_45px_rgba(0,0,0,.55)]">
+        <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[var(--rk-shadow-popover)]">
           <input
             ref={searchRef}
             type="text"

@@ -1,4 +1,4 @@
-import { themeTokens, type UiTheme } from "@rakazo/ui-tokens";
+import { fontSizes, lineHeights, themeTokens, type UiTheme } from "@rakazo/ui-tokens";
 import Markdown, {
   MarkdownStream,
   type RenderRules,
@@ -12,15 +12,15 @@ const makeStyles = (colors: ReturnType<typeof themeTokens>) =>
   StyleSheet.create({
     body: {
       color: colors.body,
-      fontSize: 15,
-      lineHeight: 22,
+      fontSize: fontSizes.body,
+      lineHeight: lineHeights.body,
       width: "100%",
       minWidth: 0,
       flexShrink: 1,
     },
     paragraph: {
       marginTop: 0,
-      marginBottom: 9,
+      marginBottom: 12,
       width: "100%",
       flexShrink: 1,
     },

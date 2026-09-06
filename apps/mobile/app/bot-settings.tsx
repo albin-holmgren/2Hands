@@ -12,7 +12,7 @@ import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { ComputerMaintenanceActions } from "../components/computer-maintenance-actions";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { type MobileBot, rpc } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 
 type BotSettingsRecord = MobileBot & {
   description?: string;
@@ -101,10 +101,7 @@ export default function BotSettingsScreen() {
           placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
           }}
         />
         <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Title</Text>
@@ -116,10 +113,7 @@ export default function BotSettingsScreen() {
           placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
           }}
         />
         <Text style={{ color: native.muted, marginTop: 16, fontSize: 14 }}>Description</Text>
@@ -132,10 +126,7 @@ export default function BotSettingsScreen() {
           multiline
           style={{
             marginTop: 8,
-            backgroundColor: native.surface2,
-            borderRadius: 11,
-            padding: 16,
-            color: native.ink,
+            ...nativeInputStyle(native),
             minHeight: 120,
             textAlignVertical: "top",
           }}
@@ -155,14 +146,16 @@ export default function BotSettingsScreen() {
           disabled={!name.trim() || pending || !bot}
           style={{
             marginTop: 24,
-            backgroundColor: native.page,
+            backgroundColor: native.cream,
             borderRadius: 11,
             padding: 16,
             alignItems: "center",
             opacity: !name.trim() || pending || !bot ? 0.4 : 1,
           }}
         >
-          <Text style={{ color: native.ink, fontSize: 16 }}>{pending ? "Saving…" : "Save"}</Text>
+          <Text style={{ color: native.creamInk, fontSize: 16 }}>
+            {pending ? "Saving…" : "Save"}
+          </Text>
         </Pressable>
       </ScrollView>
     </>

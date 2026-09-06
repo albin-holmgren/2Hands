@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { rpc, selectSpace } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 
 export default function NewSpace() {
   const native = useNativeTheme();
@@ -57,9 +57,9 @@ export default function NewSpace() {
         <View
           style={{
             borderWidth: 1,
-            borderColor: native.hairlineStrong,
+            borderColor: native.hairline,
             borderRadius: 16,
-            backgroundColor: native.surface2,
+            backgroundColor: native.surface,
             padding: 18,
           }}
         >
@@ -76,11 +76,7 @@ export default function NewSpace() {
             returnKeyType="done"
             style={{
               marginTop: 8,
-              backgroundColor: native.page,
-              borderRadius: 11,
-              padding: 14,
-              color: native.ink,
-              fontSize: 16,
+              ...nativeInputStyle(native),
             }}
           />
           {error ? <Text style={{ color: native.danger, marginTop: 14 }}>{error}</Text> : null}
@@ -90,7 +86,7 @@ export default function NewSpace() {
             style={{
               marginTop: 20,
               backgroundColor: native.cream,
-              borderRadius: 999,
+              borderRadius: 12,
               padding: 14,
               alignItems: "center",
               opacity: !name.trim() || pending ? 0.4 : 1,

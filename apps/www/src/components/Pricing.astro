@@ -1,34 +1,29 @@
 ---
 import { PLAN_IDS, PLANS } from "@rakazo/core";
 import { DOCS_URL, HOSTED_PREVIEW_NOTICE } from "../site";
+import { getLandingCopy } from "../i18n/landing";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+const { locale = DEFAULT_LOCALE } = Astro.props as { locale?: Locale };
+const copy = getLandingCopy(locale);
 ---
-<section id="pricing" class="pricing-section">
-  <div class="eyebrow">Plans</div>
-  <h2 class="section-heading">Start free. Room to grow.</h2>
-  <p class="section-copy">A recurring allowance for models and active computer time. No automatic overages. {HOSTED_PREVIEW_NOTICE}</p>
+<section id="pricing" class="landing-pricing" aria-labelledby="pricing-title">
+  <div class="landing-pricing__intro"><p class="landing-eyebrow">{copy.pricingEyebrow}</p><h2 id="pricing-title">{copy.pricingHeading}</h2><p>{copy.pricingDescription}</p></div>
   <div class="pricing-grid">
-    {PLAN_IDS.map(id => {
+    {PLAN_IDS.map((id, index) => {
       const plan = PLANS[id];
-      return <article class="comparison-card">
-        <h3>{plan.name}</h3>
-        <p class="plan-price">${plan.priceUsd}<span> / month</span></p>
-        <p>${plan.allowanceUsd} included usage each month</p>
-        <p class="plan-detail">{id === "free" ? "Economical hosted models. No card or key required." : "Every compatible hosted model, with clear usage rates."}</p>
-        <a class="button button--secondary button--small" href={DOCS_URL}>Self-host</a>
+      return <article class:list={["plan-card", id === "plus" && "plan-card--featured"]}>
+        <div class="plan-card__top"><h3>{plan.name}</h3>{id === "plus" && <span>{copy.planBadge}</span>}</div>
+        <p class="plan-card__description">{copy.planDescriptions[index]}</p>
+        <p class="plan-price"><span>${plan.priceUsd}</span><small>{copy.monthly}</small></p>
+        <p class="plan-allowance"><b>${plan.allowanceUsd}</b> {copy.included}</p>
+        <ul>
+          <li><span aria-hidden="true">✓</span>{id === "free" ? copy.freeModels : copy.paidModels}</li>
+          <li><span aria-hidden="true">✓</span>{copy.sharedBalance}</li>
+          <li><span aria-hidden="true">✓</span>{id === "free" ? copy.noCard : copy.byok}</li>
+        </ul>
       </article>;
     })}
   </div>
-  <p class="pricing-note">Model input, output, and cached-token rates appear in the model picker. Hosted computers cost $0.15 per active hour, billed per second, and pause after five idle minutes. BYOK inference is paid to your provider; hosted computer time still uses your allowance. All workspaces share your account balance.</p>
+  <div class="pricing-access"><div><p>{copy.pricingAvailability}</p><span>{HOSTED_PREVIEW_NOTICE}</span></div><a class="button button--secondary" href={DOCS_URL} target="_blank" rel="noreferrer">{copy.selfHost}<span aria-hidden="true">↗</span></a></div>
+  <details class="pricing-details"><summary>{copy.pricingRates}<span aria-hidden="true">+</span></summary><p>{copy.pricingDetails}</p></details>
 </section>
-<style>
-  .pricing-section { padding-block: 64px; scroll-margin-top: 80px; }
-  .pricing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-block: 32px; }
-  .pricing-grid > .comparison-card { display: flex; flex-direction: column; }
-  .pricing-grid .button { margin-top: auto; }
-  .plan-price { font-size: 36px; letter-spacing: -1.5px; margin-block: 20px 12px; }
-  .plan-price span { font-size: 13px; letter-spacing: 0; opacity: .65; }
-  .plan-detail { font-size: 13px; line-height: 1.6; min-height: 64px; margin-block: 16px; }
-  .pricing-note { max-width: 820px; font-size: 13px; line-height: 1.7; opacity: .7; }
-  @media (max-width: 1000px) { .pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 520px) { .pricing-grid { grid-template-columns: 1fr; } .pricing-section { padding-block: 40px; } }
-</style>

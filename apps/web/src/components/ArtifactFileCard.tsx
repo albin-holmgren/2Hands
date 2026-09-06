@@ -72,7 +72,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
             onClick={() => setPreviewOpen(true)}
             className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-[var(--rk-surface-2)]"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#24344A] text-[#68A7FF]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[var(--rk-selected)] text-[var(--rk-selected-ink)]">
               <FileText size={21} strokeWidth={1.8} />
             </span>
             <span className="min-w-0">

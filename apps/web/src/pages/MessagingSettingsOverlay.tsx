@@ -79,7 +79,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(4,4,5,.62)] p-4 sm:p-10">
+    <div className="absolute inset-0 z-30 flex items-center justify-center rk-overlay-backdrop p-4 sm:p-10">
       <div
         ref={panelRef}
         data-testid="messaging-settings"
@@ -87,7 +87,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-labelledby="messaging-settings-title"
         tabIndex={-1}
-        className="rk-scroll max-h-full w-[640px] max-w-full overflow-y-auto rounded-[26px] border border-[#232326] bg-[var(--rk-surface)] p-6 shadow-[0_40px_90px_rgba(0,0,0,.55)] sm:p-8"
+        className="rk-scroll max-h-full w-[640px] max-w-full overflow-y-auto rounded-[26px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] p-6 shadow-[var(--rk-shadow-popover)] sm:p-8"
       >
         <div className="flex items-start justify-between gap-6">
           <h2 id="messaging-settings-title" className="text-2xl font-medium text-[var(--rk-ink)]">
@@ -103,7 +103,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {error ? <p className="mt-4 text-[13px] text-[#E88B8B]">{error}</p> : null}
+        {error ? <p className="mt-4 text-[13px] text-[var(--rk-danger)]">{error}</p> : null}
 
         <section className="mt-8 rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-4 py-4">
           <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">

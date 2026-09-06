@@ -93,7 +93,7 @@ export function ComputerMaintenanceActions({
       aria-labelledby="reset-computer-title"
       aria-describedby="reset-computer-description"
     >
-      <BuiCard className="w-full max-w-[420px] border border-[#232326] p-5">
+      <BuiCard className="w-full max-w-[420px] border border-[var(--rk-hairline-strong)] p-5">
         <div id="reset-computer-title" className="text-[16px] font-medium text-[var(--rk-ink)]">
           <Trans>Reset computer?</Trans>
         </div>
@@ -140,7 +140,7 @@ export function ComputerMaintenanceActions({
             role="menu"
             aria-labelledby={menuId}
             data-testid="computer-more-menu"
-            className="absolute end-0 top-full z-20 mt-1.5 min-w-[180px] rounded-[12px] border border-[#2A2A2E] bg-[#16161A] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
+            className="absolute end-0 top-full z-20 mt-1.5 min-w-[180px] rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] py-1.5 shadow-[0_12px_40px_rgba(0,0,0,.55)]"
           >
             {showRecover ? (
               <button
@@ -148,7 +148,7 @@ export function ComputerMaintenanceActions({
                 role="menuitem"
                 disabled={busy || pending !== null}
                 onClick={() => void run("recover")}
-                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22] disabled:opacity-40"
+                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
               >
                 {pending === "recover" ? (
                   <Trans>Recovering…</Trans>
@@ -167,7 +167,7 @@ export function ComputerMaintenanceActions({
                   setMenuOpen(false);
                   setConfirmReset(true);
                 }}
-                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22] disabled:opacity-40"
+                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
               >
                 {pending === "reset" ? <Trans>Resetting…</Trans> : <Trans>Reset computer</Trans>}
               </button>
@@ -178,7 +178,7 @@ export function ComputerMaintenanceActions({
                 role="menuitem"
                 disabled={busy || pending !== null}
                 onClick={() => void run("update")}
-                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[#1E1E22] disabled:opacity-40"
+                className="flex w-full px-3.5 py-2.5 text-start text-[14px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
               >
                 {pending === "update" ? <Trans>Updating…</Trans> : <Trans>Update computer</Trans>}
               </button>

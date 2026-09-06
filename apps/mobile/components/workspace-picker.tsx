@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import type { MobileSpace } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 import { NativeSheet } from "./native-sheet";
 
 export function WorkspacePicker({
@@ -47,12 +47,9 @@ export function WorkspacePicker({
         autoCapitalize="none"
         keyboardAppearance={native.theme}
         style={{
+          ...nativeInputStyle(native),
           marginHorizontal: 20,
           marginBottom: 12,
-          padding: 14,
-          borderRadius: 12,
-          color: native.ink,
-          backgroundColor: native.surface2,
         }}
       />
       {error ? (
@@ -79,10 +76,12 @@ export function WorkspacePicker({
             disabled={Boolean(pending)}
             onPress={() => void choose(item.id)}
             style={({ pressed }) => ({
-              padding: 16,
-              borderRadius: 14,
+              padding: 14,
+              minHeight: 64,
+              borderRadius: 12,
               marginBottom: 6,
-              backgroundColor: pressed || item.id === selectedId ? native.surface2 : native.page,
+              backgroundColor:
+                item.id === selectedId ? native.selected : pressed ? native.surface2 : native.page,
               opacity: pending && pending !== item.id ? 0.5 : 1,
             })}
           >
@@ -94,7 +93,14 @@ export function WorkspacePicker({
                 gap: 12,
               }}
             >
-              <Text style={{ color: native.ink, fontSize: 17, fontWeight: "500", flexShrink: 1 }}>
+              <Text
+                style={{
+                  color: item.id === selectedId ? native.selectedInk : native.ink,
+                  fontSize: 16,
+                  fontWeight: "500",
+                  flexShrink: 1,
+                }}
+              >
                 {item.name}
               </Text>
               <Text style={{ color: native.accent }}>
@@ -123,7 +129,7 @@ export function WorkspacePicker({
           borderColor: native.hairline,
         }}
       >
-        <Text style={{ color: native.ink, fontSize: 16 }}>New workspace</Text>
+        <Text style={{ color: native.ink, fontSize: 14, fontWeight: "600" }}>New workspace</Text>
       </Pressable>
     </NativeSheet>
   );

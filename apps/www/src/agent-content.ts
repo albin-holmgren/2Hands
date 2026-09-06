@@ -2,15 +2,21 @@ import { HOSTED_PREVIEW_NOTICE, PRIVACY_PREVIEW_NOTICE } from "./site.js";
 
 export const HOME_MARKDOWN = `# 2hands
 
-> Hosted Grok Bot alternative: named bots, a shared computer, plugins, and a coding harness you pick per bot.
+> Your ideas, models, and projects together in one personal AI workspace.
 
-2hands is an open source Grok Bot alternative built from [Rakazo](https://github.com/elie222/rakazo) (Apache 2.0). Each workspace keeps its own context, files and computer state. Claude Code or Codex can run inside its isolated computer when installed and authenticated.
+2hands is an open source Grok Bot alternative built from [Rakazo](https://github.com/elie222/rakazo) (Apache 2.0). Research, write, build, and handle everyday tasks with AI assistants. Keep each personal project's conversations, files, memory, credentials, and computer state in its own workspace, and switch projects without mixing their context.
 
-## Best-fit jobs
+## Work your way
 
-- Browser and shell workflows that should keep running after the first chat.
-- Implementation handed to a coding harness, then QA on the same computer.
-- Personal AI workspaces with a shared monetary allowance and visible model choice.
+- Choose compatible hosted models or connect your own API keys. Usage rates are visible in the model picker; a model change applies to the next run.
+- Research in the browser, work with files, write and code, or turn repeated tasks into routines.
+- Review results, respond to approval requests, and take over when you need to.
+
+## Free plan and hosted access
+
+The hosted Free plan includes $1 of usage each month, with no card or API key required. Hosted access is in a controlled preview, and public hosted registration is currently closed. You can self-host 2hands today using the setup guide.
+
+One account balance covers hosted models and active computer time across your workspaces. Paid plans make every compatible hosted model available. When the allowance is exhausted, new hosted spending stops and existing results remain available; there are no automatic overage charges. Your own model provider bills inference made with your API key, while hosted computer time still requires available allowance.
 
 ## Get started
 

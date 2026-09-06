@@ -3,6 +3,7 @@ import {
   canonicalHostRedirect,
   publicRequestUrl,
   siblingWwwOrigin,
+  trustedAuthOrigins,
   trustedBrowserOrigins,
 } from "./public-origin.js";
 
@@ -42,4 +43,45 @@ describe("public origin", () => {
       ),
     ).toBe("https://www.2hands.ai/sign-in");
   });
+});
+
+describe("authentication runtime origins", () => {
+  const config = {
+    webOrigin: "https://workspace.example.test",
+    apiUrl: "https://workspace.example.test",
+    authUrl: "https://workspace.example.test",
+  };
+  it("keeps product protocols and configured origins while excluding development runtimes in production", () => {
+    const origins = trustedAuthOrigins({ ...config, nodeEnv: "production" });
+    expect(origins).toContain(config.webOrigin);
+    expect(origins).toContain("2hands://");
+    expect(origins).toContain("rakazo://");
+    expect(origins).not.toContain("exp://*");
+    expect(
+      origins.some((origin) => origin.includes("localhost") || origin.includes("127.0.0.1")),
+    ).toBe(false);
+  });
+  it("allows local native runtimes only in development/test", () => {
+    for (const nodeEnv of ["development", "test"]) {
+      expect(trustedAuthOrigins({ ...config, nodeEnv })).toContain("http://127.0.0.1:8081");
+      expect(trustedAuthOrigins({ ...config, nodeEnv })).toContain("exp://*");
+    }
+  });
+});
+
+it("retains only explicitly configured previous web origins", () => {
+  const env = {
+    webOrigin: "https://app.example.test",
+    apiUrl: "https://app.example.test",
+    authUrl: "https://app.example.test",
+    nodeEnv: "production",
+  };
+  expect(trustedAuthOrigins(env)).not.toContain("https://example.test");
+  expect(
+    trustedAuthOrigins({
+      ...env,
+      trustedWebOrigins: ["https://example.test", "https://www.example.test"],
+    }),
+  ).toEqual(expect.arrayContaining(["https://example.test", "https://www.example.test"]));
+  expect(trustedAuthOrigins(env)).not.toContain("https://other.example.test");
 });

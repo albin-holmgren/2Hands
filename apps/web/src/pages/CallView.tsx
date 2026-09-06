@@ -257,7 +257,7 @@ export function CallView({
           <button
             type="button"
             onClick={hangUp}
-            className="rounded-full bg-[#DC2626] px-4 py-2 text-[14px] font-medium text-white"
+            className="rounded-full bg-[var(--rk-danger-strong)] px-4 py-2 text-[14px] font-medium text-[var(--rk-cream-ink)]"
           >
             <Trans>Hang up</Trans>
           </button>

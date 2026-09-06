@@ -9,11 +9,13 @@ const fixture = `<!doctype html>
 </html>`;
 
 test("launches with a narrow preload bridge and an isolated renderer", async () => {
+  const userData = await mkdtemp(path.join(tmpdir(), "2hands-desktop-smoke-"));
   const app = await electron.launch({
     args: ["."],
     cwd: path.resolve(import.meta.dirname, ".."),
     env: {
       ...process.env,
+      RAKAZO_PERFORMANCE_USER_DATA: userData,
       RAKAZO_WEB_URL: `data:text/html;charset=utf-8,${encodeURIComponent(fixture)}`,
     },
   });
@@ -78,5 +80,9 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
     });
   } finally {
     await app.close();
+    await rm(userData, { recursive: true, force: true });
   }
 });
+
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";

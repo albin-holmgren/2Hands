@@ -48,7 +48,7 @@ export function WorkspaceSwitcher({
         onClick={() => setOpen(!open)}
         className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 py-2 text-start hover:bg-[var(--rk-surface-2)]"
       >
-        <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-[var(--rk-cream)] text-sm font-semibold text-[var(--rk-cream-ink)]">
+        <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-[var(--rk-selected)] text-sm font-semibold text-[var(--rk-selected-ink)]">
           {(current?.name ?? "Personal").slice(0, 1).toUpperCase()}
         </span>
         <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--rk-ink)]">

@@ -55,7 +55,7 @@ export function TeachRecordingChrome({
   return (
     <div
       data-testid="teach-recording"
-      className="rounded-[11px] border border-[#232326] bg-[#121214] px-3 py-3"
+      className="rounded-[11px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-3 py-3"
     >
       <div className="text-[14px] text-[var(--rk-ink)]">
         <Trans>Recording: {recording.goal}</Trans>

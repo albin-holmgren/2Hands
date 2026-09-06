@@ -46,9 +46,8 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
       enabled: true,
-      // 7 so the hosted demo login (demo@2hands.ai / demo123) can sign in.
-      // New signups still use the 8-character field minimum in the web form.
-      minPasswordLength: 7,
+      // Applies to new/reset passwords; existing accounts can still sign in.
+      minPasswordLength: 8,
       // Signup policy is mutable deployment state, so the request hook below
       // enforces it instead of freezing an environment value at process start.
       disableSignUp: false,

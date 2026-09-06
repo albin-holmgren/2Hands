@@ -11,7 +11,7 @@
 }
 
 :root {
-  --page: #faf9f5;
+  --page: #ffffff;
   --surface: #ffffff;
   --surface-soft: #f3f2ec;
   --ink: #141413;
@@ -20,12 +20,12 @@
   --muted-2: #8b8a82;
   --line: #e6e4da;
   --line-2: #d0cdc4;
-  --blue: #d97757;
-  --blue-top: #d97757;
-  --blue-bottom: #e88768;
-  --blue-soft: #f8ebe6;
-  --blue-soft-2: #f3d9cf;
-  --blue-line: #f0cfc4;
+  --blue: #252529;
+  --blue-top: #252529;
+  --blue-bottom: #3e3e45;
+  --blue-soft: #efede8;
+  --blue-soft-2: #e5e2dc;
+  --blue-line: #d8d4cd;
   --panel: #ffffff;
   --panel-2: #f3f2ec;
   --panel-line: #e6e4da;
@@ -51,7 +51,7 @@ body {
   min-width: 320px;
   background: var(--page);
   color: var(--body);
-  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -173,10 +173,10 @@ button {
 }
 
 .brand-lockup__word {
-  font-family: Newsreader, Georgia, "Times New Roman", serif;
-  font-size: 21px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
   color: var(--ink);
 }
 
@@ -351,7 +351,7 @@ button {
 .privacy-copy h1 {
   margin: 0;
   color: var(--ink);
-  font-family: Newsreader, Georgia, "Times New Roman", serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
@@ -501,7 +501,7 @@ button {
 .comparison-card h3 {
   margin: 0;
   color: var(--ink);
-  font-family: Newsreader, Georgia, "Times New Roman", serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -703,7 +703,7 @@ button {
   max-width: 390px;
   margin: 0;
   color: var(--ink);
-  font-family: Newsreader, Georgia, "Times New Roman", serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 30px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -897,7 +897,7 @@ button {
 
 .stat-value {
   color: var(--ink);
-  font-family: Newsreader, Georgia, "Times New Roman", serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 30px;
   letter-spacing: -0.02em;
 }

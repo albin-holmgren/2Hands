@@ -759,15 +759,16 @@ const makeStyles = (native: NativeTheme) =>
     },
     activeCard: {
       borderRadius: 16,
-      backgroundColor: native.fill,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       padding: 18,
       marginBottom: 8,
     },
     eyebrow: {
       color: native.tertiaryLabel,
-      fontSize: 12,
-      textTransform: "uppercase",
-      letterSpacing: 1,
+      fontSize: 13,
+      fontWeight: "500",
     },
     activeModel: {
       color: native.label,
@@ -788,8 +789,10 @@ const makeStyles = (native: NativeTheme) =>
       marginBottom: 2,
     },
     card: {
-      borderRadius: 14,
-      backgroundColor: native.fill,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: native.hairline,
+      backgroundColor: native.surface,
       overflow: "hidden",
     },
     providerRow: {
@@ -845,7 +848,7 @@ const makeStyles = (native: NativeTheme) =>
       fontSize: 15,
     },
     selectedRow: {
-      backgroundColor: native.surface2,
+      backgroundColor: native.selected,
     },
     billing: {
       color: native.secondaryLabel,
@@ -904,6 +907,8 @@ const makeStyles = (native: NativeTheme) =>
     keyInput: {
       height: 48,
       borderRadius: 12,
+      borderWidth: 1,
+      borderColor: native.hairline,
       backgroundColor: native.fill,
       color: native.label,
       paddingHorizontal: 14,

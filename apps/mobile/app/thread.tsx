@@ -26,6 +26,7 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
+import { fontSizes, lineHeights, radii } from "@rakazo/ui-tokens";
 import { Link, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -539,7 +540,7 @@ function Thread({
               muted={!currentBot.notifyOnFinish}
             />
           ) : null}
-          <Text numberOfLines={1} style={{ color: native.ink, fontSize: 18, fontWeight: "600" }}>
+          <Text numberOfLines={1} style={{ color: native.ink, fontSize: 16, fontWeight: "600" }}>
             {name || "Thread"}
           </Text>
         </View>
@@ -1298,30 +1299,6 @@ function Thread({
             flexShrink: 1,
           }}
         >
-          <View
-            style={{
-              alignSelf: message.role === "user" ? "flex-end" : "flex-start",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 4,
-            }}
-          >
-            <Pressable accessibilityLabel="Reply" onPress={() => setReplyTarget(message)}>
-              <Text style={{ color: native.muted, fontSize: 12 }}>Reply</Text>
-            </Pressable>
-            {canReactToThreadMessage(message) ? (
-              <Pressable
-                accessibilityLabel={message.thumbsUp ? "Remove thumbs-up" : "Add thumbs-up"}
-                accessibilityState={{ selected: Boolean(message.thumbsUp) }}
-                onPress={() => void reactToMessage(message)}
-              >
-                <Text style={{ color: message.thumbsUp ? "#E9C46A" : native.muted, fontSize: 13 }}>
-                  👍
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
           <MessageBubble
             botId={botId ?? snap?.members?.[0]?.botId ?? ""}
             groupId={groupId}
@@ -1336,8 +1313,63 @@ function Thread({
             onAnswer={answerMessage}
             onOpenBot={openBot}
             onPreviewMarkdown={setMarkdownPreview}
-            onSpeak={message.role === "bot" ? speak : undefined}
           />
+          <View
+            style={{
+              alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reply"
+              onPress={() => setReplyTarget(message)}
+              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+            >
+              <NativeSymbol
+                ios="arrowshape.turn.up.left"
+                android="arrow-undo-outline"
+                color={native.muted}
+              />
+            </Pressable>
+            {canReactToThreadMessage(message) ? (
+              <Pressable
+                accessibilityRole="button"
+                style={{
+                  minWidth: 44,
+                  minHeight: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                accessibilityLabel={message.thumbsUp ? "Remove thumbs-up" : "Add thumbs-up"}
+                accessibilityState={{ selected: Boolean(message.thumbsUp) }}
+                onPress={() => void reactToMessage(message)}
+              >
+                <NativeSymbol
+                  ios={message.thumbsUp ? "hand.thumbsup.fill" : "hand.thumbsup"}
+                  android={message.thumbsUp ? "thumbs-up" : "thumbs-up-outline"}
+                  color={message.thumbsUp ? native.accent : native.muted}
+                />
+              </Pressable>
+            ) : null}
+            {message.role === "bot" && blockText(message).trim() ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Speak message"
+                onPress={() => speak(message)}
+                style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+              >
+                <NativeSymbol
+                  ios="speaker.wave.2"
+                  android="volume-high-outline"
+                  color={native.muted}
+                />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
     );
@@ -1568,8 +1600,9 @@ function Thread({
                   borderWidth: 1,
                   borderColor: native.hairlineStrong,
                   backgroundColor: native.surface,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
+                  paddingLeft: 12,
+                  paddingRight: 2,
+                  paddingVertical: 0,
                 }}
               >
                 {attachment.previewUri ? (
@@ -1585,6 +1618,13 @@ function Thread({
                 </Text>
                 <Pressable
                   accessibilityLabel={`Remove ${attachment.name}`}
+                  accessibilityRole="button"
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                   onPress={() =>
                     setPendingAttachments((current) =>
                       current.filter((item) => item.id !== attachment.id),
@@ -1705,210 +1745,240 @@ function Thread({
         ) : null}
         <View
           style={{
-            flexDirection: "row",
-            gap: 8,
-            marginTop: 16,
-            alignItems: "flex-end",
+            marginTop: 12,
+            borderRadius: radii.composer,
+            borderWidth: 1,
+            borderColor: native.hairlineStrong,
+            backgroundColor: native.surface,
+            padding: 8,
           }}
         >
-          <Pressable
-            accessibilityLabel="Attach file"
-            onPress={showAttachMenu}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              borderWidth: 1,
-              borderColor: native.hairlineStrong,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
-          </Pressable>
           <View
             style={{
-              flex: 1,
               flexDirection: "row",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 6,
-              backgroundColor: native.surface2,
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              minHeight: 44,
+              gap: 4,
+              alignItems: "flex-end",
             }}
           >
-            {selectedSkill ? (
-              <View
-                testID="skill-chip"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: native.surface2,
-                  borderRadius: 999,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  maxWidth: "100%",
-                }}
-              >
-                <NativeSymbol ios="cube" android="cube-outline" size={13} color={native.muted} />
-                <Text numberOfLines={1} style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}>
-                  {selectedSkill.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={`Remove skill ${selectedSkill.name}`}
-                  hitSlop={8}
-                  onPress={() => setSelectedSkill(null)}
-                >
-                  <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
-                </Pressable>
-              </View>
-            ) : null}
-            {selectedMentions.map((mention) => (
-              <View
-                key={mentionChipKey(mention)}
-                testID="mention-chip"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: native.surface2,
-                  borderRadius: 999,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  maxWidth: "100%",
-                }}
-              >
-                <MentionChipIcon mention={mention} />
-                <Text numberOfLines={1} style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}>
-                  {mention.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={`Remove mention ${mention.name}`}
-                  hitSlop={8}
-                  onPress={() =>
-                    setSelectedMentions((current) =>
-                      current.filter(
-                        (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
-                      ),
-                    )
-                  }
-                >
-                  <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
-                </Pressable>
-              </View>
-            ))}
-            <TextInput
-              testID="composer-input"
-              value={draft}
-              onChangeText={updateDraft}
-              accessibilityLabel={name ? `Message ${name}` : "Message"}
-              onKeyPress={(event) => {
-                if (
-                  event.nativeEvent.key === "Backspace" &&
-                  draft.length === 0 &&
-                  (selectedSkill !== null || selectedMentions.length > 0)
-                ) {
-                  removeLastChip();
-                }
-              }}
-              placeholder={
-                selectedSkill || selectedMentions.length
-                  ? undefined
-                  : name
-                    ? `Message ${name}`
-                    : "Message…"
-              }
-              placeholderTextColor={native.muted}
-              keyboardAppearance={native.theme}
-              multiline
-              textAlignVertical="center"
-              blurOnSubmit={false}
-              style={{
-                flexGrow: 1,
-                flexShrink: 1,
-                minWidth: 96,
-                color: native.ink,
-                paddingVertical: 2,
-                maxHeight: 100,
-                writingDirection: "auto",
-              }}
-            />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            testID="composer-send"
-            disabled={sending || !canSend}
-            onPress={() => void send()}
-            style={{
-              backgroundColor: native.cream,
-              borderRadius: 22,
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: sending || !canSend ? 0.5 : 1,
-            }}
-          >
-            <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color={native.creamInk} />
-          </Pressable>
-          {working ? (
             <Pressable
-              accessibilityLabel="Stop"
-              disabled={sending}
-              onPress={() => void stop()}
+              accessibilityLabel="Attach file"
+              onPress={showAttachMenu}
               style={{
-                borderColor: native.hairlineStrong,
-                borderWidth: 1,
+                width: 44,
+                height: 44,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
+            </Pressable>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 6,
+                backgroundColor: "transparent",
+                borderRadius: 16,
+                paddingHorizontal: 6,
+                paddingVertical: 8,
+                minHeight: 44,
+              }}
+            >
+              {selectedSkill ? (
+                <View
+                  testID="skill-chip"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    backgroundColor: native.surface2,
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 0,
+                    maxWidth: "100%",
+                  }}
+                >
+                  <NativeSymbol ios="cube" android="cube-outline" size={13} color={native.muted} />
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}
+                  >
+                    {selectedSkill.name}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel={`Remove skill ${selectedSkill.name}`}
+                    accessibilityRole="button"
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    hitSlop={8}
+                    onPress={() => setSelectedSkill(null)}
+                  >
+                    <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
+                  </Pressable>
+                </View>
+              ) : null}
+              {selectedMentions.map((mention) => (
+                <View
+                  key={mentionChipKey(mention)}
+                  testID="mention-chip"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    backgroundColor: native.surface2,
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 0,
+                    maxWidth: "100%",
+                  }}
+                >
+                  <MentionChipIcon mention={mention} />
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: native.ink, fontSize: 13, flexShrink: 1 }}
+                  >
+                    {mention.name}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel={`Remove mention ${mention.name}`}
+                    accessibilityRole="button"
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    hitSlop={8}
+                    onPress={() =>
+                      setSelectedMentions((current) =>
+                        current.filter(
+                          (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
+                        ),
+                      )
+                    }
+                  >
+                    <NativeSymbol ios="xmark" android="close" size={12} color={native.muted} />
+                  </Pressable>
+                </View>
+              ))}
+              <TextInput
+                testID="composer-input"
+                value={draft}
+                onChangeText={updateDraft}
+                accessibilityLabel={name ? `Message ${name}` : "Message"}
+                onKeyPress={(event) => {
+                  if (
+                    event.nativeEvent.key === "Backspace" &&
+                    draft.length === 0 &&
+                    (selectedSkill !== null || selectedMentions.length > 0)
+                  ) {
+                    removeLastChip();
+                  }
+                }}
+                placeholder={
+                  selectedSkill || selectedMentions.length
+                    ? undefined
+                    : name
+                      ? `Message ${name}`
+                      : "Message…"
+                }
+                placeholderTextColor={native.muted}
+                keyboardAppearance={native.theme}
+                multiline
+                textAlignVertical="center"
+                blurOnSubmit={false}
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  minWidth: 96,
+                  color: native.ink,
+                  fontSize: 16,
+                  lineHeight: 24,
+                  paddingVertical: 2,
+                  maxHeight: 120,
+                  writingDirection: "auto",
+                }}
+              />
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              testID="composer-send"
+              disabled={sending || !canSend}
+              onPress={() => void send()}
+              style={{
+                backgroundColor: native.cream,
                 borderRadius: 22,
                 width: 44,
                 height: 44,
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: sending ? 0.5 : 1,
+                opacity: sending || !canSend ? 0.5 : 1,
               }}
             >
-              <NativeSymbol ios="stop.fill" android="stop" size={15} color={native.muted} />
+              <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color={native.creamInk} />
             </Pressable>
+            {working ? (
+              <Pressable
+                accessibilityLabel="Stop"
+                disabled={sending}
+                onPress={() => void stop()}
+                style={{
+                  borderColor: native.hairlineStrong,
+                  borderWidth: 1,
+                  borderRadius: 22,
+                  width: 44,
+                  height: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: sending ? 0.5 : 1,
+                }}
+              >
+                <NativeSymbol ios="stop.fill" android="stop" size={15} color={native.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+          {!inGroup ? (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <BotModelPicker
+                botId={botId ?? ""}
+                onUpdate={(bot) =>
+                  setMentionBots((current) =>
+                    current.map((entry) => (entry.id === bot.id ? { ...entry, ...bot } : entry)),
+                  )
+                }
+              />
+              <Link
+                href={{
+                  pathname: "/computer",
+                  params: { botId: botId ?? "", name: name ?? "Bot" },
+                }}
+                asChild
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  style={{ minHeight: 44, justifyContent: "center" }}
+                >
+                  <Text style={{ color: native.muted, fontSize: 14 }}>Open computer →</Text>
+                </Pressable>
+              </Link>
+            </View>
           ) : null}
         </View>
-        {!inGroup ? (
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <BotModelPicker
-              botId={botId ?? ""}
-              onUpdate={(bot) =>
-                setMentionBots((current) =>
-                  current.map((entry) => (entry.id === bot.id ? { ...entry, ...bot } : entry)),
-                )
-              }
-            />
-            <Link
-              href={{
-                pathname: "/computer",
-                params: { botId: botId ?? "", name: name ?? "Bot" },
-              }}
-              asChild
-            >
-              <Pressable
-                accessibilityRole="button"
-                style={{ minHeight: 44, justifyContent: "center" }}
-              >
-                <Text style={{ color: native.muted }}>Open computer →</Text>
-              </Pressable>
-            </Link>
-          </View>
-        ) : null}
       </View>
       {markdownPreview && artifactTarget ? (
         <MarkdownArtifactPreview
@@ -2070,7 +2140,6 @@ const MessageBubble = memo(function MessageBubble({
   onAnswer,
   onOpenBot,
   onPreviewMarkdown,
-  onSpeak,
 }: {
   botId: string;
   botName?: string;
@@ -2083,7 +2152,6 @@ const MessageBubble = memo(function MessageBubble({
   onAnswer: (message: MobileMessage, answer: string) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
-  onSpeak?: (message: MobileMessage) => void;
 }) {
   const native = useNativeTheme();
   const [peerExpanded, setPeerExpanded] = useState(false);
@@ -2374,7 +2442,7 @@ const MessageBubble = memo(function MessageBubble({
           borderRadius: 20,
           borderWidth: 1,
           borderColor: native.hairlineStrong,
-          backgroundColor: message.role === "user" ? native.page : native.surface2,
+          backgroundColor: message.role === "user" ? native.userMessage : native.surface2,
           paddingHorizontal: 14,
           paddingVertical: 12,
           gap: 8,
@@ -2391,8 +2459,9 @@ const MessageBubble = memo(function MessageBubble({
         {caption ? (
           <Text
             style={{
-              color: message.role === "user" ? native.ink : native.ink,
-              fontSize: 15,
+              color: message.role === "user" ? native.userMessageInk : native.ink,
+              fontSize: 16,
+              lineHeight: 24,
             }}
           >
             {caption}
@@ -2478,10 +2547,6 @@ const MessageBubble = memo(function MessageBubble({
   const speaker =
     message.role === "bot" ? (memberName(members, message.botId) ?? botName) : undefined;
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
-  const lastContent = segments.reduce(
-    (last, segment, index) => (segment.kind === "content" ? index : last),
-    -1,
-  );
   return (
     <View style={{ gap: 8, width: "100%" }}>
       {segments.map((segment, index) =>
@@ -2497,7 +2562,6 @@ const MessageBubble = memo(function MessageBubble({
             message={{ ...message, blocks: segment.blocks }}
             speaker={index === firstContent ? speaker : undefined}
             replyPreview={index === firstContent ? replyPreview : undefined}
-            onSpeak={index === lastContent && onSpeak ? () => onSpeak(message) : undefined}
           />
         ),
       )}
@@ -2512,12 +2576,10 @@ function MessageTextCard({
   message,
   speaker,
   replyPreview,
-  onSpeak,
 }: {
   message: MobileMessage;
   speaker?: string;
   replyPreview?: MobileMessage;
-  onSpeak?: () => void;
 }) {
   const native = useNativeTheme();
   const contentText = blockText(message);
@@ -2528,9 +2590,13 @@ function MessageTextCard({
         flexShrink: 1,
         minWidth: 0,
         maxWidth: "100%",
-        backgroundColor: message.role === "user" ? native.surface : native.page,
-        padding: 0,
-        borderRadius: 0,
+        backgroundColor: message.role === "user" ? native.userMessage : "transparent",
+        paddingHorizontal: message.role === "user" ? 16 : 0,
+        paddingVertical: message.role === "user" ? 12 : 0,
+        borderWidth: message.role === "user" ? 1 : 0,
+        borderColor: native.userMessageBorder,
+        borderRadius: message.role === "user" ? radii.message : 0,
+        borderBottomRightRadius: message.role === "user" ? 4 : 0,
       }}
     >
       {speaker ? (
@@ -2544,24 +2610,19 @@ function MessageTextCard({
         </Text>
       ) : null}
       {message.role === "user" ? (
-        <Text style={{ color: native.ink, fontSize: 15, lineHeight: 22 }}>{contentText}</Text>
+        <Text
+          style={{
+            color: native.userMessageInk,
+            fontSize: fontSizes.body,
+            lineHeight: lineHeights.body,
+          }}
+        >
+          {contentText}
+        </Text>
       ) : (
-        <>
-          <ChatMarkdown theme={native.theme} streaming={message.id.startsWith("progress:")}>
-            {contentText}
-          </ChatMarkdown>
-          {onSpeak ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Speak message"
-              onPress={onSpeak}
-              hitSlop={8}
-              style={{ marginTop: 8 }}
-            >
-              <Text style={{ color: native.muted, fontSize: 13 }}>Speak</Text>
-            </Pressable>
-          ) : null}
-        </>
+        <ChatMarkdown theme={native.theme} streaming={message.id.startsWith("progress:")}>
+          {contentText}
+        </ChatMarkdown>
       )}
     </View>
   );

@@ -55,7 +55,7 @@ export function ToolActivityDisclosure({
       className="group"
     >
       <summary
-        className={`flex min-h-6 w-fit cursor-pointer list-none items-center gap-1 rounded-md py-0.5 pe-1.5 text-[13px] font-medium outline-none hover:text-[var(--rk-body)] focus-visible:ring-2 focus-visible:ring-[#85858A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1A1A1D] ${
+        className={`flex min-h-6 w-fit cursor-pointer list-none items-center gap-1 rounded-md py-0.5 pe-1.5 text-[13px] font-medium outline-none hover:text-[var(--rk-body)] focus-visible:ring-2 focus-visible:ring-[var(--rk-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1A1A1D] ${
           live ? "text-[var(--rk-body)]" : "text-[var(--rk-muted)]"
         }`}
       >

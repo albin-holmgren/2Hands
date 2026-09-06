@@ -35,9 +35,10 @@ primary_region = "arn"
   VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1"
   WAKEUP_DRIVER = "graphile"
   SERVE_WEB = "1"
-  WEB_ORIGIN = "https://2hands.ai"
-  BETTER_AUTH_URL = "https://2hands.ai"
-  API_URL = "https://2hands.ai"
+  WEB_ORIGIN = "https://app.2hands.ai"
+  BETTER_AUTH_URL = "https://app.2hands.ai"
+  API_URL = "https://app.2hands.ai"
+  TRUSTED_WEB_ORIGINS = "https://2hands.ai,https://www.2hands.ai"
 
 [processes]
   api = "bash infra/fly/start.sh"

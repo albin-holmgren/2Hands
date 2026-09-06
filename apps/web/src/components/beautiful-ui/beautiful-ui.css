@@ -7,15 +7,15 @@
   --bui-ink: var(--rk-ink);
   --bui-ink-2: var(--rk-muted);
   --bui-ink-3: var(--rk-muted-2);
-  --bui-surface: var(--rk-surface-2);
-  --bui-hover: var(--rk-surface);
+  --bui-surface: var(--rk-surface);
+  --bui-hover: var(--rk-surface-2);
   --bui-line: var(--rk-hairline);
   --bui-line-strong: var(--rk-hairline-strong);
-  --bui-green: #3dbb72;
-  --bui-green-tint: #3dbb7224;
+  --bui-green: var(--rk-success);
+  --bui-green-tint: color-mix(in srgb, var(--rk-success) 12%, transparent);
   --bui-accent: var(--rk-accent);
-  --bui-shadow-btn: 0 0 0 1px var(--bui-line-strong), 0 1px 2px #0000004d;
-  --bui-shadow-card: 0 0 0 1px var(--bui-line), 0 1px 2px #0003, 0 2px 6px #0003;
+  --bui-shadow-btn: 0 0 0 1px var(--bui-line-strong), 0 1px 2px #00000006;
+  --bui-shadow-card: 0 0 0 1px var(--bui-line), 0 2px 8px #00000006;
 }
 
 @keyframes bui-shimmer-text {

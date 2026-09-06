@@ -98,7 +98,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const value = (name) => args[args.indexOf(name) + 1];
   try {
     const report = await verifyDeployment({
-      origin: args.includes("--origin") ? value("--origin") : "https://2hands.ai",
+      origin: args.includes("--origin") ? value("--origin") : "https://app.2hands.ai",
       revision: args.includes("--revision") ? value("--revision") : undefined,
       mode: args.includes("--mode") ? value("--mode") : "controlled",
     });

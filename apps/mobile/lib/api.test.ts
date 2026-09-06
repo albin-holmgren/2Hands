@@ -24,6 +24,7 @@ import {
   signIn,
   signOut,
   signUp,
+  subscribeSessionExpired,
   subscribeThread,
 } from "./api.js";
 import { resumeLiveNotifications } from "./live-notifications.js";
@@ -76,6 +77,204 @@ describe("mobile API authentication", () => {
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "session-token");
     expect(resumeLiveNotifications).not.toHaveBeenCalled();
   });
+
+  it("cannot switch servers while an authentication response is pending", async () => {
+    await resetApiBase();
+    let release!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => response),
+    );
+    const pending = signIn("ada@example.test", "valid-password");
+    try {
+      await expect(saveApiBase("https://other.example.test")).resolves.toMatchObject({ ok: false });
+      expect(currentApiBase()).toBe("http://127.0.0.1:3100");
+    } finally {
+      release(jsonResponse({ token: "original-server-token" }));
+    }
+    await pending;
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      "rakazo.session_token",
+      "original-server-token",
+    );
+    await expect(saveApiBase("https://other.example.test")).resolves.toMatchObject({ ok: true });
+    await resetApiBase();
+  });
+
+  it("does not start authentication during an unfinished server persistence change", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key) => {
+      if (key === "rakazo.api_base") {
+        started();
+        await paused;
+      }
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = saveApiBase("https://new.example.test");
+    await entered;
+    try {
+      await expect(signIn("ada@example.test", "valid-password")).rejects.toThrow(
+        "Wait for the current",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      release();
+    }
+    await pending;
+    await resetApiBase();
+  });
+
+  it.each([401, 503])(
+    "expires only a confirmed unauthorized current session (%s)",
+    async (status) => {
+      const store = new Map([["rakazo.session_token", "current-token"]]);
+      vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => store.get(key) ?? null);
+      vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
+        store.set(key, value);
+      });
+      vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => {
+        store.delete(key);
+      });
+      await loadApiBase();
+      const expired = vi.fn();
+      const unsubscribe = subscribeSessionExpired(expired);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => jsonResponse({ message: "Unavailable" }, { status })),
+      );
+      try {
+        await expect(rpc("me")).rejects.toThrow();
+      } finally {
+        unsubscribe();
+      }
+      expect(expired).toHaveBeenCalledTimes(status === 401 ? 1 : 0);
+      expect(store.get("rakazo.session_token")).toBe(status === 401 ? undefined : "current-token");
+    },
+  );
+
+  it("does not expire a new session when an old request later returns unauthorized", async () => {
+    const store = new Map([["rakazo.session_token", "old-token"]]);
+    vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => store.get(key) ?? null);
+    vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
+      store.set(key, value);
+    });
+    vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => {
+      store.delete(key);
+    });
+    await loadApiBase();
+    let release!: (response: Response) => void;
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const response = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        started();
+        return response;
+      }),
+    );
+    const expired = vi.fn();
+    const unsubscribe = subscribeSessionExpired(expired);
+    const pending = rpc("me");
+    await entered;
+    await saveSessionToken("new-token");
+    release(jsonResponse({ message: "Unauthorized" }, { status: 401 }));
+    try {
+      await expect(pending).rejects.toThrow();
+    } finally {
+      unsubscribe();
+    }
+    expect(expired).not.toHaveBeenCalled();
+    expect(store.get("rakazo.session_token")).toBe("new-token");
+  });
+
+  it.each(["sign-out", "delete-user"])(
+    "does not let %s cleanup erase a newer sign-in",
+    async (action) => {
+      let release!: (response: Response) => void;
+      let started!: () => void;
+      const entered = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const response = new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url) => {
+          if (String(url).includes("/rpc/"))
+            return Promise.resolve(jsonResponse({ message: "Unauthorized" }, { status: 401 }));
+          started();
+          return response;
+        }),
+      );
+      const pending = action === "sign-out" ? signOut() : deleteAccount("valid-password");
+      await entered;
+      try {
+        await expect(signIn("new@example.test", "new-password")).rejects.toThrow(
+          "Wait for the current",
+        );
+        await expect(saveApiBase("https://new.example.test")).resolves.toMatchObject({ ok: false });
+      } finally {
+        release(jsonResponse({ success: true }));
+      }
+      await pending;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => jsonResponse({ token: "new-token" })),
+      );
+      await signIn("new@example.test", "new-password");
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "new-token");
+    },
+  );
+
+  it.each(["rpc", "password"])(
+    "never pairs a changed server's token with the old %s destination",
+    async (operation) => {
+      let release!: (token: string) => void;
+      let started!: () => void;
+      const entered = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const token = new Promise<string>((resolve) => {
+        release = resolve;
+      });
+      let first = true;
+      vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => {
+        if (key === "rakazo.session_token" && first) {
+          first = false;
+          started();
+          return token;
+        }
+        return null;
+      });
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const pending =
+        operation === "rpc" ? rpc("me") : changePassword("old-password", "new-password");
+      await entered;
+      await saveApiBase("https://replacement.example.test");
+      release("replacement-token");
+      await expect(pending).rejects.toThrow("The server changed while starting the request");
+      expect(fetchMock).not.toHaveBeenCalled();
+      await resetApiBase();
+    },
+  );
 
   it("creates an account and persists its session token", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ token: "signup-token" }));

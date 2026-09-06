@@ -1,11 +1,17 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { AppState, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
-import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
+import {
+  currentApiBase,
+  loadApiBase,
+  loadSessionToken,
+  selectedSpaceId,
+  subscribeSessionExpired,
+} from "../lib/api";
 import { initializeComposerDraftStorage } from "../lib/composer-draft-storage";
 import { flushComposerDrafts } from "../lib/composer-drafts";
 import {
@@ -20,7 +26,17 @@ configureForegroundNotifications();
 
 export default function Layout() {
   const native = useNativeTheme();
+  const router = useRouter();
   const [ready, setReady] = useState(false);
+
+  useEffect(
+    () =>
+      subscribeSessionExpired(() => {
+        if (router.canDismiss()) router.dismissAll();
+        router.replace("/sign-in");
+      }),
+    [router],
+  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -66,6 +82,7 @@ export default function Layout() {
                   headerStyle: { backgroundColor: native.page },
                   headerTintColor: native.ink,
                   headerShadowVisible: false,
+                  headerTitleStyle: { fontSize: 16, fontWeight: "600" },
                   headerBackButtonDisplayMode: "minimal",
                   contentStyle: { backgroundColor: native.page },
                 }}

@@ -13,7 +13,10 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#F5F3F0"
+          "backgroundColor": "#FAFAFC",
+          "dark": {
+            "backgroundColor": "#121316"
+          }
         }
       ],
       "expo-router",
@@ -26,7 +29,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#D97757"
+          "color": "#4B73FF"
         }
       ],
       [
@@ -38,7 +41,8 @@
         }
       ],
       "expo-sharing",
-      "./plugins/with-worklets-headers"
+      "./plugins/with-worklets-headers",
+      "./plugins/with-shared-bundle-inputs"
     ],
     "ios": {
       "bundleIdentifier": "com.rakazo.app",
@@ -65,7 +69,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/monochrome-icon.png",
-        "backgroundColor": "#2965EC"
+        "backgroundColor": "#FAFAFC"
       }
     },
     "web": {

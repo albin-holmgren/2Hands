@@ -4,9 +4,11 @@ import {
   openAiCompatibleConnectReady,
   openAiCompatibleProbeSuccessMessage,
 } from "@rakazo/contracts";
+import { BrandMark } from "@rakazo/ui-web";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BuiButton, LoadingState } from "../components/beautiful-ui/primitives";
 import { localizedProviderHint } from "../lib/localized-provider-hint";
 import type { ModelCatalogEntry } from "../lib/model-auth";
 import { useModelOAuthSignIn } from "../lib/use-model-oauth-signin";
@@ -32,6 +34,8 @@ export function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const probeRequestIdRef = useRef(0);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const {
     oauth,
@@ -50,11 +54,15 @@ export function OnboardingPage() {
   });
 
   useEffect(() => {
+    let active = true;
+    setLoadFailed(false);
     void Promise.all([rpc.me(), rpc.models.list().catch(() => [])])
       .then(async ([me, models]) => {
+        if (!active) return;
         setCatalog(models);
         if (!me.needsModel) {
           const bot = await rpc.onboarding.ensureChiefOfStaff();
+          if (!active) return;
           const search = new URLSearchParams(window.location.search);
           navigate(
             `/app/${bot.id}${search.get("space") ? `?space=${encodeURIComponent(search.get("space")!)}` : ""}`,
@@ -74,11 +82,14 @@ export function OnboardingPage() {
         }
         setStep("model");
       })
-      .catch(() => setStep("bot"));
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
     return () => {
+      active = false;
       probeRequestIdRef.current += 1;
     };
-  }, []);
+  }, [loadAttempt]);
 
   const providers = useMemo(() => {
     const seen = new Map<string, ModelCatalogEntry>();
@@ -217,16 +228,34 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[var(--rk-main)] px-6">
-      <div className="w-[560px]">
+    <div
+      data-rakazo-route-ready="true"
+      className="flex min-h-full items-center justify-center bg-[var(--rk-main)] px-6 py-12"
+    >
+      <div className="w-full max-w-[560px]">
+        <div className="mb-8 flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[var(--rk-ink)]">
+          <BrandMark size={32} />
+          2hands
+        </div>
         {step === "loading" ? (
-          <p className="text-[var(--rk-muted)]">
-            <Trans>Loading…</Trans>
-          </p>
+          loadFailed ? (
+            <div>
+              <p role="alert" className="text-sm text-[var(--rk-muted)]">
+                <Trans>Could not open your workspace.</Trans>
+              </p>
+              <div className="mt-4">
+                <BuiButton onClick={() => setLoadAttempt((value) => value + 1)}>
+                  <Trans>Try again</Trans>
+                </BuiButton>
+              </div>
+            </div>
+          ) : (
+            <LoadingState label={t`Opening your workspace`} />
+          )
         ) : null}
         {step === "model" ? (
           <div>
-            <h1 className="text-[32px] font-medium text-[var(--rk-ink)]">
+            <h1 className="text-[28px] font-medium text-[var(--rk-ink)]">
               <Trans>Connect a model</Trans>
             </h1>
             <p className="mt-2 text-[var(--rk-muted)]">
@@ -258,7 +287,9 @@ export function OnboardingPage() {
                     setNotice(null);
                   }}
                   className={`flex w-full items-center justify-between border-b border-[var(--rk-hairline-strong)] px-3.5 py-2.5 text-left last:border-0 ${
-                    entry.provider === provider ? "bg-[var(--rk-surface-2)]" : "hover:bg-[#161618]"
+                    entry.provider === provider
+                      ? "bg-[var(--rk-surface-2)]"
+                      : "hover:bg-[var(--rk-surface-2)]"
                   }`}
                 >
                   <span className="text-[15px] text-[var(--rk-ink)]">
@@ -518,7 +549,7 @@ export function OnboardingPage() {
         ) : null}
         {step === "bot" ? (
           <div>
-            <h1 className="text-[32px] font-medium text-[var(--rk-ink)]">
+            <h1 className="text-[28px] font-medium text-[var(--rk-ink)]">
               <Trans>Create your first bot</Trans>
             </h1>
             <label className="mt-8 block text-sm text-[var(--rk-muted)]">

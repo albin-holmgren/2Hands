@@ -4,7 +4,7 @@ import type { DesktopSetup } from "@rakazo/contracts";
 
 /** Where `pnpm dev` serves the Rakazo web app on this machine. */
 export const DEFAULT_LOCAL_WEB_URL = "http://127.0.0.1:5173";
-export const DEFAULT_HOSTED_WEB_URL = "https://2hands.ai";
+export const DEFAULT_HOSTED_WEB_URL = "https://app.2hands.ai";
 
 export const SETUP_FILE_NAME = "setup.json";
 
@@ -63,10 +63,23 @@ export function parseSetupInput(value: unknown): DesktopSetup | null {
 
 export function parseStoredSetup(raw: string): DesktopSetup | null {
   try {
-    return parseSetupInput(JSON.parse(raw));
+    return parseSavedSetup(JSON.parse(raw));
   } catch {
     return null;
   }
+}
+
+/** The official app moved off the marketing apex; other saved servers stay put. */
+function parseSavedSetup(value: unknown): DesktopSetup | null {
+  const saved = parseSetupInput(value);
+  if (saved === null) return null;
+  const original = (value as { serverUrl: string }).serverUrl.trim();
+  // Only a stored official origin is an alias. Explicit environment paths and
+  // custom targets remain under the user's control; credentials are never moved.
+  if (/^https:\/\/2hands\.ai\/?$/.test(original)) {
+    return { ...saved, serverUrl: DEFAULT_HOSTED_WEB_URL };
+  }
+  return saved;
 }
 
 export function serializeSetup(setup: DesktopSetup): string {
@@ -90,7 +103,7 @@ export function resolveStartupTarget(input: {
   if (envUrl !== undefined && envUrl !== "") return { kind: "app", url: envUrl, source: "env" };
 
   if (input.saved != null) {
-    const saved = parseSetupInput(input.saved);
+    const saved = parseSavedSetup(input.saved);
     if (saved !== null) return { kind: "app", url: saved.serverUrl, source: "saved" };
   }
   const hostedUrl = input.hostedUrl ? normalizeServerUrl(input.hostedUrl) : null;

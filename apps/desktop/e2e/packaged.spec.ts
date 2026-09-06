@@ -1,10 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 
-test("packaged renderer opens privately, keeps its sandbox, and recovers a rejected sign-in", async () => {
+test("packaged welcome opens privately, keeps its sandbox, and recovers a rejected sign-in", async () => {
   const executablePath = process.env.RAKAZO_ELECTRON_EXECUTABLE;
   test.skip(!executablePath, "Set the path to a locally packaged executable.");
   const userData = await mkdtemp(path.join(tmpdir(), "2hands-packaged-test-"));
@@ -45,12 +45,20 @@ test("packaged renderer opens privately, keeps its sandbox, and recovers a rejec
         RAKAZO_ELECTRON_E2E: "1",
         RAKAZO_ELECTRON_HIDDEN: "1",
         RAKAZO_PERFORMANCE_USER_DATA: userData,
-        RAKAZO_WEB_URL: `http://127.0.0.1:${address.port}/sign-in`,
+        RAKAZO_WEB_URL: `http://127.0.0.1:${address.port}/`,
         RAKAZO_DISABLE_BUNDLED_RENDERER: "0",
       },
     });
     const page = await app.firstWindow();
-    await expect(page.getByRole("heading", { name: "Sign in to 2hands" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
+    // Seeing the first paint is insufficient: failed readiness used to destroy
+    // the Welcome window eight seconds later and reopen connection setup.
+    await expect
+      .poll(
+        () => app!.evaluate(() => performance.getEntriesByName("rk:main:load-url-resolved").length),
+        { timeout: 12_000 },
+      )
+      .toBe(1);
     const startupMs = Math.round(performance.now() - started);
     const processState = await app.evaluate(({ app, BrowserWindow }) => ({
       packaged: app.isPackaged,
@@ -73,6 +81,8 @@ test("packaged renderer opens privately, keeps its sandbox, and recovers a rejec
         process: typeof (window as unknown as { process: unknown }).process,
       })),
     ).toEqual({ require: "undefined", process: "undefined" });
+    await page.getByRole("link", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Sign in to 2hands" })).toBeVisible();
     await page.getByLabel("Email", { exact: true }).fill("packaged@example.test");
     await page.getByLabel("Password", { exact: true }).fill("invalid-test-password");
     await page.getByRole("button", { name: "Continue with email", exact: true }).click();
@@ -88,6 +98,32 @@ test("packaged renderer opens privately, keeps its sandbox, and recovers a rejec
         BrowserWindow.getAllWindows().every((window) => !window.isVisible()),
       ),
     ).toBe(true);
+    const warm = await app.evaluate(async ({ app, BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]!;
+      const id = window.webContents.id;
+      const began = performance.now();
+      // macOS keeps the rendered workspace warm when the window is closed.
+      // Activation must reuse it, without creating a setup/relaunch cycle.
+      if (process.platform === "darwin") window.close();
+      app.emit("activate");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return {
+        elapsedMs: performance.now() - began,
+        sameRenderer: BrowserWindow.getAllWindows()[0]?.webContents.id === id,
+        windows: BrowserWindow.getAllWindows().length,
+        marks: performance
+          .getEntriesByType("mark")
+          .map(({ name, startTime }) => ({ name, startTime })),
+      };
+    });
+    expect(warm.sameRenderer).toBe(true);
+    expect(warm.windows).toBe(1);
+    const performancePath = test.info().outputPath("desktop-performance.json");
+    await writeFile(performancePath, JSON.stringify({ startupMs, warm }, null, 2));
+    await test.info().attach("desktop-performance.json", {
+      contentType: "application/json",
+      path: performancePath,
+    });
     test.info().annotations.push({ type: "packaged-startup-ms", description: String(startupMs) });
   } finally {
     await app?.close();

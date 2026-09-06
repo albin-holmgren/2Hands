@@ -53,7 +53,7 @@ export function createWorkspaceRpc(spaceId?: string | null, signal?: AbortSignal
   const link = new RPCLink<RpcClientContext>({
     url: () =>
       typeof window === "undefined" ? "http://127.0.0.1:5173/rpc" : `${window.location.origin}/rpc`,
-    fetch: (input, init, options) => {
+    fetch: async (input, init, options) => {
       const request = new Request(input, init);
       const capturedSpace =
         options.context.spaceId === undefined
@@ -61,11 +61,15 @@ export function createWorkspaceRpc(spaceId?: string | null, signal?: AbortSignal
             ? selectedSpaceId()
             : spaceId
           : options.context.spaceId;
-      return fetch(request, {
+      const response = await fetch(request, {
         headers: withSpaceHeaders(request.headers, capturedSpace),
         credentials: "include",
         signal: signal ? AbortSignal.any([signal, request.signal]) : request.signal,
       });
+      if (response.status === 401 && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("rakazo:session-unauthorized"));
+      }
+      return response;
     },
   });
   return createORPCClient<ContractRouterClient<AppContract, RpcClientContext>>(link);

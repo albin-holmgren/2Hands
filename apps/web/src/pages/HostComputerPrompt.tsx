@@ -45,7 +45,7 @@ export function HostComputerPrompt({ initialMe }: { initialMe?: Me }) {
 
   return (
     <div className="absolute inset-0 z-40 grid place-items-center bg-[var(--rk-page)]/80 px-6">
-      <div className="w-[440px] rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[#121214] p-6">
+      <div className="w-[440px] rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] p-6">
         <h2 className="text-[22px] font-medium text-[var(--rk-ink)]">
           <Trans>Where should bots run?</Trans>
         </h2>

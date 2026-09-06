@@ -45,7 +45,10 @@ export function McpOAuthCallbackPage() {
   }, [navigate, params, t]);
   const showReturn = Boolean(error) && window.name !== POPUP_NAME;
   return (
-    <div className="grid min-h-screen place-items-center bg-[var(--rk-page)] p-6 text-center">
+    <div
+      data-rakazo-route-ready="true"
+      className="grid min-h-screen place-items-center bg-[var(--rk-page)] p-6 text-center"
+    >
       <div>
         <div className="text-lg text-[var(--rk-ink)]">
           {error ? (
@@ -56,17 +59,17 @@ export function McpOAuthCallbackPage() {
             <Trans>Finishing MCP connection…</Trans>
           )}
         </div>
-        {error ? <p className="mt-2 max-w-md text-sm text-[#85858B]">{error}</p> : null}
+        {error ? <p className="mt-2 max-w-md text-sm text-[var(--rk-muted)]">{error}</p> : null}
         {showReturn ? (
           <button
             type="button"
             onClick={() => navigate("/app")}
-            className="mt-5 rounded-xl bg-[#7785FF] px-4 py-2 text-sm font-semibold text-[#090A12]"
+            className="mt-5 rounded-xl bg-[var(--rk-cream)] px-4 py-2 text-sm font-semibold text-[var(--rk-cream-ink)]"
           >
             <Trans>Return to 2hands</Trans>
           </button>
         ) : (
-          <p className="mt-2 text-sm text-[#85858B]">
+          <p className="mt-2 text-sm text-[var(--rk-muted)]">
             {error || done ? (
               <Trans>You can close this window.</Trans>
             ) : (

@@ -25,6 +25,10 @@ describe("session gate", () => {
     expect(sessionGate({ data: null, isPending: false, error: { status: 401 } })).toBe("anonymous");
   });
 
+  it("does not keep stale authenticated data after a confirmed unauthorized refresh", () => {
+    expect(sessionGate({ data: user, isPending: false, error: { status: 401 } })).toBe("anonymous");
+  });
+
   it("does not sign out a cold load that could not reach the server", () => {
     expect(sessionGate({ data: null, isPending: false, error: { status: 503 } })).toBe(
       "unreachable",

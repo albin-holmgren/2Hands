@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BrandMark } from "../components/brand-mark";
 import {
   apiBaseWarning,
   currentApiBase,
@@ -34,7 +35,7 @@ import {
   signUp,
   usesCustomApiBase,
 } from "../lib/api";
-import { useNativeTheme } from "../lib/theme";
+import { nativeInputStyle, useNativeTheme } from "../lib/theme";
 
 export default function SignIn() {
   const native = useNativeTheme();
@@ -51,6 +52,9 @@ export default function SignIn() {
   const [serverOpen, setServerOpen] = useState(false);
   const [reset, setReset] = useState<PasswordResetCapabilities | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
+  const [capabilitiesAttempt, setCapabilitiesAttempt] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     void loadSessionToken().then((token) => {
@@ -62,15 +66,18 @@ export default function SignIn() {
   useEffect(() => {
     let active = true;
     setReset(null);
+    setCapabilitiesError(false);
     void passwordResetCapabilities()
       .then((capabilities) => {
         if (active) setReset(capabilities);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setCapabilitiesError(true);
+      });
     return () => {
       active = false;
     };
-  }, [apiBase]);
+  }, [apiBase, capabilitiesAttempt]);
 
   if (!ready) {
     return (
@@ -85,6 +92,20 @@ export default function SignIn() {
 
   async function submit() {
     if (pending) return;
+    if (mode !== "in" && !reset) return;
+    if (mode === "up" && reset?.signupsEnabled === false) return;
+    if (!email.trim().includes("@")) {
+      setError("Enter a valid email address");
+      return;
+    }
+    if (mode !== "forgot" && !password) {
+      setError("Enter your password");
+      return;
+    }
+    if (mode === "up" && password.length < 8) {
+      setError("Use at least 8 characters for your password");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -146,11 +167,16 @@ export default function SignIn() {
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
             >
+              <View style={{ alignItems: "center", marginBottom: 24 }}>
+                <BrandMark size={56} />
+              </View>
               <Text
                 style={{
                   color: native.ink,
-                  fontSize: 32,
-                  fontWeight: "500",
+                  fontSize: 28,
+                  lineHeight: 34,
+                  letterSpacing: -0.8,
+                  fontWeight: "600",
                   textAlign: "center",
                 }}
               >
@@ -165,7 +191,25 @@ export default function SignIn() {
                   Start free. No card or API key.
                 </Text>
               ) : null}
-              {resetSent ? (
+              {mode === "up" && reset?.signupsEnabled === false ? (
+                <View style={{ marginTop: 28, alignItems: "center" }}>
+                  <Text
+                    accessibilityRole="alert"
+                    style={{ color: native.muted, textAlign: "center" }}
+                  >
+                    Registration is currently unavailable
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setMode("in")}
+                    style={{ marginTop: 18, minHeight: 44, justifyContent: "center" }}
+                  >
+                    <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
+                      Sign in
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : resetSent ? (
                 <View style={{ alignItems: "center", marginTop: 28 }}>
                   <Text style={{ color: native.ink, fontSize: 17 }}>Check your email</Text>
                   <Text
@@ -184,7 +228,7 @@ export default function SignIn() {
                       setMode("in");
                       setResetSent(false);
                     }}
-                    style={{ marginTop: 22 }}
+                    style={{ marginTop: 22, minHeight: 44, justifyContent: "center" }}
                   >
                     <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
                       Back to sign in
@@ -195,6 +239,8 @@ export default function SignIn() {
                 <>
                   {mode === "up" ? (
                     <TextInput
+                      accessibilityLabel="Name"
+                      keyboardAppearance={native.theme}
                       autoComplete="name"
                       placeholder="Name"
                       placeholderTextColor={native.muted2}
@@ -202,15 +248,15 @@ export default function SignIn() {
                       onChangeText={setName}
                       style={{
                         marginTop: 28,
-                        backgroundColor: native.surface,
-                        borderRadius: 13,
-                        padding: 16,
-                        color: native.ink,
+                        ...nativeInputStyle(native),
                       }}
                     />
                   ) : null}
                   <TextInput
+                    accessibilityLabel="Email"
+                    keyboardAppearance={native.theme}
                     autoCapitalize="none"
+                    autoCorrect={false}
                     autoComplete="email"
                     keyboardType="email-address"
                     placeholder="Email"
@@ -219,10 +265,7 @@ export default function SignIn() {
                     onChangeText={setEmail}
                     style={{
                       marginTop: mode === "up" ? 12 : 28,
-                      backgroundColor: native.surface,
-                      borderRadius: 13,
-                      padding: 16,
-                      color: native.ink,
+                      ...nativeInputStyle(native),
                     }}
                   />
                   {mode === "in" && reset?.passwordReset && reset.resetUrl ? (
@@ -233,7 +276,7 @@ export default function SignIn() {
                         setMode("forgot");
                         setError(null);
                       }}
-                      style={{ alignSelf: "flex-end", marginTop: 10 }}
+                      style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
                     >
                       <Text style={{ color: native.ink, fontSize: 14, fontWeight: "600" }}>
                         Forgot password?
@@ -242,36 +285,76 @@ export default function SignIn() {
                   ) : null}
                   {mode !== "forgot" ? (
                     <TextInput
+                      accessibilityLabel="Password"
+                      keyboardAppearance={native.theme}
                       autoComplete={mode === "in" ? "current-password" : "new-password"}
                       placeholder="Password"
                       placeholderTextColor={native.muted2}
                       returnKeyType="go"
-                      secureTextEntry
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
                       value={password}
                       onChangeText={setPassword}
                       onSubmitEditing={() => void submit()}
                       style={{
                         marginTop: 12,
-                        backgroundColor: native.surface,
-                        borderRadius: 13,
-                        padding: 16,
-                        color: native.ink,
+                        ...nativeInputStyle(native),
                       }}
                     />
                   ) : null}
+                  {mode !== "forgot" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ checked: showPassword }}
+                      onPress={() => setShowPassword((value) => !value)}
+                      style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
+                    >
+                      <Text style={{ color: native.muted, fontSize: 13 }}>
+                        {showPassword ? "Hide password" : "Show password"}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {capabilitiesError ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text accessibilityRole="alert" style={{ color: native.muted, fontSize: 13 }}>
+                        Could not load account options.
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setCapabilitiesAttempt((value) => value + 1)}
+                        style={{ minHeight: 44, justifyContent: "center" }}
+                      >
+                        <Text style={{ color: native.ink, fontSize: 14 }}>Try again</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                   {error ? (
-                    <Text style={{ color: native.danger, marginTop: 12 }}>{error}</Text>
+                    <Text
+                      accessibilityRole="alert"
+                      accessibilityLiveRegion="polite"
+                      style={{ color: native.danger, marginTop: 12 }}
+                    >
+                      {error}
+                    </Text>
                   ) : null}
                   <Pressable
                     accessibilityRole="button"
                     testID="auth-submit"
                     onPress={() => void submit()}
-                    disabled={pending}
+                    disabled={pending || (mode !== "in" && !reset)}
+                    accessibilityState={{
+                      disabled: pending || (mode !== "in" && !reset),
+                      busy: pending,
+                    }}
                     style={{
                       marginTop: 16,
                       backgroundColor: native.cream,
-                      borderRadius: 10,
+                      borderRadius: 12,
+                      minHeight: 48,
+                      justifyContent: "center",
                       paddingVertical: 12,
+                      opacity: pending || (mode !== "in" && !reset) ? 0.6 : 1,
                       alignItems: "center",
                     }}
                   >
@@ -293,26 +376,35 @@ export default function SignIn() {
                       marginTop: 24,
                     }}
                   >
-                    <Text style={{ color: native.muted2, fontSize: 15 }}>
-                      {mode === "in"
-                        ? "Don’t have an account?"
-                        : mode === "up"
-                          ? "Already have an account?"
-                          : ""}
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      hitSlop={8}
-                      onPress={() => {
-                        setMode((current) => (current === "in" ? "up" : "in"));
-                        setError(null);
-                      }}
-                      style={{ marginLeft: 5 }}
-                    >
-                      <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
-                        {mode === "in" ? "Sign up" : mode === "up" ? "Sign in" : "Back to sign in"}
+                    {mode !== "in" || reset?.signupsEnabled !== false ? (
+                      <Text style={{ color: native.muted2, fontSize: 15 }}>
+                        {mode === "in"
+                          ? "Don’t have an account?"
+                          : mode === "up"
+                            ? "Already have an account?"
+                            : ""}
                       </Text>
-                    </Pressable>
+                    ) : null}
+                    {mode !== "in" || reset?.signupsEnabled !== false ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={pending}
+                        hitSlop={8}
+                        onPress={() => {
+                          setMode((current) => (current === "in" ? "up" : "in"));
+                          setError(null);
+                        }}
+                        style={{ marginLeft: 5, minHeight: 44, justifyContent: "center" }}
+                      >
+                        <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>
+                          {mode === "in"
+                            ? "Sign up"
+                            : mode === "up"
+                              ? "Sign in"
+                              : "Back to sign in"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </>
               )}
@@ -323,9 +415,12 @@ export default function SignIn() {
                 custom ? `Custom server ${displayApiHost(apiBase)}` : "Use a custom server"
               }
               hitSlop={12}
+              disabled={pending}
+              accessibilityState={{ disabled: pending }}
               onPress={() => setServerOpen(true)}
               style={{
                 alignItems: "center",
+                minHeight: 44,
                 paddingHorizontal: 24,
                 paddingBottom: 12,
                 paddingTop: 8,
@@ -351,6 +446,10 @@ export default function SignIn() {
         onClose={() => setServerOpen(false)}
         onSaved={(url) => {
           setApiBase(url);
+          setPassword("");
+          setError(null);
+          setResetSent(false);
+          setMode("in");
           setServerOpen(false);
         }}
       />
@@ -469,11 +568,7 @@ function ServerSheet({
             }}
             style={{
               marginTop: 20,
-              backgroundColor: native.surface,
-              borderRadius: 13,
-              padding: 16,
-              color: native.ink,
-              fontSize: 16,
+              ...nativeInputStyle(native),
             }}
           />
           {warning ? (

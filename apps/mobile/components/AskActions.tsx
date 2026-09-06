@@ -38,6 +38,10 @@ export function AskActions({
         <Pressable
           key={action.id}
           accessibilityRole="button"
+          accessibilityState={{
+            disabled: Boolean(disabled || submitting),
+            busy: pendingAction === action.id,
+          }}
           disabled={disabled || submitting}
           onPress={() => void submit(action.id)}
           style={{

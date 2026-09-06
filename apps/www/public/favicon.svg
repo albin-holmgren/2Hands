@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">Rakazo mark</title>
-  <defs>
-    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2965EC" />
-      <stop offset="1" stop-color="#5C89F8" />
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="148" fill="url(#blue)" />
-  <rect x="157" y="196" width="62" height="120" rx="31" fill="#F5F3F0" />
-  <rect x="293" y="196" width="62" height="120" rx="31" fill="#F5F3F0" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><title>2hands</title><g transform="translate(0 0)"><defs><linearGradient id="mark-0" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="#4E93FF"/><stop offset="1" stop-color="#6968DF"/></linearGradient><linearGradient id="mark-1" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="#F5A58D"/><stop offset="1" stop-color="#DB6B83"/></linearGradient></defs><path d="M8 55 5 48C3 44 2 41 2 37V27C2 24 6 24 6 27V33C6 34 8 34 8 33V19C8 16 12 16 12 19V31C12 32 14 32 14 31V13C14 10 18 10 18 13V31C18 32 20 32 20 31V17C20 14 24 14 24 17V36L26 33C28 30 31 32 29 35L24 46C22 49 22 51 22 55 22 56 20 57 18 57H12C10 57 9 56 8 55Z" fill="url(#mark-0)"/><path d="M56 55 59 48C61 44 62 41 62 37V27C62 24 58 24 58 27V33C58 34 56 34 56 33V19C56 16 52 16 52 19V31C52 32 50 32 50 31V13C50 10 46 10 46 13V31C46 32 44 32 44 31V17C44 14 40 14 40 17V36L38 33C36 30 33 32 35 35L40 46C42 49 42 51 42 55 42 56 44 57 46 57H52C54 57 55 56 56 55Z" fill="url(#mark-1)"/></g></svg>

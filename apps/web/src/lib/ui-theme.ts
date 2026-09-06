@@ -14,7 +14,7 @@ export function readUiThemePreference(): UiThemePreference {
   } catch {
     // Private mode / blocked storage — fall through to default.
   }
-  return "dark";
+  return "system";
 }
 
 export function writeUiThemePreference(preference: UiThemePreference) {
@@ -41,9 +41,10 @@ export function systemPrefersLight() {
 export function applyResolvedUiTheme(theme: UiResolvedTheme) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
+  document.documentElement.style.backgroundColor = palettes[theme].page;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta instanceof HTMLMetaElement) {
-    meta.content = theme === "light" ? "#f6f6f3" : "#050506";
+    meta.content = palettes[theme].page;
   }
 }
 
@@ -51,3 +52,5 @@ export function applyUiThemePreference(preference: UiThemePreference) {
   writeUiThemePreference(preference);
   applyResolvedUiTheme(resolveUiTheme(preference, systemPrefersLight()));
 }
+
+import { palettes } from "@rakazo/ui-tokens";

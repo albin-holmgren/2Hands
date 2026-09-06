@@ -16,6 +16,7 @@ export function trustedBrowserOrigins(env: {
   webOrigin: string;
   apiUrl: string;
   authUrl: string;
+  trustedWebOrigins?: string[];
 }): string[] {
   const origins = new Set([env.webOrigin, env.apiUrl, env.authUrl].filter(Boolean));
   for (const origin of [...origins]) {
@@ -23,6 +24,7 @@ export function trustedBrowserOrigins(env: {
     if (sibling) origins.add(sibling);
   }
   origins.add("https://2hands-computers.fly.dev");
+  for (const origin of env.trustedWebOrigins ?? []) origins.add(origin);
   return [...origins];
 }
 
@@ -48,4 +50,31 @@ export function publicRequestUrl(request: Request): string {
   const proto =
     request.headers.get("x-forwarded-proto") ?? incoming.protocol.replace(":", "") ?? "https";
   return `${proto}://${host}${incoming.pathname}${incoming.search}`;
+}
+
+/** Development runtimes are trusted only by development/test deployments. */
+export function trustedAuthOrigins(env: {
+  webOrigin: string;
+  apiUrl: string;
+  authUrl: string;
+  nodeEnv: string;
+  trustedWebOrigins?: string[];
+}): string[] {
+  return [
+    ...new Set([
+      ...trustedBrowserOrigins(env),
+      "rakazo://",
+      "2hands://",
+      ...(["development", "test"].includes(env.nodeEnv)
+        ? [
+            "exp://",
+            "exp://*",
+            "http://localhost:8081",
+            "http://127.0.0.1:8081",
+            "http://localhost:19006",
+            "http://127.0.0.1:19006",
+          ]
+        : []),
+    ]),
+  ];
 }

@@ -5,7 +5,7 @@ const config = { name: "2hands", slug: "rakazo" };
 const release = {
   EAS_OWNER: "example-team",
   EAS_PROJECT_ID: "11111111-1111-4111-8111-111111111111",
-  EXPO_PUBLIC_API_URL: "https://app.example.test",
+  EXPO_PUBLIC_API_URL: "https://app.example.com",
   EAS_BUILD_PROFILE: "production",
   EAS_IOS_BUNDLE_IDENTIFIER: "com.example.twohands",
   EAS_ANDROID_PACKAGE: "com.example.twohands",
@@ -29,6 +29,29 @@ describe("mobile distribution identity", () => {
       "EAS_PROJECT_ID",
     );
     expect(() => mobileBuildConfig(config, { ...release, EAS_PROJECT_ID: "bad" })).toThrow("UUID");
+  });
+  it("requires the owned identifier only for the selected store platform", () => {
+    expect(
+      mobileBuildConfig(config, {
+        ...release,
+        EAS_BUILD_PLATFORM: "ios",
+        EAS_ANDROID_PACKAGE: undefined,
+      }).ios?.bundleIdentifier,
+    ).toBe(release.EAS_IOS_BUNDLE_IDENTIFIER);
+    expect(
+      mobileBuildConfig(config, {
+        ...release,
+        EAS_BUILD_PLATFORM: "android",
+        EAS_IOS_BUNDLE_IDENTIFIER: undefined,
+      }).android?.package,
+    ).toBe(release.EAS_ANDROID_PACKAGE);
+    expect(() =>
+      mobileBuildConfig(config, {
+        ...release,
+        EAS_BUILD_PLATFORM: "ios",
+        EAS_IOS_BUNDLE_IDENTIFIER: undefined,
+      }),
+    ).toThrow("EAS_IOS_BUNDLE_IDENTIFIER");
   });
   it("pins the update project to the configured operator", () => {
     expect(mobileBuildConfig(config, release)).toMatchObject({
@@ -63,6 +86,19 @@ describe("mobile distribution identity", () => {
     "https://user:password@app.example.test",
     "https://app.example.test/api",
     "https://app.example.test/?token=value",
+    "https://localhost",
+    "https://localhost.",
+    "https://preview.local",
+    "https://fixture.example.test",
+    "https://127.0.0.1",
+    "https://10.0.2.2",
+    "https://192.168.1.1",
+    "https://172.16.0.1",
+    "https://100.64.0.1",
+    "https://169.254.1.1",
+    "https://[::1]",
+    "https://[fd00::1]",
+    "https://[::ffff:127.0.0.1]",
   ])("rejects unsafe production API configuration: %s", (url) => {
     expect(() => mobileBuildConfig(config, { ...release, EXPO_PUBLIC_API_URL: url })).toThrow(
       "EXPO_PUBLIC_API_URL",

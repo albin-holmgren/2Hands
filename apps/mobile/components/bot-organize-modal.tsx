@@ -184,9 +184,9 @@ const makeStyles = (native: NativeTheme) =>
     },
     sheet: {
       maxHeight: "82%",
-      borderTopLeftRadius: 22,
-      borderTopRightRadius: 22,
-      backgroundColor: native.surface2,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      backgroundColor: native.surface,
       paddingHorizontal: 16,
       paddingTop: 18,
       paddingBottom: 28,

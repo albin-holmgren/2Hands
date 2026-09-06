@@ -1,5 +1,6 @@
 export const SITE_NAME = "2hands";
 export const SITE_URL = "https://2hands.ai";
+export const APP_URL = "https://app.2hands.ai";
 export const SITE_DESCRIPTION =
   "2hands brings your AI models, personal workspaces, and recurring work together. Start free or self-host.";
 

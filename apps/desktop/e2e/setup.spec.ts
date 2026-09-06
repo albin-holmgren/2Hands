@@ -515,6 +515,13 @@ test("servers on the same host but different ports do not share login cookies", 
     await app.close();
 
     app = await launch({ RAKAZO_WEB_URL: `http://127.0.0.1:${secondAddress.port}` });
+    // A legacy storage check uses a windowless WebContents. Wait for the real
+    // app window to finish opening before selecting Playwright's surviving Page.
+    await expect
+      .poll(() =>
+        app!.evaluate(() => performance.getEntriesByName("rk:main:load-url-resolved").length),
+      )
+      .toBe(1);
     const secondWindow = await app.firstWindow();
     await expect(secondWindow.getByText("Cookies: none")).toBeVisible();
   } finally {

@@ -180,7 +180,7 @@ export function TeachComputerOverlayControl({
       {goalOpen ? (
         <div
           data-testid="teach-chrome-popover"
-          className="absolute end-0 top-full z-20 mt-2 w-[min(360px,calc(100vw-2rem))] rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[#121214] px-3 py-3 shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+          className="absolute end-0 top-full z-20 mt-2 w-[min(360px,calc(100vw-2rem))] rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-3 py-3 shadow-[0_12px_40px_rgba(0,0,0,.45)]"
         >
           <label htmlFor="teach-goal-input" className="text-[13px] text-[var(--rk-muted)]">
             <Trans>What result will you demonstrate?</Trans>
@@ -224,7 +224,7 @@ export function TeachComputerOverlayControl({
       {!goalOpen && needsRefresh && recoveryOpen ? (
         <div
           data-testid="teach-refresh-recovery"
-          className="absolute end-0 top-full z-20 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[#121214] px-3 py-3 shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+          className="absolute end-0 top-full z-20 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-[12px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-3 py-3 shadow-[0_12px_40px_rgba(0,0,0,.45)]"
         >
           {error ? (
             <div role="alert" className="text-[13px] text-[var(--rk-danger-soft)]">
@@ -270,11 +270,11 @@ export function TeachComputerOverlayControl({
           setError(null);
           setGoalOpen((open) => !open);
         }}
-        className="flex items-center gap-2 rounded-[10px] border border-[#2A2A2E] bg-[#141417] px-3 py-1.5 text-[13px] text-[var(--rk-ink)] hover:bg-[#1A1A1E] disabled:opacity-40"
+        className="flex items-center gap-2 rounded-[10px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] px-3 py-1.5 text-[13px] text-[var(--rk-ink)] hover:bg-[var(--rk-surface-2)] disabled:opacity-40"
       >
         <span
           aria-hidden
-          className="inline-block h-2 w-2 shrink-0 rounded-full border border-[#ECECEE]"
+          className="inline-block h-2 w-2 shrink-0 rounded-full border border-[var(--rk-focus-ring)]"
         />
         <Trans>Teach a task</Trans>
       </button>

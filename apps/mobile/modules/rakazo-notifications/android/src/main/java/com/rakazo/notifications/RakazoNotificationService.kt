@@ -8,14 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -33,9 +25,6 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 private data class RunRecord(
   val runId: String,
@@ -93,7 +82,6 @@ class RakazoNotificationService : Service() {
   }
 
   private suspend fun poll(generation: Long) {
-    var selectedAvatarStyle: String? = null
     while (scope.isActive) {
       val storage = NotificationStorage(this)
       val settings = storage.settings
@@ -109,9 +97,6 @@ class RakazoNotificationService : Service() {
       }
       val seeded = prepareHistorySpace(generation, storage.spaceId) ?: return
       try {
-        val avatarStyle = selectedAvatarStyle
-          ?: avatarStyle(storage.endpoint, storage.token, storage.spaceId)
-            .also { selectedAvatarStyle = it }
         val active = runs(storage.endpoint, storage.token, storage.spaceId, "active")
         val working = active.filter(::isWorking).filter { it.notificationsEnabled }
         val recent = runs(storage.endpoint, storage.token, storage.spaceId, "recent")
@@ -119,7 +104,7 @@ class RakazoNotificationService : Service() {
         val immediate = mutableListOf<Pair<RunRecord, NotificationCopy>>()
         if (!runIfCurrent(generation) {
             val visibleWorking = working.filterNot(::isOpenThread)
-            if (visibleWorking.isEmpty()) clearLive() else showLive(visibleWorking, avatarStyle)
+            if (visibleWorking.isEmpty()) clearLive() else showLive(visibleWorking)
             if (!seeded) {
               knownCompleted += recent.map { it.runId }
             } else {
@@ -242,7 +227,7 @@ class RakazoNotificationService : Service() {
     manager.notify(run.threadId.hashCode(), notification)
   }
 
-  private fun showLive(active: List<RunRecord>, avatarStyle: String) {
+  private fun showLive(active: List<RunRecord>) {
     val primary = active.first()
     val title = when (active.size) {
       1 -> "${primary.botName} is working"
@@ -253,9 +238,7 @@ class RakazoNotificationService : Service() {
       else -> active.take(3).joinToString(" · ") { it.botName }
     }
     val liveBuilder = builder(Channels.LIVE)
-      .setSmallIcon(
-        liveStatusIcon(primary, avatarStyle),
-      )
+      .setSmallIcon(R.drawable.ic_rakazo_notification)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(Notification.BigTextStyle().bigText(body))
@@ -277,33 +260,6 @@ class RakazoNotificationService : Service() {
     } else {
       startForeground(LIVE_NOTIFICATION_ID, notification)
     }
-  }
-
-  private fun liveStatusIcon(run: RunRecord, avatarStyle: String): Icon {
-    if (avatarStyle != "organic") {
-      return Icon.createWithResource(this, R.drawable.ic_rakazo_notification)
-    }
-    val bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val seed = run.botId.fold(0) { hash, character -> hash * 31 + character.code }
-    val phase = (seed and 0xff) / 255.0 * PI * 2
-    val lobes = 5 + (seed and 3)
-    val path = Path()
-    repeat(32) { index ->
-      val angle = index / 32.0 * PI * 2
-      val radius = 34 + sin(angle * lobes + phase) * 4 + cos(angle * 3 - phase) * 2
-      val x = (48 + cos(angle) * radius).toFloat()
-      val y = (48 + sin(angle) * radius).toFloat()
-      if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-    }
-    path.close()
-    canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
-    val eyes = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-    }
-    canvas.drawRoundRect(35f, 36f, 41f, 58f, 3f, 3f, eyes)
-    canvas.drawRoundRect(55f, 36f, 61f, 58f, 3f, 3f, eyes)
-    return Icon.createWithBitmap(bitmap)
   }
 
   private fun clearLive() {
@@ -452,9 +408,6 @@ private fun runs(endpoint: String, token: String, spaceId: String, filter: Strin
 
 private fun isWorking(run: RunRecord): Boolean =
   run.status == "queued" || run.status == "leased" || run.status == "running"
-
-private fun avatarStyle(endpoint: String, token: String, spaceId: String): String =
-  rpc(endpoint, token, spaceId, "me", JSONObject()).optString("avatarStyle", "robot")
 
 private fun latestReply(endpoint: String, token: String, spaceId: String, run: RunRecord): String? {
   val target = JSONObject().apply {

@@ -32,7 +32,7 @@ function ScopePicker({
             onClick={() => onChange(option)}
             className={`flex-1 rounded-[11px] border px-3.5 py-2.5 text-[14px] disabled:opacity-40 ${
               value === option
-                ? "border-[#4A4A50] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
+                ? "border-[var(--rk-focus-ring)] bg-[var(--rk-surface-2)] text-[var(--rk-ink)]"
                 : "border-[var(--rk-hairline-strong)] text-[var(--rk-muted)]"
             }`}
           >
@@ -127,8 +127,8 @@ export function MemorySettingsOverlay({
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(4,4,5,.62)] p-4 sm:p-10">
-      <div className="flex max-h-[min(760px,100%)] w-[560px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[#232326] bg-[var(--rk-surface)] shadow-[0_40px_90px_rgba(0,0,0,.55)]">
+    <div className="absolute inset-0 z-30 flex items-center justify-center rk-overlay-backdrop p-4 sm:p-10">
+      <div className="flex max-h-[min(760px,100%)] w-[560px] max-w-full flex-col overflow-hidden rounded-[26px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] shadow-[var(--rk-shadow-popover)]">
         <div className="flex items-start justify-between px-6 pt-6 sm:px-8 sm:pt-7">
           <div>
             <div className="text-2xl font-medium text-[var(--rk-ink)]">

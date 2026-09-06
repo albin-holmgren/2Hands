@@ -129,6 +129,8 @@ export default defineConfig(({ mode }) => {
   const performanceAssetDelayMs = Number(process.env.RAKAZO_PERFORMANCE_ASSET_DELAY_MS ?? 0);
   return {
     ...(ignoreEnvFiles ? { envDir: "/tmp/rakazo-offline-no-env" } : {}),
+    // Concurrent fixture/preview servers must not invalidate each other's optimized dependencies.
+    cacheDir: path.resolve(import.meta.dirname, `node_modules/.vite-${webPort}`),
     plugins: [
       react({
         babel: {

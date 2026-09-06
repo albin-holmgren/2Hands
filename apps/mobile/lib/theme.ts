@@ -1,7 +1,7 @@
-import { themeTokens, type UiTheme } from "@rakazo/ui-tokens";
+import { fontSizes, lineHeights, themeTokens, type UiTheme } from "@rakazo/ui-tokens";
 import * as SecureStore from "expo-secure-store";
 import { useSyncExternalStore } from "react";
-import { Appearance, useColorScheme } from "react-native";
+import { Appearance, type TextStyle, useColorScheme } from "react-native";
 
 export type ThemePreference = "system" | UiTheme;
 const KEY = "2hands.appearance";
@@ -50,6 +50,21 @@ export function nativeTheme(theme: UiTheme) {
 }
 const nativePalettes = { light: nativeTheme("light"), dark: nativeTheme("dark") };
 export type NativeTheme = ReturnType<typeof nativeTheme>;
+/** Platform-sized form text with the same quiet, bordered surface on every screen. */
+export function nativeInputStyle(native: NativeTheme): TextStyle {
+  return {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: native.hairline,
+    backgroundColor: native.surface,
+    color: native.ink,
+    fontSize: fontSizes.body,
+    lineHeight: lineHeights.body,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  };
+}
 export function useNativeTheme(): NativeTheme {
   const preferred = useThemePreference();
   const system = useColorScheme();
