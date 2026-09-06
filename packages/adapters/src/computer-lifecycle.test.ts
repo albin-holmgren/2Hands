@@ -76,10 +76,7 @@ describe("computer provisioning", () => {
           context,
         ),
       ).resolves.toMatchObject({ providerRef: "winner-provider" });
-      expect(sandbox.provision).toHaveBeenCalledWith(
-        expect.objectContaining({ providerRef: "winner-provider" }),
-        context,
-      );
+      expect(sandbox.provision).not.toHaveBeenCalled();
       expect(prisma.computer.updateMany).toHaveBeenCalledOnce();
       expect(prisma.bot.findFirst).toHaveBeenCalledWith({
         where: { id: context.botId, computerId: "computer-1", archivedAt: null },
@@ -148,6 +145,7 @@ describe("computer provisioning", () => {
           where: {
             id: "computer-1",
             state: "booting",
+            executionFence: 1,
             bots: { some: { id: "bot-1", archivedAt: null } },
           },
         }),
@@ -167,6 +165,7 @@ describe("computer provisioning", () => {
       fresh: false,
     };
     const prepare = vi.fn().mockResolvedValue(undefined);
+    const home = new LocalAgentHomeStore(dataDir);
     const prisma = {
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -178,13 +177,14 @@ describe("computer provisioning", () => {
           state: "running",
           controlLeaseId: null,
         }),
-        updateMany: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn(),
       },
     } as unknown as PrismaClient;
     const sandbox = {
       provision: vi.fn().mockResolvedValue(ref),
       prepare,
+      importWorkspace: vi.fn(async () => undefined),
     } as unknown as SandboxProvider;
 
     try {
@@ -193,7 +193,7 @@ describe("computer provisioning", () => {
           {
             prisma,
             sandbox,
-            home: {} as AgentHomeStore,
+            home,
             jobs: {} as JobPublisher,
             events: {} as ThreadEvents,
             dataDir,
@@ -203,13 +203,17 @@ describe("computer provisioning", () => {
         ),
       ).resolves.toEqual(ref);
       expect(prepare).toHaveBeenCalledWith(ref, context);
-      expect(prisma.computer.update).toHaveBeenCalledWith({
-        where: { id: "computer-1" },
-        data: {
-          providerRef: "provider-2",
-          kind: "cloud",
-        },
-      });
+      expect(sandbox.importWorkspace).toHaveBeenCalledWith(ref, expect.anything(), context);
+      expect(prisma.computer.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ state: "booting", executionFence: 1 }),
+          data: expect.objectContaining({
+            providerRef: "provider-2",
+            kind: "cloud",
+            state: "running",
+          }),
+        }),
+      );
     } finally {
       await rm(dataDir, { recursive: true, force: true });
     }
@@ -389,7 +393,7 @@ describe("computer provisioning", () => {
         errors: [prepareError, rollbackError],
       });
       expect(updateMany).toHaveBeenLastCalledWith({
-        where: { id: "computer-1", state: "booting" },
+        where: { id: "computer-1", state: "booting", executionFence: 1 },
         data: {
           state: "error",
           providerRef: "new-provider-1",
@@ -422,7 +426,7 @@ describe("computer provisioning", () => {
           state: "running",
           controlLeaseId: null,
         }),
-        updateMany: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn(),
       },
     } as unknown as PrismaClient;
@@ -447,7 +451,7 @@ describe("computer provisioning", () => {
         ),
       ).resolves.toEqual(ref);
       expect(prepare).toHaveBeenCalledWith(ref, context);
-      expect(prisma.computer.updateMany).not.toHaveBeenCalled();
+      expect(prisma.computer.updateMany).toHaveBeenCalledTimes(2);
       expect(prisma.computer.update).not.toHaveBeenCalled();
     } finally {
       await rm(dataDir, { recursive: true, force: true });

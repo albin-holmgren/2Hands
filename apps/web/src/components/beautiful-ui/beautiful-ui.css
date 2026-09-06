@@ -1,6 +1,6 @@
 /* Beautiful UI primitives — hand-ported from beautifului.dev
    (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
-   Tokens are remapped onto Rakazo's dark palette; keyframes are ported
+   Tokens follow the shared light and dark palette; keyframes are ported
    verbatim with a bui- prefix to avoid collisions. */
 
 :root {
@@ -13,7 +13,7 @@
   --bui-line-strong: var(--rk-hairline-strong);
   --bui-green: #3dbb72;
   --bui-green-tint: #3dbb7224;
-  --bui-accent: #7785ff;
+  --bui-accent: var(--rk-accent);
   --bui-shadow-btn: 0 0 0 1px var(--bui-line-strong), 0 1px 2px #0000004d;
   --bui-shadow-card: 0 0 0 1px var(--bui-line), 0 1px 2px #0003, 0 2px 6px #0003;
 }

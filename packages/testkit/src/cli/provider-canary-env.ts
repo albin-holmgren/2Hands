@@ -59,6 +59,47 @@ export function canaryDatabaseUrl(source: NodeJS.ProcessEnv) {
   return testDatabaseUrl(source.TEST_DATABASE_URL);
 }
 
+/** Explicit model selection for the real computer journey; no unrelated provider fallback. */
+export function computerCanaryModel(source: NodeJS.ProcessEnv) {
+  const provider = source.COMPUTER_E2E_PROVIDER?.trim() || "openrouter";
+  if (provider !== "openrouter" && provider !== "vercel-gateway")
+    throw new Error("COMPUTER_E2E_PROVIDER must be openrouter or vercel-gateway");
+  const model = source.COMPUTER_E2E_MODEL?.trim();
+  if (!model) throw new Error("COMPUTER_E2E_MODEL is required");
+  const key =
+    provider === "vercel-gateway"
+      ? source.VERCEL_AI_GATEWAY_API_KEY?.trim() || source.AI_GATEWAY_API_KEY?.trim()
+      : source.OPENROUTER_API_KEY?.trim();
+  if (!key)
+    throw new Error(
+      `${provider === "vercel-gateway" ? "AI_GATEWAY_API_KEY" : "OPENROUTER_API_KEY"} is required`,
+    );
+  return { provider, model, key };
+}
+
+export function computerCanaryEnv(source: NodeJS.ProcessEnv, databaseUrl: string) {
+  const { provider, model, key } = computerCanaryModel(source);
+  if (!source.E2B_API_KEY?.trim()) throw new Error("E2B_API_KEY is required");
+  return {
+    ...providerCanaryEnv(source, "e2b", databaseUrl),
+    RUN_COMPUTER_E2E: "1",
+    SANDBOX_PROVIDER: "e2b",
+    COMPUTER_E2E_PROVIDER: provider,
+    COMPUTER_E2E_MODEL: model,
+    PI_DEFAULT_PROVIDER: provider,
+    PI_DEFAULT_MODEL: model,
+    AI_GATEWAY_API_KEY: provider === "vercel-gateway" ? key : undefined,
+    VERCEL_AI_GATEWAY_API_KEY: undefined,
+    VERCEL_OIDC_TOKEN: undefined,
+    OPENROUTER_API_KEY: provider === "openrouter" ? key : undefined,
+    BILLING_ENABLED: "true",
+    HOSTED_COMPUTER_USD_PER_HOUR: "0.15",
+    STRIPE_SECRET_KEY: "",
+    STRIPE_WEBHOOK_SECRET: "",
+    STRIPE_TEST_SECRET_KEY: "",
+  };
+}
+
 export function sandboxCanaryRequest(now = Date.now()) {
   return {
     botId: `synthetic-canary-${now}`,

@@ -181,7 +181,7 @@ export function ensureExtraDisplayCommand(
     `if command -v websockify >/dev/null 2>&1; then`,
     `  websockify --web=/usr/share/novnc 0.0.0.0:${layout.viewPort} 127.0.0.1:${layout.viewVncPort} 7>&- 8>&- >${log}-novnc.log 2>&1 &`,
     `elif [ -d /opt/noVNC/utils ]; then`,
-    `  (cd /opt/noVNC/utils && nohup ./novnc_proxy --vnc localhost:${layout.viewVncPort} --listen ${layout.viewPort} --web /opt/noVNC 7>&- 8>&- >${log}-novnc.log 2>&1 &)`,
+    `  (cd /opt/noVNC/utils && exec nohup ./novnc_proxy --vnc localhost:${layout.viewVncPort} --listen ${layout.viewPort} --web /opt/noVNC) 7>&- 8>&- </dev/null >${log}-novnc.log 2>&1 &`,
     `else`,
     `  exit 1`,
     `fi`,
@@ -228,7 +228,7 @@ export function extraDisplayControlStartCommand(
     "if command -v websockify >/dev/null 2>&1; then",
     `  (nohup websockify --web=/usr/share/novnc 0.0.0.0:${proxyPort} 127.0.0.1:${vncPort} 7>&- 8>&- >${log}-control-novnc.log 2>&1 &)`,
     "elif [ -d /opt/noVNC/utils ]; then",
-    `  (cd /opt/noVNC/utils && nohup ./novnc_proxy --vnc localhost:${vncPort} --listen ${proxyPort} --web /opt/noVNC 7>&- 8>&- >${log}-control-novnc.log 2>&1 &)`,
+    `  (cd /opt/noVNC/utils && exec nohup ./novnc_proxy --vnc localhost:${vncPort} --listen ${proxyPort} --web /opt/noVNC) 7>&- 8>&- </dev/null >${log}-control-novnc.log 2>&1 &`,
     "else",
     "  exit 1",
     "fi",
@@ -390,7 +390,9 @@ export function ensurePrimaryNovncCommand(display: string, viewPassword: string)
     "if command -v websockify >/dev/null 2>&1; then",
     `  (nohup websockify --web=/usr/share/novnc 0.0.0.0:${viewPort} 127.0.0.1:${vncPort} 7>&- 8>&- >/tmp/novnc.log 2>&1 &)`,
     "elif [ -x /opt/noVNC/utils/novnc_proxy ]; then",
-    `  (cd /opt/noVNC/utils && nohup ./novnc_proxy --vnc localhost:${vncPort} --listen ${viewPort} --web /opt/noVNC --heartbeat 30 7>&- 8>&- >/tmp/novnc.log 2>&1 &)`,
+    // Detach the whole shell group: redirecting only nohup leaves the `cd &&`
+    // wrapper holding the SDK's output pipes and setup lock until noVNC exits.
+    `  (cd /opt/noVNC/utils && exec nohup ./novnc_proxy --vnc localhost:${vncPort} --listen ${viewPort} --web /opt/noVNC --heartbeat 30) 7>&- 8>&- </dev/null >/tmp/novnc.log 2>&1 &`,
     "elif [ -x /opt/noVNC/utils/websockify/run ]; then",
     `  (nohup /opt/noVNC/utils/websockify/run --web=/opt/noVNC 0.0.0.0:${viewPort} 127.0.0.1:${vncPort} 7>&- 8>&- >/tmp/novnc.log 2>&1 &)`,
     "elif python3 -c 'import websockify' >/dev/null 2>&1; then",

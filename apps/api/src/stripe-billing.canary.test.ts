@@ -8,6 +8,12 @@ import Stripe from "stripe";
 import { describe, expect, it, vi } from "vitest";
 import { stripeCanaryConfig } from "../../../packages/testkit/src/cli/stripe-canary-config.js";
 import { createCheckoutUrl, createStripeClient } from "./stripe-billing.js";
+import {
+  cancelPlanChange,
+  planChangeStatus,
+  schedulePlanChange,
+  setCancelAtPeriodEnd,
+} from "./stripe-plan-changes.js";
 import { mountStripeWebhook } from "./stripe-webhook.js";
 
 const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
@@ -203,110 +209,112 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
         await persist();
       }
 
-      stage = "real Checkout completion";
-      const checkoutFixture = await fixture();
-      // Exercise the production customer binding and serialized duplicate-checkout path.
-      const checkoutOptions = {
-        prisma,
-        ...checkoutFixture,
-        email: `${checkoutFixture.userId}@example.test`,
-        plan: "plus" as const,
-        webOrigin: "http://127.0.0.1:5173",
-      };
-      const checkoutUrls = await Promise.all([
-        createCheckoutUrl(checkoutOptions, { stripe }),
-        createCheckoutUrl(checkoutOptions, { stripe }),
-      ]);
-      expect(checkoutUrls[0]).toBe(checkoutUrls[1]);
-      const billing = await prisma.organizationBilling.findUniqueOrThrow({
-        where: { organizationId: checkoutFixture.organizationId },
-      });
-      const checkoutCustomer = billing.stripeCustomerId!;
-      manifest.customers.push(checkoutCustomer);
-      await persist();
-      const pending = await stripe.checkout.sessions.list({
-        customer: checkoutCustomer,
-        status: "open",
-      });
-      expect(pending.data).toHaveLength(1);
-      const checkout = pending.data[0]!;
-      expect(checkout.livemode).toBe(false);
-      expect(await ensureOrganizationBilling(prisma, checkoutFixture.organizationId)).toMatchObject(
-        { plan: "free", allowanceUsd: 1 },
-      );
-      const checkoutFile = path.join(directory, "checkout-url.txt");
-      await writeFile(checkoutFile, `${checkoutUrls[0]}\n`, { mode: 0o600 });
-      console.log(
-        `Complete the test Checkout URL saved in ${checkoutFile} with Stripe's 4242 test card. No browser is launched. Waiting up to 10 minutes.`,
-      );
-      await poll(
-        "operator completing the test Checkout",
-        async () => {
-          const session = await stripe.checkout.sessions.retrieve(checkout.id);
-          if (session.status === "expired") throw new Error("Test Checkout expired");
-          return session.status === "complete" && session.payment_status === "paid"
-            ? session
-            : undefined;
-        },
-        600_000,
-        3_000,
-      );
-      const checkoutEvent = await eventFor(
-        "checkout.session.completed",
-        checkoutCustomer,
-        (event) => eventObjectId(event) === checkout.id,
-      );
-      await deliver(checkoutEvent);
-      expect(await ensureOrganizationBilling(prisma, checkoutFixture.organizationId)).toMatchObject(
-        { plan: "plus", allowanceUsd: 10 },
-      );
-      await check(
-        "real Checkout completion grants Plus exactly once; unfinished Checkout grants no paid allowance",
-      );
-
-      stage = "incomplete subscription";
-      const incompleteFixture = await fixture();
-      const incompleteCustomer = await customer(incompleteFixture);
-      const incomplete = await stripe.subscriptions.create({
-        customer: incompleteCustomer,
-        items: [{ price: prices.plus }],
-        payment_behavior: "default_incomplete",
-      });
-      expect(incomplete.status).toBe("incomplete");
-      await deliver(
-        await eventFor(
-          "customer.subscription.created",
-          incompleteCustomer,
-          (event) => eventObjectId(event) === incomplete.id,
-        ),
-      );
-      expect(
-        await ensureOrganizationBilling(prisma, incompleteFixture.organizationId),
-      ).toMatchObject({ plan: "free", allowanceUsd: 1 });
-      await check("a real unpaid incomplete subscription grants no paid allowance");
-
-      stage = "paid plan grants";
-      for (const [plan, allowance] of [
-        ["pro", 30],
-        ["ultra", 100],
-      ] as const) {
-        const value = await fixture();
-        const customerId = await customer(value);
-        const paymentMethod = await card(customerId);
-        const subscription = await stripe.subscriptions.create({
-          customer: customerId,
-          items: [{ price: prices[plan] }],
-          default_payment_method: paymentMethod,
-          payment_behavior: "error_if_incomplete",
+      if (process.env.STRIPE_TEST_RENEWAL_ONLY !== "1") {
+        stage = "real Checkout completion";
+        const checkoutFixture = await fixture();
+        // Exercise the production customer binding and serialized duplicate-checkout path.
+        const checkoutOptions = {
+          prisma,
+          ...checkoutFixture,
+          email: `${checkoutFixture.userId}@example.test`,
+          plan: "plus" as const,
+          webOrigin: "http://127.0.0.1:5173",
+        };
+        const checkoutUrls = await Promise.all([
+          createCheckoutUrl(checkoutOptions, { stripe }),
+          createCheckoutUrl(checkoutOptions, { stripe }),
+        ]);
+        expect(checkoutUrls[0]).toBe(checkoutUrls[1]);
+        const billing = await prisma.organizationBilling.findUniqueOrThrow({
+          where: { organizationId: checkoutFixture.organizationId },
         });
-        expect(subscription.status).toBe("active");
-        await deliver(await eventFor("invoice.paid", customerId));
-        expect(await ensureOrganizationBilling(prisma, value.organizationId)).toMatchObject({
-          plan,
-          allowanceUsd: allowance,
+        const checkoutCustomer = billing.stripeCustomerId!;
+        manifest.customers.push(checkoutCustomer);
+        await persist();
+        const pending = await stripe.checkout.sessions.list({
+          customer: checkoutCustomer,
+          status: "open",
         });
+        expect(pending.data).toHaveLength(1);
+        const checkout = pending.data[0]!;
+        expect(checkout.livemode).toBe(false);
+        expect(
+          await ensureOrganizationBilling(prisma, checkoutFixture.organizationId),
+        ).toMatchObject({ plan: "free", allowanceUsd: 1 });
+        const checkoutFile = path.join(directory, "checkout-url.txt");
+        await writeFile(checkoutFile, `${checkoutUrls[0]}\n`, { mode: 0o600 });
+        console.log(
+          `Complete the test Checkout URL saved in ${checkoutFile} with Stripe's 4242 test card. No browser is launched. Waiting up to 10 minutes.`,
+        );
+        await poll(
+          "operator completing the test Checkout",
+          async () => {
+            const session = await stripe.checkout.sessions.retrieve(checkout.id);
+            if (session.status === "expired") throw new Error("Test Checkout expired");
+            return session.status === "complete" && session.payment_status === "paid"
+              ? session
+              : undefined;
+          },
+          600_000,
+          3_000,
+        );
+        const checkoutEvent = await eventFor(
+          "checkout.session.completed",
+          checkoutCustomer,
+          (event) => eventObjectId(event) === checkout.id,
+        );
+        await deliver(checkoutEvent);
+        expect(
+          await ensureOrganizationBilling(prisma, checkoutFixture.organizationId),
+        ).toMatchObject({ plan: "plus", allowanceUsd: 10 });
+        await check(
+          "real Checkout completion grants Plus exactly once; unfinished Checkout grants no paid allowance",
+        );
+
+        stage = "incomplete subscription";
+        const incompleteFixture = await fixture();
+        const incompleteCustomer = await customer(incompleteFixture);
+        const incomplete = await stripe.subscriptions.create({
+          customer: incompleteCustomer,
+          items: [{ price: prices.plus }],
+          payment_behavior: "default_incomplete",
+        });
+        expect(incomplete.status).toBe("incomplete");
+        await deliver(
+          await eventFor(
+            "customer.subscription.created",
+            incompleteCustomer,
+            (event) => eventObjectId(event) === incomplete.id,
+          ),
+        );
+        expect(
+          await ensureOrganizationBilling(prisma, incompleteFixture.organizationId),
+        ).toMatchObject({ plan: "free", allowanceUsd: 1 });
+        await check("a real unpaid incomplete subscription grants no paid allowance");
+
+        stage = "paid plan grants";
+        for (const [plan, allowance] of [
+          ["pro", 30],
+          ["ultra", 100],
+        ] as const) {
+          const value = await fixture();
+          const customerId = await customer(value);
+          const paymentMethod = await card(customerId);
+          const subscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: prices[plan] }],
+            default_payment_method: paymentMethod,
+            payment_behavior: "error_if_incomplete",
+          });
+          expect(subscription.status).toBe("active");
+          await deliver(await eventFor("invoice.paid", customerId));
+          expect(await ensureOrganizationBilling(prisma, value.organizationId)).toMatchObject({
+            plan,
+            allowanceUsd: allowance,
+          });
+        }
+        await check("paid Pro and Ultra invoices grant the configured $30 and $100 allowances");
       }
-      await check("paid Pro and Ultra invoices grant the configured $30 and $100 allowances");
 
       stage = "test clock renewal";
       const value = await fixture();
@@ -338,6 +346,23 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
         await ensureOrganizationBilling(prisma, value.organizationId, new Date(initialTime * 1000)),
       ).toMatchObject({ allowanceUsd: 10, spentUsd: 0.25, reservedUsd: 0 });
       const firstEnd = subscription.items.data[0]!.current_period_end;
+      stage = "schedule paid upgrade at renewal";
+      const changeOptions = {
+        prisma,
+        ...value,
+        plan: "pro" as const,
+        expectedPeriodEnd: new Date(firstEnd * 1000).toISOString(),
+      };
+      const scheduled = await schedulePlanChange(changeOptions, { stripe });
+      expect(scheduled).toMatchObject({
+        currentPlan: "plus",
+        pendingChange: { plan: "pro", priceUsd: 60, effectiveAt: changeOptions.expectedPeriodEnd },
+      });
+      expect(await planChangeStatus({ prisma, ...value }, { stripe })).toEqual(scheduled);
+      expect(await schedulePlanChange(changeOptions, { stripe })).toEqual(scheduled);
+      expect(
+        await ensureOrganizationBilling(prisma, value.organizationId, new Date(initialTime * 1000)),
+      ).toMatchObject({ plan: "plus", allowanceUsd: 10, spentUsd: 0.25 });
       const renewedTime = firstEnd + 7_200;
       await advance(clock.id, renewedTime);
       const renewed = await poll("paid renewal invoice", async () => {
@@ -352,6 +377,8 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
           : undefined;
       });
       const renewedInvoiceId = objectId(renewed.latest_invoice)!;
+      expect(renewed.items.data[0]!.price.id).toBe(prices.pro);
+      expect(renewed.latest_invoice).toMatchObject({ status: "paid", amount_paid: 6000 });
       const renewalEvent = await eventFor(
         "invoice.paid",
         customerId,
@@ -373,22 +400,35 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
       const renewedAt = new Date(renewedTime * 1000);
       expect(
         await ensureOrganizationBilling(prisma, value.organizationId, renewedAt),
-      ).toMatchObject({ plan: "plus", allowanceUsd: 10, spentUsd: 0, reservedUsd: 0 });
+      ).toMatchObject({ plan: "pro", allowanceUsd: 30, spentUsd: 0, reservedUsd: 0 });
       await spend(value, renewedAt);
       await deliver(delayedCreated);
       await deliver(renewalEvent);
       expect(
         await ensureOrganizationBilling(prisma, value.organizationId, renewedAt),
-      ).toMatchObject({ plan: "plus", allowanceUsd: 10, spentUsd: 0.25, reservedUsd: 0 });
+      ).toMatchObject({ plan: "pro", allowanceUsd: 30, spentUsd: 0.25, reservedUsd: 0 });
       await check(
-        "real monthly renewal resets once; duplicates and delayed prior-period events preserve usage",
+        "scheduled upgrade bills the full target price at renewal and grants its allowance once; replays preserve usage",
       );
 
       stage = "cancellation effective date";
-      const canceling = await stripe.subscriptions.update(subscription.id, {
-        cancel_at_period_end: true,
-      });
-      const end = canceling.items.data[0]!.current_period_end;
+      const end = renewed.items.data[0]!.current_period_end;
+      const cancelOptions = {
+        prisma,
+        ...value,
+        expectedPeriodEnd: new Date(end * 1000).toISOString(),
+      };
+      await schedulePlanChange({ ...cancelOptions, plan: "plus" }, { stripe });
+      expect((await cancelPlanChange({ prisma, ...value }, { stripe })).pendingChange).toBeNull();
+      await schedulePlanChange({ ...cancelOptions, plan: "plus" }, { stripe });
+      expect(
+        await setCancelAtPeriodEnd({ ...cancelOptions, cancel: true }, { stripe }),
+      ).toMatchObject({ cancelAtPeriodEnd: true, pendingChange: null });
+      expect(
+        (await setCancelAtPeriodEnd({ ...cancelOptions, cancel: false }, { stripe }))
+          .cancelAtPeriodEnd,
+      ).toBe(false);
+      await setCancelAtPeriodEnd({ ...cancelOptions, cancel: true }, { stripe });
       await deliver(
         await eventFor("customer.subscription.updated", customerId, (event) => {
           const object = event.data.object as Stripe.Subscription;
@@ -398,8 +438,8 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
       expect(
         await ensureOrganizationBilling(prisma, value.organizationId, new Date((end - 1) * 1000)),
       ).toMatchObject({
-        plan: "plus",
-        allowanceUsd: 10,
+        plan: "pro",
+        allowanceUsd: 30,
         spentUsd: 0.25,
         currentPeriodEnd: new Date(end * 1000),
       });
@@ -418,6 +458,72 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
       await check(
         "cancellation preserves paid access until period end; late renewal cannot revive it",
       );
+      stage = "failed scheduled renewal";
+      const failedValue = await fixture();
+      const failedClock = await stripe.testHelpers.testClocks.create({
+        frozen_time: initialTime,
+        name: `2hands decline ${runId}`,
+      });
+      manifest.clocks.push(failedClock.id);
+      await persist();
+      const failedCustomer = await customer(failedValue, failedClock.id);
+      const successMethod = await card(failedCustomer);
+      const failedSubscription = await stripe.subscriptions.create({
+        customer: failedCustomer,
+        items: [{ price: prices.plus }],
+        default_payment_method: successMethod,
+        payment_behavior: "error_if_incomplete",
+      });
+      const failedInitial = await eventFor("invoice.paid", failedCustomer);
+      await deliver(failedInitial);
+      const failedEnd = failedSubscription.items.data[0]!.current_period_end;
+      await schedulePlanChange(
+        {
+          prisma,
+          ...failedValue,
+          plan: "pro",
+          expectedPeriodEnd: new Date(failedEnd * 1000).toISOString(),
+        },
+        { stripe },
+      );
+      const decline = await stripe.paymentMethods.create({
+        type: "card",
+        card: { token: "tok_chargeCustomerFail" },
+      });
+      await stripe.paymentMethods.attach(decline.id, { customer: failedCustomer });
+      // The target phase inherits schedule defaults instead of pinning the card
+      // used at signup. Replacing the default must affect its renewal attempt.
+      const failedLive = await stripe.subscriptions.retrieve(failedSubscription.id);
+      const failedSchedule = await stripe.subscriptionSchedules.retrieve(
+        objectId(failedLive.schedule)!,
+      );
+      await stripe.subscriptionSchedules.update(failedSchedule.id, {
+        default_settings: { default_payment_method: decline.id },
+      });
+      await stripe.customers.update(failedCustomer, {
+        invoice_settings: { default_payment_method: decline.id },
+      });
+      await advance(failedClock.id, failedEnd + 7_200);
+      const failedEvent = await eventFor("invoice.payment_failed", failedCustomer);
+      expect(failedEvent.data.object).toMatchObject({ amount_due: 6000 });
+      await deliver(failedEvent);
+      await deliver(failedInitial);
+      await deliver(failedEvent);
+      const failedBilling = await ensureOrganizationBilling(
+        prisma,
+        failedValue.organizationId,
+        new Date((failedEnd + 7_200) * 1000),
+      );
+      expect(failedBilling.plan).toBe("free");
+      expect(failedBilling.allowanceUsd).toBe(1);
+      expect(
+        await prisma.billingPeriod.count({
+          where: { organizationId: failedValue.organizationId, allowanceMicros: 30_000_000n },
+        }),
+      ).toBe(0);
+      await check(
+        "a scheduled target phase with a declined renewal grants no paid allowance, including delayed and duplicate events",
+      );
       manifest.complete = true;
     } catch (error) {
       // Do not dump SDK request objects (or Checkout URLs / customer payloads) to CI logs.
@@ -425,6 +531,20 @@ const enabled = process.env.VERIFY_STRIPE_TEST_MODE === "1";
         error instanceof Stripe.errors.StripeError
           ? (error.code ?? error.type)
           : "assertion-or-timeout";
+      if (error instanceof Stripe.errors.StripeError) {
+        // Keep only bounded, redacted provider diagnostics, never the SDK request,
+        // response, headers, credentials or any customer object.
+        const message = error.message
+          .replace(/\b(?:sk|rk|pk)_(?:live|test)_\S+/g, "[redacted-key]")
+          .replace(/https?:\/\/\S+/g, "[redacted-url]")
+          .replace(/\b(?:cus|sub|sub_sched|pm|price|prod|in|evt)_[A-Za-z0-9]+/g, "[test-object]")
+          .slice(0, 1000);
+        await writeFile(
+          path.join(directory, "failure.json"),
+          JSON.stringify({ code, param: error.param, message }),
+          { mode: 0o600 },
+        );
+      }
       throw new Error(
         `Stripe release gate failed during ${stage} (${code}); private manifest: ${directory}`,
       );

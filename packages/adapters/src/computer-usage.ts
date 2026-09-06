@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { AdapterContext, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
 import { ExecutionError, hostedBillingEnabled, PlanLimitError } from "@rakazo/core";
 import {
+  type Computer,
   currentBillingTerms,
   microsToUsd,
   organizationIdForSpace,
+  type Prisma,
   type PrismaClient,
   reserveUsageInTransaction,
   settleUsageInTransaction,
@@ -42,6 +44,11 @@ export async function ensureComputerUsageCoverage(
   const organizationId = await organizationIdForSpace(deps.prisma, computer.spaceId);
   return withBillingLock(deps.prisma, organizationId, async (tx, billing) => {
     const current = await tx.computer.findUniqueOrThrow({ where: { id: computerId } });
+    if (current.state !== "running" && current.state !== "booting")
+      throw new ExecutionError(
+        "COMPUTER_UNAVAILABLE",
+        "Start the computer before renewing its usage.",
+      );
     if (
       current.billingReservationId &&
       current.billingCoveredUntil &&
@@ -142,41 +149,50 @@ async function finishComputerUsage(
   const organizationId = await organizationIdForSpace(prisma, computer.spaceId);
   await withBillingLock(prisma, organizationId, async (tx) => {
     const current = await tx.computer.findUniqueOrThrow({ where: { id: computerId } });
-    if (
-      !current.billingReservationId ||
-      !current.billingStartedAt ||
-      !current.billingCoveredUntil ||
-      current.billingRateMicrosPerHour === null
-    )
-      return;
-    if (current.billingReservationId === unusedAfterReservationId) return;
-    const elapsedMs =
-      unusedAfterReservationId !== undefined
-        ? 0
-        : Math.max(
-            0,
-            Math.min(now.getTime(), current.billingCoveredUntil.getTime()) -
-              current.billingStartedAt.getTime(),
-          );
-    await settleUsageInTransaction(tx, {
-      reservationId: current.billingReservationId,
-      actualAmountUsd: (microsToUsd(current.billingRateMicrosPerHour) * elapsedMs) / 3_600_000,
-      usage: {
-        computerId,
-        elapsedMs,
-        rateUsdPerHour: microsToUsd(current.billingRateMicrosPerHour),
-      },
-      now,
-    });
-    await tx.computer.update({
-      where: { id: computerId },
-      data: {
-        billingReservationId: null,
-        billingStartedAt: null,
-        billingCoveredUntil: null,
-        billingRateMicrosPerHour: null,
-      },
-    });
+    await finishComputerUsageInTransaction(tx, current, now, unusedAfterReservationId);
+  });
+}
+
+async function finishComputerUsageInTransaction(
+  tx: Prisma.TransactionClient,
+  current: Computer,
+  now: Date,
+  unusedAfterReservationId?: string | null,
+) {
+  if (
+    !current.billingReservationId ||
+    !current.billingStartedAt ||
+    !current.billingCoveredUntil ||
+    current.billingRateMicrosPerHour === null
+  )
+    return;
+  if (current.billingReservationId === unusedAfterReservationId) return;
+  const elapsedMs =
+    unusedAfterReservationId !== undefined
+      ? 0
+      : Math.max(
+          0,
+          Math.min(now.getTime(), current.billingCoveredUntil.getTime()) -
+            current.billingStartedAt.getTime(),
+        );
+  await settleUsageInTransaction(tx, {
+    reservationId: current.billingReservationId,
+    actualAmountUsd: (microsToUsd(current.billingRateMicrosPerHour) * elapsedMs) / 3_600_000,
+    usage: {
+      computerId: current.id,
+      elapsedMs,
+      rateUsdPerHour: microsToUsd(current.billingRateMicrosPerHour),
+    },
+    now,
+  });
+  await tx.computer.update({
+    where: { id: current.id },
+    data: {
+      billingReservationId: null,
+      billingStartedAt: null,
+      billingCoveredUntil: null,
+      billingRateMicrosPerHour: null,
+    },
   });
 }
 
@@ -187,39 +203,65 @@ export async function suspendComputerForBudget(
 ): Promise<void> {
   const computer = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
   if (
-    !computer.providerRef &&
+    (!computer.providerRef || computer.state === "booting") &&
     computer.billingReservationId &&
     computer.billingCoveredUntil &&
     computer.billingCoveredUntil.getTime() > Date.now()
   ) {
     throw new Error("Computer provisioning outcome is unknown until its prepaid deadline.");
   }
-  if (computer.providerRef) {
-    const context: AdapterContext = {
-      operationId: "computer.budget",
-      traceId: "computer.budget",
-      userId: computer.userId,
-      spaceId: computer.spaceId,
-      signal: new AbortController().signal,
-    };
-    try {
-      await deps.sandbox.stop(toComputerRef(computer), context);
-    } catch (error) {
-      // The bounded provider has already stopped spending after this deadline.
-      if (!computer.billingCoveredUntil || computer.billingCoveredUntil.getTime() > Date.now())
-        throw error;
-    }
-  }
-  await deps.prisma.computer.update({
-    where: { id: computerId },
-    data: {
-      state: "suspended",
-      controlHolder: "none",
-      controlLeaseId: null,
-      controlLeaseExpiresAt: null,
-      controlBotId: null,
-      controlRunId: null,
+  const organizationId = await organizationIdForSpace(deps.prisma, computer.spaceId);
+  await withBillingLock(
+    deps.prisma,
+    organizationId,
+    async (tx) => {
+      // Claim the exact generation observed by this cleanup. Renewals use the same
+      // billing lock, and the computer row remains locked through provider stop and
+      // settlement, so Boot cannot install a new hold beneath an old expiry job.
+      const claimed = await tx.computer.updateMany({
+        where: {
+          id: computerId,
+          providerRef: computer.providerRef,
+          executionFence: computer.executionFence,
+          billingReservationId: computer.billingReservationId,
+          billingCoveredUntil: computer.billingCoveredUntil,
+          state: computer.state,
+        },
+        data: { state: "suspending" },
+      });
+      if (claimed.count !== 1) return;
+      const current = await tx.computer.findUniqueOrThrow({ where: { id: computerId } });
+      if (computer.providerRef) {
+        const context: AdapterContext = {
+          operationId: "computer.budget",
+          traceId: "computer.budget",
+          userId: computer.userId,
+          spaceId: computer.spaceId,
+          signal: new AbortController().signal,
+        };
+        try {
+          await deps.sandbox.stop(toComputerRef(computer), context);
+        } catch (error) {
+          // The bounded provider has already stopped spending after this deadline.
+          if (!computer.billingCoveredUntil || computer.billingCoveredUntil.getTime() > Date.now())
+            throw error;
+        }
+      }
+      // This transaction still owns both row locks and exactly this reservation.
+      if (hostedBillingEnabled(process.env.BILLING_ENABLED))
+        await finishComputerUsageInTransaction(tx, current, new Date());
+      await tx.computer.update({
+        where: { id: computerId },
+        data: {
+          state: "suspended",
+          controlHolder: "none",
+          controlLeaseId: null,
+          controlLeaseExpiresAt: null,
+          controlBotId: null,
+          controlRunId: null,
+        },
+      });
     },
-  });
-  await settleComputerUsage(deps.prisma, computerId);
+    { timeoutMs: 30_000 },
+  );
 }

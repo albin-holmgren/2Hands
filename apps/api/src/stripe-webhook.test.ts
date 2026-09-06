@@ -30,10 +30,25 @@ function fixture() {
     id: "sub-example",
     customer: "cus-example",
     status: "active",
-    latest_invoice: { id: "in-example", status: "paid" },
+    latest_invoice: {
+      id: "in-example",
+      status: "paid",
+      subscription: "sub-example",
+      lines: {
+        data: [
+          {
+            subscription_item: "si-example",
+            proration: false,
+            price: { id: "price-plus" },
+            period: { start: 1_783_123_200, end: 1_785_801_600 },
+          },
+        ],
+      },
+    },
     items: {
       data: [
         {
+          id: "si-example",
           price: { id: "price-plus" },
           current_period_start: 1_783_123_200,
           current_period_end: 1_785_801_600,
@@ -108,6 +123,17 @@ describe("Stripe webhook", () => {
     expect(applyStripeSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ status: "incomplete" }),
     );
+  });
+
+  it("retries a phase transition whose latest paid invoice belongs to the prior plan", async () => {
+    const { prisma, stripe, retrieve } = fixture();
+    const subscription = await retrieve("sub-example");
+    subscription.items.data[0]!.price.id = "price-pro";
+    retrieve.mockResolvedValue(subscription);
+    await expect(processStripeBillingEvent(prisma, stripe, event)).rejects.toThrow(
+      "payment has not been confirmed",
+    );
+    expect(applyStripeSubscription).not.toHaveBeenCalled();
   });
 
   it("verifies the raw signature before reading billing state", async () => {

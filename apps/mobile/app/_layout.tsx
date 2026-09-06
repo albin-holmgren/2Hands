@@ -81,6 +81,7 @@ export default function Layout() {
                   name="new"
                   options={{
                     title: "New bot",
+                    headerTitleAlign: "center",
                     presentation: "modal",
                     gestureEnabled: true,
                     headerBackVisible: false,
@@ -98,6 +99,7 @@ export default function Layout() {
                   name="new-space"
                   options={{
                     title: "New workspace",
+                    headerTitleAlign: "center",
                     presentation: "modal",
                     gestureEnabled: true,
                     headerBackVisible: false,

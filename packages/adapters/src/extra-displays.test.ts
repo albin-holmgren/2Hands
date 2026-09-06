@@ -1,7 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import {
@@ -110,6 +111,63 @@ describe("authenticated screen scripts", () => {
 });
 
 describe("screen command execution", () => {
+  it.each([
+    ["primary", ensurePrimaryNovncCommand(":0", "synthetic-view")],
+    [
+      "extra",
+      ensureExtraDisplayCommand(
+        extraDisplayLayout(1, ":0"),
+        { homeDir: "/home/user", browserProfilesDir: "/home/user/profiles" },
+        "synthetic-view",
+      ),
+    ],
+    [
+      "control",
+      extraDisplayControlStartCommand(extraDisplayLayout(0, ":0"), "lease", "synthetic-control"),
+    ],
+  ])("releases the %s setup command's pipes while noVNC remains running", async (_name, script) => {
+    const dir = mkdtempSync(path.join(tmpdir(), "screen-detach-test-"));
+    const ready = path.join(dir, "ready");
+    const gate = path.join(dir, "stop");
+    const done = path.join(dir, "done");
+    writeFileSync(
+      path.join(dir, "novnc_proxy"),
+      `#!/bin/sh\nprintf ready > '${ready}'\nwhile [ ! -f '${gate}' ]; do sleep 0.01; done\nprintf done > '${done}'\n`,
+      { mode: 0o700 },
+    );
+    const launch = script
+      .split("\n")
+      .find((line) => line.includes("cd /opt/noVNC/utils"))!
+      .replace("/opt/noVNC/utils", dir)
+      .replace(/>\/tmp\/[^ ]+/, `>${path.join(dir, "output.log")}`);
+    const completed = new Promise<void>((resolve, reject) => {
+      execFile("bash", ["-c", launch], (error) => (error ? reject(error) : resolve()));
+    });
+    void completed.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const deadline = Date.now() + 5_000;
+      while (!existsSync(ready) && Date.now() < deadline) await delay(10);
+      expect(existsSync(ready)).toBe(true);
+      // Model the SDK waiting for stdout/stderr EOF. The daemon cannot exit
+      // until finally releases it, so retaining its wrapper pipes fails here.
+      await Promise.race([
+        completed,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("noVNC retained the setup pipes")), 2_000);
+        }),
+      ]);
+      expect(existsSync(done)).toBe(false);
+    } finally {
+      clearTimeout(timer);
+      writeFileSync(gate, "stop");
+      await completed.catch(() => undefined);
+      const deadline = Date.now() + 1_000;
+      while (existsSync(ready) && !existsSync(done) && Date.now() < deadline) await delay(10);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("parses every generated primary/extra setup, release, and control script as bash", () => {
     const primary = extraDisplayLayout(0, ":0");
     const extra = extraDisplayLayout(1, ":0");

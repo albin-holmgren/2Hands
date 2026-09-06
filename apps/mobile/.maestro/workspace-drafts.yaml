@@ -3,6 +3,9 @@ name: 2hands workspace draft isolation
 ---
 # Requires the signed-in, seeded local fixture described in README.md.
 - launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
 - openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
 - tapOn:
     text: "Open"
@@ -38,6 +41,9 @@ name: 2hands workspace draft isolation
 - killApp
 - launchApp:
     stopApp: false
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
 - openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
 - tapOn:
     text: "Open"

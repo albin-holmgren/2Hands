@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, Billing } from "@rakazo/contracts";
+import type { AvatarStyle } from "@rakazo/contracts";
 import { BotAvatar } from "@rakazo/ui-web";
 import { ArrowDownToLine, ChevronDown, Gauge, Monitor, Settings, X } from "lucide-react";
 import {
@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
+import { BillingPlanSettings } from "../components/BillingPlanSettings";
 import { BuiButton, SuccessPop } from "../components/beautiful-ui/primitives";
 import {
   ComputersUnavailableHint,
@@ -24,7 +25,6 @@ import {
   readUiThemePreference,
   type UiThemePreference,
 } from "../lib/ui-theme";
-import { useWorkspaceRpc } from "../lib/workspace-context";
 
 export function AccountSettingsOverlay({
   email,
@@ -51,7 +51,6 @@ export function AccountSettingsOverlay({
   onOpenMessaging?: () => void;
   onClose: () => void;
 }) {
-  const rpc = useWorkspaceRpc();
   const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement>(null);
   const usageRef = useRef<HTMLDivElement>(null);
@@ -61,20 +60,10 @@ export function AccountSettingsOverlay({
   const localeRequestRef = useRef(0);
   const [avatarPending, setAvatarPending] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [billing, setBilling] = useState<Billing | null>(null);
-  const [billingError, setBillingError] = useState<string | null>(null);
-  const [billingBusy, setBillingBusy] = useState<"plus" | "pro" | "ultra" | "portal" | null>(null);
   const [themePreference, setThemePreference] = useState<UiThemePreference>(readUiThemePreference);
   const [section, setSection] = useState<"general" | "computer" | "usage" | "updates">(
     focusUsage ? "usage" : "general",
   );
-
-  useEffect(() => {
-    void rpc.billing
-      .get()
-      .then(setBilling)
-      .catch(() => setBillingError(t`Could not load your plan. Reopen settings to retry.`));
-  }, []);
 
   useEffect(() => {
     const previousFocus =
@@ -88,13 +77,16 @@ export function AccountSettingsOverlay({
         ].filter((item) => item.getClientRects().length > 0);
         const first = items[0],
           last = items.at(-1);
+        const outside = !panelRef.current?.contains(document.activeElement);
         if (
           event.shiftKey &&
-          (document.activeElement === first || document.activeElement === panelRef.current)
+          (outside ||
+            document.activeElement === first ||
+            document.activeElement === panelRef.current)
         ) {
           event.preventDefault();
           last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
+        } else if (!event.shiftKey && (outside || document.activeElement === last)) {
           event.preventDefault();
           first?.focus();
         }
@@ -110,7 +102,7 @@ export function AccountSettingsOverlay({
     window.addEventListener("keydown", handleKeyDown);
     if (focusUsage) {
       setSection("usage");
-      usageRef.current?.focus();
+      (usageRef.current ?? panelRef.current)?.focus();
     } else panelRef.current?.focus();
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -354,141 +346,26 @@ export function AccountSettingsOverlay({
 
           {section === "usage" ? (
             <>
-              <section className={card}>
-                <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">
-                  <Trans>Plan</Trans>
-                </h3>
-                <p className="mt-3 text-[14px] text-[var(--rk-body)]">
-                  {billing
-                    ? `${billing.planName} · $${billing.priceUsd}/mo`
-                    : billingError
-                      ? t`Plan unavailable`
-                      : t`Loading plan…`}
-                </p>
-                {billing ? (
-                  <p className="mt-2 text-[13px] text-[var(--rk-muted)]">
-                    {billing.legacyUntil
-                      ? t`Your current included usage continues until ${new Date(billing.legacyUntil).toLocaleDateString()}`
-                      : billing.remainingUsd != null && billing.allowanceUsd != null
-                        ? t`$${billing.remainingUsd.toFixed(2)} of $${billing.allowanceUsd.toFixed(2)} remaining`
-                        : t`${billing.tokensUsed.toLocaleString()} tokens used this period`}
-                  </p>
-                ) : null}
-                {billing?.allowanceUsd != null &&
-                billing.remainingUsd != null &&
-                !billing.legacyUntil ? (
-                  <meter
-                    className="rk-balance-meter mt-3 h-1.5 w-full"
-                    aria-label={t`Included balance remaining`}
-                    min={0}
-                    max={Math.max(billing.allowanceUsd, 0.01)}
-                    value={billing.remainingUsd}
-                  />
-                ) : null}
-                {billing?.resetAt && !billing.legacyUntil ? (
-                  <p className="mt-2 text-xs text-[var(--rk-muted)]">{t`Renews ${new Date(billing.resetAt).toLocaleDateString()}`}</p>
-                ) : null}
-                {billing?.exhausted && !billing.legacyUntil ? (
-                  <p className="mt-2 text-[13px] text-[var(--rk-danger)]">
-                    <Trans>
-                      Your included balance is used. Upgrade, connect your own model, or wait for
-                      renewal.
-                    </Trans>
-                  </p>
-                ) : null}
-                {billingError ? (
-                  <p className="mt-2 text-[13px] text-[var(--rk-danger)]">{billingError}</p>
-                ) : null}
-                {billing?.checkoutEnabled ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {(["plus", "pro", "ultra"] as const).map((plan) => (
-                      <button
-                        key={plan}
-                        type="button"
-                        disabled={billingBusy !== null || billing.plan === plan}
-                        onClick={() => {
-                          setBillingBusy(plan);
-                          setBillingError(null);
-                          void rpc.billing
-                            .checkout({ plan })
-                            .then((result) => {
-                              window.location.href = result.url;
-                            })
-                            .catch((error) => {
-                              setBillingError(
-                                error instanceof Error
-                                  ? error.message
-                                  : t`Could not start checkout`,
-                              );
-                              setBillingBusy(null);
-                            });
-                        }}
-                        className="min-h-9 rounded-full bg-[var(--rk-surface-2)] px-4 text-[13.5px] font-medium capitalize text-[var(--rk-ink)] disabled:opacity-40"
-                      >
-                        {plan === "plus"
-                          ? t`Plus $20`
-                          : plan === "pro"
-                            ? t`Pro $60`
-                            : t`Ultra $200`}
-                      </button>
-                    ))}
-                    {billing.plan !== "free" ? (
-                      <button
-                        type="button"
-                        disabled={billingBusy !== null}
-                        onClick={() => {
-                          setBillingBusy("portal");
-                          setBillingError(null);
-                          void rpc.billing
-                            .portal()
-                            .then((result) => {
-                              window.location.href = result.url;
-                            })
-                            .catch((error) => {
-                              setBillingError(
-                                error instanceof Error
-                                  ? error.message
-                                  : t`Could not open billing portal`,
-                              );
-                              setBillingBusy(null);
-                            });
-                        }}
-                        className="min-h-9 rounded-full px-4 text-[13.5px] font-medium text-[var(--rk-muted)]"
-                      >
-                        <Trans>Manage billing</Trans>
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-[13px] text-[var(--rk-muted)]">
-                    <Trans>Billing is not configured on this deployment.</Trans>
-                  </p>
-                )}
-              </section>
-              <div
-                ref={usageRef}
-                tabIndex={-1}
-                data-testid="usage-settings"
-                className={`mt-4 outline-none ${card}`}
-              >
-                <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">
-                  <Trans>Usage</Trans>
-                </h3>
-                {usage ? (
-                  <p className="mt-3 text-[14px] text-[var(--rk-body)]">
-                    <Trans>
-                      {usage.runs} runs · {usage.inputTokens + usage.outputTokens} tokens
-                    </Trans>
-                  </p>
-                ) : null}
-                <p className={`text-[12.5px] text-[var(--rk-muted-2)] ${usage ? "mt-2" : "mt-3"}`}>
-                  {billing?.legacyUntil
-                    ? t`${billing.tokensUsed.toLocaleString()} of ${billing.monthlyTokens.toLocaleString()} included tokens used`
-                    : billing?.spentUsd != null
-                      ? t`$${billing.spentUsd.toFixed(2)} spent · $${(billing.reservedUsd ?? 0).toFixed(2)} reserved for running work`
-                      : t`Usage is unavailable right now.`}
-                </p>
-              </div>
+              <BillingPlanSettings className={card} />
+              {usage ? (
+                <div
+                  ref={usageRef}
+                  tabIndex={-1}
+                  data-testid="usage-settings"
+                  className={`mt-4 outline-none ${card}`}
+                >
+                  <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">
+                    <Trans>Usage</Trans>
+                  </h3>
+                  {usage ? (
+                    <p className="mt-3 text-[14px] text-[var(--rk-body)]">
+                      <Trans>
+                        {usage.runs} runs · {usage.inputTokens + usage.outputTokens} tokens
+                      </Trans>
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : null}
 

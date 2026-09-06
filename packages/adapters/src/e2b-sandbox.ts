@@ -58,6 +58,10 @@ export interface E2BSandboxSdk {
   create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
   connect(id: string, options: { apiKey: string; timeoutMs: number }): Promise<Sandbox>;
   pause(id: string, options: { apiKey: string }): Promise<void>;
+  kill(
+    id: string,
+    options: { apiKey: string; signal: AbortSignal; requestTimeoutMs: number },
+  ): Promise<boolean>;
 }
 
 export function e2bLifetimeMs(expiresAt?: string, now = Date.now()): number {
@@ -751,15 +755,18 @@ export class E2BSandboxProvider implements SandboxProvider {
     ]);
   }
 
-  async destroy(computer: ComputerRef, _context: AdapterContext): Promise<void> {
+  async destroy(computer: ComputerRef, context: AdapterContext): Promise<void> {
     const id = computer.providerRef || computer.id;
-    const desktop = this.boxes.get(id) ?? (await this.box(computer).catch(() => undefined));
     const pending = this.streamStarts.get(id);
     this.forget(id);
     await settleForTeardown(pending);
-    if (!desktop && computer.expiresAt)
-      throw new Error("Computer destruction could not be confirmed");
-    await desktop?.kill();
+    // Delete through the provider API without reconnecting/resuming an expired
+    // computer. The SDK returns false only for confirmed 404; other errors reject.
+    await this.sdk.kill(id, {
+      apiKey: this.apiKey,
+      signal: context.signal,
+      requestTimeoutMs: 10_000,
+    });
   }
 
   private forget(id: string): void {
@@ -777,7 +784,10 @@ export class E2BSandboxProvider implements SandboxProvider {
     timeoutMs?: number,
   ): Promise<CommandResult> {
     try {
-      return await desktop.commands.run(command, {
+      // The SDK uses login bash. Keep `set -e` in a non-login child so a
+      // template's .bash_logout (e.g. clear_console without a TTY) cannot
+      // turn a successful setup into a failed command when the shell exits.
+      return await desktop.commands.run(`bash -c ${shellQuote(command)}`, {
         ...(signal ? { signal } : {}),
         timeoutMs: boundedSandboxCommandTimeoutMs(timeoutMs),
       });
@@ -938,18 +948,22 @@ async function configurePortableBrowserProfiles(desktop: Sandbox): Promise<boole
   return true;
 }
 
+// Some desktop templates omit the URL field from Chrome's launcher. gtk-launch
+// then opens a blank tab when Chrome is already running. Preserve the vendor's
+// flags in a user-level override; do not replace an existing user customization.
+export const E2B_DEFAULT_BROWSER_SETUP_COMMAND = [
+  "command -v google-chrome >/dev/null 2>&1 || exit 0",
+  'mkdir -p "$HOME/.config/xfce4" "$HOME/.local/share/applications"',
+  'if [ ! -f "$HOME/.local/share/applications/google-chrome.desktop" ] && [ -f /usr/share/applications/google-chrome.desktop ]; then ' +
+    'awk \'/^\\[/ { main = ($0 == "[Desktop Entry]") } main && /^Exec=/ && $0 !~ /%[uUfF]/ { $0 = $0 " %U" } { print }\' ' +
+    '/usr/share/applications/google-chrome.desktop > "$HOME/.local/share/applications/google-chrome.desktop"; fi',
+  "printf 'WebBrowser=google-chrome\\n' > \"$HOME/.config/xfce4/helpers.rc\"",
+  "xdg-settings set default-web-browser google-chrome.desktop",
+].join(" && ");
+
 /** Point xdg-open / XFCE exo-open at Chrome. Lives outside the checkpointed workspace. */
 async function configureDefaultWebBrowser(desktop: Sandbox): Promise<void> {
-  await desktop.commands
-    .run(
-      [
-        "command -v google-chrome >/dev/null 2>&1 || exit 0",
-        'mkdir -p "$HOME/.config/xfce4"',
-        "printf 'WebBrowser=google-chrome\\n' > \"$HOME/.config/xfce4/helpers.rc\"",
-        "xdg-settings set default-web-browser google-chrome.desktop",
-      ].join(" && "),
-    )
-    .catch(() => undefined);
+  await desktop.commands.run(E2B_DEFAULT_BROWSER_SETUP_COMMAND).catch(() => undefined);
 }
 
 async function stopDesktopBrowsers(desktop: Sandbox): Promise<void> {

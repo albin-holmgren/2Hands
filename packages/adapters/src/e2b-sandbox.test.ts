@@ -1,8 +1,13 @@
-import { type Sandbox, TimeoutError } from "@e2b/desktop";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { type CommandResult, type Sandbox, TimeoutError } from "@e2b/desktop";
 import { describe, expect, it, vi } from "vitest";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import {
+  E2B_DEFAULT_BROWSER_SETUP_COMMAND,
   E2BSandboxProvider,
   type E2BSandboxSdk,
   e2bLifetimeMs,
@@ -21,11 +26,109 @@ const context = {
 };
 
 function screenPasswordOutput(command: string) {
-  const token = command.match(/printf %s '([^']+)' > \/tmp\/rakazo\/control-token-/)?.[1];
+  const token = command
+    .replaceAll("'\"'\"'", "'")
+    .match(/printf %s '([^']+)' > \/tmp\/rakazo\/control-token-/)?.[1];
   return `RAKAZO_SCREEN_PASSWORD=${token ? `control-${token}` : "view-password"}\n`;
 }
 
 describe("E2B computer backend", () => {
+  it("destroys expired or already missing computers without resuming and surfaces unknown outcomes", async () => {
+    const sdk: E2BSandboxSdk = {
+      create: vi.fn(),
+      connect: vi.fn(),
+      pause: vi.fn(),
+      kill: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+    };
+    const provider = new E2BSandboxProvider("synthetic-key", sdk);
+    const computer = {
+      id: "expired-computer",
+      providerRef: "expired-computer",
+      botId: "bot-1",
+      kind: "e2b" as const,
+      expiresAt: new Date(0).toISOString(),
+    };
+    await provider.destroy(computer, context);
+    await provider.destroy(computer, context);
+    expect(sdk.connect).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
+    expect(sdk.kill).toHaveBeenLastCalledWith("expired-computer", {
+      apiKey: "synthetic-key",
+      signal: context.signal,
+      requestTimeoutMs: 10_000,
+    });
+    const uncertain = new Error("fetch failed");
+    vi.mocked(sdk.kill).mockRejectedValueOnce(uncertain);
+    await expect(provider.destroy(computer, context)).rejects.toBe(uncertain);
+  });
+
+  it("preserves browser flags and user overrides while giving the vendor launcher a URL field", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "e2b-browser-entry-"));
+    const bin = path.join(dir, "bin");
+    const vendor = path.join(dir, "vendor");
+    const profile = path.join(dir, "user");
+    mkdirSync(bin);
+    mkdirSync(vendor);
+    for (const tool of ["google-chrome", "xdg-settings"])
+      writeFileSync(path.join(bin, tool), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+    const entry = path.join(profile, ".local/share/applications/google-chrome.desktop");
+    const setup = E2B_DEFAULT_BROWSER_SETUP_COMMAND.replaceAll("$HOME", profile).replaceAll(
+      "/usr/share/applications",
+      vendor,
+    );
+    const run = () =>
+      execFileSync("bash", ["-c", setup], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      });
+    try {
+      const vendorText =
+        "[Desktop Entry]\nExec=google-chrome --disable-sync --no-first-run\n[Desktop Action NewWindow]\nExec=google-chrome --new-window\n";
+      writeFileSync(path.join(vendor, "google-chrome.desktop"), vendorText);
+      run();
+      expect(readFileSync(entry, "utf8")).toBe(
+        vendorText.replace("--no-first-run\n", "--no-first-run %U\n"),
+      );
+      run();
+      expect(readFileSync(entry, "utf8").match(/%U/g)).toHaveLength(1);
+      writeFileSync(entry, "[Desktop Entry]\nExec=custom-browser %u\n");
+      run();
+      expect(readFileSync(entry, "utf8")).toContain("Exec=custom-browser %u");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("isolates setup errexit from vendor logout hooks and preserves actual failures", async () => {
+    const desktop = {
+      commands: {
+        run: async (command: string) => {
+          try {
+            // clear_console in the live desktop's login-shell logout fails
+            // without a TTY. An EXIT trap models that same shell boundary.
+            const stdout = execFileSync("bash", ["-c", `trap 'false' EXIT\n${command}`], {
+              encoding: "utf8",
+            });
+            return { stdout, stderr: "", exitCode: 0 };
+          } catch (error) {
+            const failed = error as { status: number; stdout: string; stderr: string };
+            throw Object.assign(new Error("Command exited"), {
+              result: { exitCode: failed.status, stdout: failed.stdout, stderr: failed.stderr },
+            });
+          }
+        },
+      },
+    } as unknown as Sandbox;
+    const provider = new E2BSandboxProvider("synthetic-key") as unknown as {
+      runSetupCommand(desktop: Sandbox, command: string): Promise<CommandResult>;
+    };
+    await expect(
+      provider.runSetupCommand(desktop, "set -eu; printf SETUP_READY; exit 0"),
+    ).resolves.toMatchObject({ exitCode: 0, stdout: "SETUP_READY" });
+    await expect(
+      provider.runSetupCommand(desktop, "set -eu; printf SETUP_FAILED; exit 9"),
+    ).resolves.toMatchObject({ exitCode: 9, stdout: "SETUP_FAILED" });
+  });
+
   it("only filters transient cache files inside portable browser profiles", () => {
     expect(shouldSkipPortableWorkspaceFile("project/Cache/important.txt")).toBe(false);
     expect(shouldSkipPortableWorkspaceFile("project/lock")).toBe(false);
@@ -48,6 +151,7 @@ describe("E2B computer backend", () => {
         });
       }),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
 
@@ -86,6 +190,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const computer = {
@@ -116,6 +221,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const computer = {
@@ -155,6 +261,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const computer = await provider.provision(
@@ -211,6 +318,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     });
     const computer = await provider.provision(
       { botId: "bot-1", homePath: "/unused", providerKind: "e2b" },
@@ -321,6 +429,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const computer = await provider.provision(
@@ -515,6 +624,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     });
     const computer = await provider.provision(
       { botId: "bot-1", homePath: "/unused", providerKind: "e2b" },
@@ -560,6 +670,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     });
     const computer = await provider.provision(
       { botId: "bot-1", homePath: "/unused", providerKind: "e2b" },
@@ -614,6 +725,7 @@ describe("E2B computer backend", () => {
       create: vi.fn(async () => desktop),
       connect: vi.fn(async () => desktop),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     });
     const computer = await provider.provision(
       { botId: "bot-1", homePath: "/unused", providerKind: "e2b" },
@@ -773,7 +885,7 @@ describe("E2B computer backend", () => {
     );
     expect(control.url).toMatch(/6083-desktop\.test/);
     const startControl = command.mock.calls
-      .map(([value]) => String(value))
+      .map(([value]) => String(value).replaceAll("'\"'\"'", "'"))
       .find((value) => value.includes("-rfbport 5903") && value.includes("novnc_proxy"));
     expect(startControl).toBeDefined();
     expect(startControl).toContain("pkill -f '(^|/)x11vnc .* -rfbport 5903([ ]|$)'");
@@ -886,6 +998,7 @@ describe("sandbox-gone detection", () => {
       create: vi.fn(async () => dead),
       connect: vi.fn(async () => revived as unknown as Sandbox),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const ref = await provider.provision({ botId: "bot-1", homePath: "/unused" }, context);
@@ -918,6 +1031,7 @@ describe("sandbox-gone detection", () => {
       create: vi.fn(async () => dead),
       connect: vi.fn(async () => revived as unknown as Sandbox),
       pause: vi.fn(async () => undefined),
+      kill: vi.fn(async () => true),
     };
     const provider = new E2BSandboxProvider("test-key", sdk);
     const ref = await provider.provision({ botId: "bot-1", homePath: "/unused" }, context);

@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { Bot, Me, ModelCatalogEntry, ThreadSnapshot } from "@rakazo/contracts";
+import type {
+  BillingPlanChangeStatus,
+  Bot,
+  Me,
+  ModelCatalogEntry,
+  ThreadSnapshot,
+} from "@rakazo/contracts";
 import { captureScreenshot } from "./helpers";
 
 const now = "2026-09-04T12:00:00.000Z";
@@ -41,6 +47,8 @@ async function fixture(
     theme = "dark",
     failed = false,
     legacy = false,
+    paid = false,
+    pastDue = false,
     computerAvailable = false,
     deploymentOwner = false,
   }: {
@@ -48,6 +56,8 @@ async function fixture(
     theme?: "light" | "dark";
     failed?: boolean;
     legacy?: boolean;
+    paid?: boolean;
+    pastDue?: boolean;
     computerAvailable?: boolean;
     deploymentOwner?: boolean;
   } = {},
@@ -278,10 +288,10 @@ async function fixture(
     else if (path === "usage/summary") result = { runs: 4, inputTokens: 8000, outputTokens: 3000 };
     else if (path === "billing/get")
       result = {
-        plan: legacy ? "plus" : "free",
-        planName: legacy ? "Plus" : "Free",
-        priceUsd: legacy ? 20 : 0,
-        status: "active",
+        plan: legacy || paid ? "plus" : "free",
+        planName: legacy || paid ? "Plus" : "Free",
+        priceUsd: legacy || paid ? 20 : 0,
+        status: pastDue ? "past_due" : "active",
         currentPeriodEnd: "2026-10-01T00:00:00Z",
         maxBots: 3,
         maxPlugins: 2,
@@ -293,14 +303,24 @@ async function fixture(
         computerSecondsUsed: 0,
         checkoutEnabled: true,
         billingEnabled: true,
-        allowanceUsd: 1,
+        allowanceUsd: paid ? 10 : 1,
         spentUsd: exhausted ? 1 : 0.3,
         reservedUsd: exhausted ? 0 : 0.04,
-        remainingUsd: exhausted ? 0 : 0.66,
+        remainingUsd: exhausted ? 0 : paid ? 9.66 : 0.66,
         resetAt: "2026-10-01T00:00:00Z",
         exhausted,
         ...(legacy ? { legacyUntil: "2026-10-01T00:00:00Z" } : {}),
       };
+    else if (path === "billing/planChangeStatus")
+      result = {
+        currentPlan: legacy || paid ? "plus" : "free",
+        currentPeriodEnd: legacy || paid ? "2026-10-01T00:00:00.000Z" : null,
+        cancelAtPeriodEnd: false,
+        pendingChange: null,
+        canChange: true,
+        canManageCancellation: legacy || paid,
+        unavailableReason: null,
+      } satisfies BillingPlanChangeStatus;
     else if (path.startsWith("threads/mark")) result = { ok: true };
     await route.fulfill({ json: { json: result } }).catch(() => undefined);
   });
@@ -579,4 +599,192 @@ test("existing subscriptions show their included usage until renewal", async ({
   await expect(page.getByRole("meter")).toHaveCount(0);
   await expect(page.getByText("Your included balance is used.", { exact: false })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "workspace-legacy-plan");
+});
+
+test("paid plan changes show renewal terms, preserve balance, and support undo and cancellation", async ({
+  page,
+}, testInfo) => {
+  const control = await fixture(page, { paid: true, theme: "light" });
+  let status: BillingPlanChangeStatus = {
+    currentPlan: "plus",
+    currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+    cancelAtPeriodEnd: false,
+    pendingChange: null,
+    canChange: true,
+    canManageCancellation: true,
+    unavailableReason: null,
+  };
+  const writes: Array<{ path: string; input: unknown }> = [];
+  await page.route("**/rpc/billing/*", async (route) => {
+    const path = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    if (path === "get") return route.fallback();
+    if (path !== "planChangeStatus") {
+      const input = route.request().postDataJSON()?.json ?? {};
+      writes.push({ path, input });
+      if (path === "schedulePlanChange")
+        status = {
+          ...status,
+          pendingChange: { plan: input.plan, priceUsd: 60, effectiveAt: status.currentPeriodEnd! },
+        };
+      else if (path === "cancelPlanChange") status = { ...status, pendingChange: null };
+      else if (path === "setCancelAtPeriodEnd")
+        status = {
+          ...status,
+          cancelAtPeriodEnd: input.cancel,
+          canChange: !input.cancel,
+          unavailableReason: input.cancel
+            ? "Keep your subscription before scheduling a plan change."
+            : null,
+          pendingChange: null,
+        };
+      else throw new Error(`Unexpected billing action ${path}`);
+    }
+    await route.fulfill({ json: { json: status } });
+  });
+  await page.goto("/app/chief?space=personal");
+  await page.getByTestId("allowance-indicator").click();
+  const billing = page.getByTestId("billing-plan-settings");
+  await billing.getByRole("button", { name: "Pro $60", exact: true }).click();
+  const confirmation = page.getByTestId("billing-confirmation");
+  await expect(confirmation).toContainText("$60/month starting October 1, 2026, including $30");
+  await expect(confirmation).toBeFocused();
+  expect(writes).toHaveLength(0);
+  await captureScreenshot(page, testInfo, "billing-light-renewal-confirmation");
+  await billing.getByRole("button", { name: "Schedule change", exact: true }).click();
+  await expect(billing.getByRole("status")).toContainText("Pro · $60/month from October 1, 2026");
+  await expect(billing).toContainText("Plus · $20/mo");
+  await expect(billing).toContainText("$9.66 of $10.00 remaining");
+  expect(writes).toEqual([
+    {
+      path: "schedulePlanChange",
+      input: { plan: "pro", expectedPeriodEnd: status.currentPeriodEnd },
+    },
+  ]);
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
+  await captureScreenshot(page, testInfo, "billing-dark-pending-change");
+  await billing.getByRole("button", { name: "Undo change" }).click();
+  await expect(billing.getByRole("status")).toHaveCount(0);
+  await billing.getByRole("button", { name: "Cancel subscription", exact: true }).click();
+  await expect(confirmation).toContainText("Subscription ends October 1, 2026");
+  expect(writes).toHaveLength(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "billing-mobile-dark-cancel-confirmation");
+  await billing.getByRole("button", { name: "Cancel at renewal" }).click();
+  await expect(billing.getByRole("status")).toContainText("Subscription ends October 1, 2026");
+  await expect(billing.getByRole("button", { name: "Pro $60", exact: true })).toBeDisabled();
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light";
+  });
+  await captureScreenshot(page, testInfo, "billing-mobile-light-canceled");
+  expect(await page.locator("body").evaluate((body) => body.scrollWidth)).toBe(390);
+  await billing.getByRole("button", { name: "Keep subscription" }).click();
+  await expect(billing.getByRole("status")).toHaveCount(0);
+  await expect(billing.getByRole("button", { name: "Pro $60", exact: true })).toBeEnabled();
+  expect(writes.slice(2)).toEqual([
+    {
+      path: "setCancelAtPeriodEnd",
+      input: { cancel: true, expectedPeriodEnd: status.currentPeriodEnd },
+    },
+    {
+      path: "setCancelAtPeriodEnd",
+      input: { cancel: false, expectedPeriodEnd: status.currentPeriodEnd },
+    },
+  ]);
+  expect(control.errors).toEqual([]);
+});
+
+test("billing refresh reconciles an unknown write before another paid plan change", async ({
+  page,
+}, testInfo) => {
+  const control = await fixture(page, { paid: true });
+  let status: BillingPlanChangeStatus = {
+    currentPlan: "plus",
+    currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+    cancelAtPeriodEnd: false,
+    pendingChange: null,
+    canChange: true,
+    canManageCancellation: true,
+    unavailableReason: null,
+  };
+  let writes = 0;
+  await page.route("**/rpc/billing/*", async (route) => {
+    const path = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    if (path === "get") return route.fallback();
+    if (path === "schedulePlanChange") {
+      writes++;
+      status = {
+        ...status,
+        pendingChange: { plan: "pro", priceUsd: 60, effectiveAt: status.currentPeriodEnd! },
+      };
+      await route.abort("failed");
+      return;
+    }
+    if (path !== "planChangeStatus") throw new Error(`Unexpected billing action ${path}`);
+    await route.fulfill({ json: { json: status } });
+  });
+  await page.goto("/app/chief?space=personal");
+  await page.getByTestId("allowance-indicator").click();
+  const billing = page.getByTestId("billing-plan-settings");
+  await billing.getByRole("button", { name: "Pro $60", exact: true }).click();
+  await billing.getByRole("button", { name: "Schedule change", exact: true }).click();
+  await expect(billing.getByRole("alert")).toBeVisible();
+  await expect(billing.getByRole("button", { name: "Pro $60", exact: true })).toBeDisabled();
+  await captureScreenshot(page, testInfo, "billing-dark-recoverable-error");
+  await billing.getByRole("button", { name: "Refresh billing" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(billing.getByRole("status")).toContainText("Pro · $60/month from October 1, 2026");
+  await expect(billing).toContainText("$9.66 of $10.00 remaining");
+  expect(writes).toBe(1);
+  expect(
+    await page
+      .getByTestId("user-settings")
+      .evaluate((dialog) => dialog.contains(document.activeElement)),
+  ).toBe(true);
+  await page.keyboard.press("Tab");
+  expect(
+    await page
+      .getByTestId("user-settings")
+      .evaluate((dialog) => dialog.contains(document.activeElement)),
+  ).toBe(true);
+  expect(control.errors).toEqual([]);
+});
+
+test("past-due subscriptions retain cancellation and billing access while allowance is Free", async ({
+  page,
+}, testInfo) => {
+  const control = await fixture(page, { pastDue: true, theme: "light" });
+  let status: BillingPlanChangeStatus = {
+    currentPlan: "plus",
+    currentPeriodEnd: "2026-10-01T00:00:00.000Z",
+    cancelAtPeriodEnd: false,
+    pendingChange: null,
+    canChange: false,
+    canManageCancellation: true,
+    unavailableReason: "Resolve this subscription in billing before changing plans.",
+  };
+  const writes: unknown[] = [];
+  await page.route("**/rpc/billing/*", async (route) => {
+    const path = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    if (path === "get") return route.fallback();
+    if (path === "setCancelAtPeriodEnd") {
+      const input = route.request().postDataJSON()?.json;
+      writes.push(input);
+      status = { ...status, cancelAtPeriodEnd: input.cancel };
+    } else if (path !== "planChangeStatus") throw new Error(`Unexpected billing action ${path}`);
+    await route.fulfill({ json: { json: status } });
+  });
+  await page.goto("/app/chief?space=personal");
+  await page.getByTestId("allowance-indicator").click();
+  const billing = page.getByTestId("billing-plan-settings");
+  await expect(billing).toContainText("Free · $0/mo");
+  await expect(billing.getByRole("button", { name: "Plus $20", exact: true })).toBeDisabled();
+  await expect(billing.getByRole("button", { name: "Manage billing" })).toBeEnabled();
+  await billing.getByRole("button", { name: "Cancel subscription", exact: true }).click();
+  await billing.getByRole("button", { name: "Cancel at renewal" }).click();
+  await expect(billing.getByRole("button", { name: "Keep subscription" })).toBeEnabled();
+  await captureScreenshot(page, testInfo, "billing-light-past-due-cancellation");
+  expect(writes).toEqual([{ cancel: true, expectedPeriodEnd: status.currentPeriodEnd }]);
+  expect(control.errors).toEqual([]);
 });

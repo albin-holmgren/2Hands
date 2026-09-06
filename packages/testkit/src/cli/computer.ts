@@ -4,12 +4,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { runProcess } from "./process.js";
-import { canaryDatabaseUrl, providerCanaryEnv } from "./provider-canary-env.js";
+import {
+  canaryDatabaseUrl,
+  computerCanaryEnv,
+  computerCanaryModel,
+} from "./provider-canary-env.js";
 
 async function main() {
-  for (const key of ["E2B_API_KEY", "OPENROUTER_API_KEY", "COMPUTER_E2E_MODEL"]) {
-    if (!process.env[key]) throw new Error(`${key} is required`);
-  }
+  computerCanaryModel(process.env);
+  if (!process.env.E2B_API_KEY) throw new Error("E2B_API_KEY is required");
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-computer-e2e-run-"));
   const suppliedDatabase = canaryDatabaseUrl(process.env);
   const database = suppliedDatabase
@@ -17,10 +20,7 @@ async function main() {
     : await new PostgreSqlContainer("postgres:16-alpine").withDatabase("computer_e2e_test").start();
   const databaseUrl = suppliedDatabase ?? database!.getConnectionUri();
   const env = {
-    ...providerCanaryEnv(process.env, "all", databaseUrl),
-    BOX_API_KEY: undefined,
-    RUN_COMPUTER_E2E: "1",
-    VERIFY_PROVIDERS: "1",
+    ...computerCanaryEnv(process.env, databaseUrl),
     COMPOSIO_API_KEY: "",
     WAKEUP_DRIVER: "memory",
     SANDBOX_PROVIDER: "e2b",

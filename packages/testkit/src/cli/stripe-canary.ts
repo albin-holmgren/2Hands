@@ -22,6 +22,7 @@ async function main() {
     BILLING_ENABLED: "true",
     VERIFY_DATABASE: "1",
     VERIFY_PROVIDERS: "",
+    STRIPE_TEST_RENEWAL_ONLY: process.argv.includes("--renewal-only") ? "1" : "",
   };
   await runProcess("pnpm", ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"], env);
   await runProcess(

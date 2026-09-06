@@ -2,8 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
+import { resolveBotWorkspacePath, teamBotWorkspaceDirectory } from "@rakazo/adapters";
+import type { Billing } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { computerCanaryModel } from "./cli/provider-canary-env.js";
 import { testDatabaseUrl } from "./cli/test-database-url.js";
+import { cleanupComputerCanary } from "./computer-canary-cleanup.js";
 import { sessionCookieHeader } from "./index.js";
 
 const live = process.env.RUN_COMPUTER_E2E === "1";
@@ -15,9 +19,12 @@ describeLive("real model and E2B computer journey", () => {
   let computer: ComputerRef | undefined;
 
   beforeAll(async () => {
-    for (const key of ["DATABASE_URL", "E2B_API_KEY", "OPENROUTER_API_KEY", "COMPUTER_E2E_MODEL"]) {
+    for (const key of ["DATABASE_URL", "E2B_API_KEY"]) {
       if (!process.env[key]) throw new Error(`${key} is required for pnpm test:computer`);
     }
+    if (process.env.BILLING_ENABLED !== "true")
+      throw new Error("The computer canary requires the $1 Free allowance enforcement");
+    const model = computerCanaryModel(process.env);
     testDatabaseUrl(process.env.DATABASE_URL);
     dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-computer-e2e-"));
     const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -27,26 +34,32 @@ describeLive("real model and E2B computer journey", () => {
       sandboxProvider: "e2b",
       agentRuntime: "pi",
       e2bApiKey: process.env.E2B_API_KEY,
-      openRouterKey: process.env.OPENROUTER_API_KEY,
-      defaultProvider: "openrouter",
-      defaultModel: process.env.COMPUTER_E2E_MODEL,
+      deploymentModelKey: model.key,
+      defaultProvider: model.provider,
+      defaultModel: model.model,
       wakeupDriver: "memory",
     });
     await handles.prisma.deploymentSettings.update({
       where: { id: "default" },
       data: {
-        defaultModelProvider: "openrouter",
-        defaultModelId: process.env.COMPUTER_E2E_MODEL,
+        defaultModelProvider: model.provider,
+        defaultModelId: model.model,
       },
     });
   }, 120_000);
 
   afterAll(async () => {
-    if (computer) {
-      await handles.sandbox.destroy(computer, testContext(computer.botId)).catch(() => undefined);
+    const currentComputer = computer;
+    try {
+      await cleanupComputerCanary({
+        stopApp: handles ? () => handles.stop() : undefined,
+        destroyComputer: currentComputer
+          ? () => handles.sandbox.destroy(currentComputer, testContext(currentComputer.botId))
+          : undefined,
+      });
+    } finally {
+      if (dataDir) rmSync(dataDir, { recursive: true, force: true });
     }
-    await handles?.stop().catch(() => undefined);
-    if (dataDir) rmSync(dataDir, { recursive: true, force: true });
   });
 
   it("observes and clicks a real browser, then uses terminal and files", async () => {
@@ -62,6 +75,9 @@ describeLive("real model and E2B computer journey", () => {
     });
     expect(signup.status).toBeLessThan(400);
     const cookie = sessionCookieHeader(signup);
+    const before = await rpc<Billing>(handles.app, cookie, "billing/get", {});
+    expect(before.allowanceUsd).toBe(1);
+    expect(before.spentUsd).toBe(0);
     const bot = await rpc<{ id: string }>(handles.app, cookie, "bots/create", {
       name: "Operator",
       title: "Computer acceptance test",
@@ -69,6 +85,7 @@ describeLive("real model and E2B computer journey", () => {
       instructions:
         "This is an acceptance test. Follow the requested computer tool sequence exactly and do not claim a visual action succeeded until its result is visible.",
       notifyOnFinish: false,
+      computerMode: "team",
     });
     await rpc(handles.app, cookie, "computer/boot", { botId: bot.id });
     const storedBot = await handles.prisma.bot.findUniqueOrThrow({
@@ -81,8 +98,9 @@ describeLive("real model and E2B computer journey", () => {
       providerRef: stored.providerRef!,
       botId: stored.homeKey,
       kind: "e2b",
+      expiresAt: stored.billingCoveredUntil!.toISOString(),
     };
-    await installVisualFixture(handles.sandbox, computer);
+    await installVisualFixture(handles.sandbox, computer, bot.id);
 
     const sent = await rpc<{ runId: string }>(handles.app, cookie, "threads/send", {
       botId: bot.id,
@@ -100,12 +118,26 @@ describeLive("real model and E2B computer journey", () => {
           where: { id: sent.runId },
           select: { status: true, error: true },
         }),
-      180_000,
+      120_000,
     );
     expect(completedRun.status, completedRun.error ?? undefined).toBe("completed");
+    const model = computerCanaryModel(process.env);
+    const savedRun = await handles.prisma.run.findUniqueOrThrow({ where: { id: sent.runId } });
+    expect(savedRun).toMatchObject({
+      modelProvider: model.provider,
+      modelId: model.model,
+      modelFunding: "hosted",
+    });
+    const after = await rpc<Billing>(handles.app, cookie, "billing/get", {});
+    expect(after.spentUsd).toBeGreaterThan(0);
+    expect(after.spentUsd + after.reservedUsd).toBeLessThanOrEqual(1);
 
     const clickMarker = new TextDecoder().decode(
-      await handles.sandbox.readFile(computer, "results/visual-click.txt", testContext(bot.id)),
+      await handles.sandbox.readFile(
+        computer,
+        resolveBotWorkspacePath("team", bot.id, "results/visual-click.txt"),
+        testContext(bot.id),
+      ),
     );
     expect(clickMarker).toBe("visual-click-ok");
     const confirmed = await rpc<{ content: string }>(handles.app, cookie, "computer/readFile", {
@@ -149,22 +181,32 @@ describeLive("real model and E2B computer journey", () => {
       include: { computer: true },
     });
     const replacement = replacementBot.computer!;
-    expect(replacement.providerRef).not.toBe(originalRef);
     computer = {
       id: replacement.providerRef!,
       providerRef: replacement.providerRef!,
       botId: replacement.homeKey,
       kind: "e2b",
+      expiresAt: replacement.billingCoveredUntil!.toISOString(),
     };
+    expect(computer.providerRef).not.toBe(originalRef);
     const restored = await rpc<{ content: string }>(handles.app, cookie, "computer/readFile", {
       botId: bot.id,
       path: "results/llm-confirmed.txt",
     });
     expect(restored.content).toBe("visual-e2e-ok");
-  }, 240_000);
+    await rpc(handles.app, cookie, "computer/stop", { botId: bot.id });
+    const stopped = await rpc<Billing>(handles.app, cookie, "billing/get", {});
+    expect(stopped.reservedUsd).toBe(0);
+    expect(stopped.spentUsd).toBeGreaterThan(0);
+    expect(stopped.spentUsd).toBeLessThanOrEqual(1);
+  }, 170_000);
 });
 
-async function installVisualFixture(sandbox: SandboxProvider, computer: ComputerRef) {
+async function installVisualFixture(
+  sandbox: SandboxProvider,
+  computer: ComputerRef,
+  botId: string,
+) {
   const source = `
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -185,15 +227,19 @@ class Handler(BaseHTTPRequestHandler):
 
 HTTPServer(('127.0.0.1', 8765), Handler).serve_forever()
 `;
-  const context = testContext(computer.botId);
+  const context = testContext(botId);
+  const cwd = teamBotWorkspaceDirectory(botId);
   await sandbox.writeFile(
     computer,
-    { path: "visual_server.py", content: new TextEncoder().encode(source) },
+    { path: `${cwd}/visual_server.py`, content: new TextEncoder().encode(source) },
     context,
   );
   for await (const event of sandbox.execute(
     computer,
-    { argv: ["bash", "-lc", "nohup python3 visual_server.py > visual-server.log 2>&1 &"] },
+    {
+      cwd,
+      argv: ["bash", "-c", "nohup python3 visual_server.py </dev/null > visual-server.log 2>&1 &"],
+    },
     context,
   )) {
     if (event.type === "exit" && event.code !== 0)
@@ -203,7 +249,7 @@ HTTPServer(('127.0.0.1', 8765), Handler).serve_forever()
     let ready = false;
     for await (const event of sandbox.execute(
       computer,
-      { argv: ["bash", "-lc", "curl -fsS http://127.0.0.1:8765 >/dev/null"] },
+      { cwd, argv: ["bash", "-c", "curl -fsS http://127.0.0.1:8765 >/dev/null"] },
       context,
     )) {
       if (event.type === "exit") ready = event.code === 0;

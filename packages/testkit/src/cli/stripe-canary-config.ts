@@ -10,7 +10,5 @@ export function stripeCanaryConfig(env: NodeJS.ProcessEnv) {
   const databaseUrl = testDatabaseUrl(env.TEST_DATABASE_URL);
   if (!databaseUrl)
     throw new Error("TEST_DATABASE_URL must name a disposable loopback _test database.");
-  if (new URL(databaseUrl).search)
-    throw new Error("Stripe canary database URLs cannot contain connection query overrides.");
   return { secretKey, databaseUrl };
 }

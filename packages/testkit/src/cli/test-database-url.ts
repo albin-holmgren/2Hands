@@ -11,5 +11,10 @@ export function testDatabaseUrl(value: string | undefined) {
       "TEST_DATABASE_URL must address an explicit loopback database ending in _test.",
     );
   }
+  // pg accepts query parameters such as `host` that override the URL authority.
+  // A visually loopback URL must never redirect test migrations to another server.
+  if (url.search || url.hash) {
+    throw new Error("TEST_DATABASE_URL cannot contain connection query overrides or fragments.");
+  }
   return url.toString();
 }

@@ -5,9 +5,11 @@ name: 2hands native core workflow
     clearState: true
     clearKeychain: true
 - assertVisible: "Sign in to 2hands"
+- takeScreenshot: screenshots/sign-in
 - tapOn: "Sign up"
 - assertVisible: "Sign up for 2hands"
 - assertVisible: "Name"
+- takeScreenshot: screenshots/sign-up
 - tapOn: "Sign in"
 - tapOn: "Email"
 - inputText: ${RAKAZO_E2E_EMAIL}

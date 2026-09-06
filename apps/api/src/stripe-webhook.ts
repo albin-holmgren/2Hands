@@ -3,6 +3,10 @@ import type { PrismaClient } from "@rakazo/db";
 import type { Hono } from "hono";
 import type Stripe from "stripe";
 import { applyStripeSubscription, createStripeClient } from "./stripe-billing.js";
+import {
+  invoiceConfirmsSubscriptionPeriod,
+  type PaidPeriodInvoice,
+} from "./stripe-invoice-payment.js";
 
 const SUBSCRIPTION_EVENTS = new Set([
   "checkout.session.completed",
@@ -23,9 +27,10 @@ type SubscriptionObject = {
   subscription?: string | { id?: string } | null;
   parent?: { subscription_details?: { subscription?: string | { id?: string } | null } };
   status?: string;
-  latest_invoice?: string | { status?: string | null } | null;
+  latest_invoice?: string | PaidPeriodInvoice | null;
   items?: {
     data?: Array<{
+      id?: string;
       price?: { id?: string };
       current_period_start?: number;
       current_period_end?: number;
@@ -73,9 +78,13 @@ export async function processStripeBillingEvent(
   // delivery will reconcile it. Never create a new paid period from status alone.
   if (
     subscription.status === "active" &&
-    (!subscription.latest_invoice ||
-      typeof subscription.latest_invoice === "string" ||
-      subscription.latest_invoice.status !== "paid")
+    !invoiceConfirmsSubscriptionPeriod(subscription.latest_invoice, {
+      subscriptionId,
+      itemId: item?.id,
+      priceId: item?.price?.id,
+      start: subscription.current_period_start ?? item?.current_period_start,
+      end: subscription.current_period_end ?? item?.current_period_end,
+    })
   ) {
     throw new Error("Subscription payment has not been confirmed");
   }

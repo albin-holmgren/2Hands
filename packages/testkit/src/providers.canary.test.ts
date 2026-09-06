@@ -279,12 +279,23 @@ describePiApp("live OpenRouter product journey", () => {
       instructions: "Reply briefly. Prefer the write_file tool when asked to write a file.",
       notifyOnFinish: true,
     });
-    await rpc(handles.app, cookie, "threads/send", {
+    const sent = await rpc<{ runId: string }>(handles.app, cookie, "threads/send", {
       botId: botRes.id,
       text: "Use write_file to save notes/result.txt containing exactly openrouter-ok",
     });
-    const snap = await waitFor(handles.app, cookie, botRes.id, 90_000);
-    expect(snap.run?.status).toBe("completed");
+    // Bot snapshots omit completed runs. Follow the exact durable run rather than
+    // mistaking an idle snapshot for completion or expecting a terminal UI run.
+    await expect
+      .poll(
+        () =>
+          handles.prisma.run.findUnique({
+            where: { id: sent.runId },
+            select: { status: true },
+          }),
+        { timeout: 90_000 },
+      )
+      .toMatchObject({ status: "completed" });
+    const snap = await rpc(handles.app, cookie, "threads/get", { botId: botRes.id });
     const blob = JSON.stringify(snap);
     expect(blob).not.toMatch(/sk-or-/i);
     const file = await rpc<{ content: string }>(handles.app, cookie, "computer/readFile", {
@@ -296,10 +307,6 @@ describePiApp("live OpenRouter product journey", () => {
 });
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
-type Snap = {
-  messages: Array<{ role: string; blocks: unknown[] }>;
-  run: { status: string } | null;
-};
 
 async function rpc<T>(app: App, cookie: string, proc: string, body: unknown = {}): Promise<T> {
   const res = await app.request(`/rpc/${proc}`, {
@@ -311,15 +318,4 @@ async function rpc<T>(app: App, cookie: string, proc: string, body: unknown = {}
   if (res.status >= 400 || parsed.error)
     throw new Error(`${proc} ${res.status}: ${parsed.error?.message ?? "failed"}`);
   return parsed.json as T;
-}
-
-async function waitFor(app: App, cookie: string, botId: string, ms: number): Promise<Snap> {
-  const start = Date.now();
-  let last: Snap | null = null;
-  while (Date.now() - start < ms) {
-    last = await rpc<Snap>(app, cookie, "threads/get", { botId });
-    if (!last.run || ["completed", "failed", "cancelled"].includes(last.run.status)) return last;
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error(`timeout waiting for live model turn: ${JSON.stringify(last)}`);
 }

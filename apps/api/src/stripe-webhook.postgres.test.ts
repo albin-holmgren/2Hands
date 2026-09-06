@@ -20,14 +20,34 @@ const enabled = process.env.VERIFY_DATABASE === "1";
     const start = Math.floor(now.getTime() / 1000) - 3_600;
     const end = start + 30 * 24 * 3_600;
     const stripe = new Stripe("sk_test_example");
+    const invoice = (id: string, status: string, price: string) => ({
+      id,
+      status,
+      subscription: "sub_example",
+      lines: {
+        data: [
+          {
+            subscription_item: "si_example",
+            proration: false,
+            price: { id: price },
+            period: { start, end },
+          },
+        ],
+      },
+    });
     let subscription = {
       id: "sub_example",
       customer: customerId,
       status: "active",
-      latest_invoice: { id: "in_example", status: "open" },
+      latest_invoice: invoice("in_example", "open", "price_plus"),
       items: {
         data: [
-          { price: { id: "price_plus" }, current_period_start: start, current_period_end: end },
+          {
+            id: "si_example",
+            price: { id: "price_plus" },
+            current_period_start: start,
+            current_period_end: end,
+          },
         ],
       },
     };
@@ -104,10 +124,15 @@ const enabled = process.env.VERIFY_DATABASE === "1";
       // A pending upgrade must preserve both the already-paid plan and its settled usage.
       subscription = {
         ...subscription,
-        latest_invoice: { id: "in_upgrade", status: "draft" },
+        latest_invoice: invoice("in_upgrade", "draft", "price_pro"),
         items: {
           data: [
-            { price: { id: "price_pro" }, current_period_start: start, current_period_end: end },
+            {
+              id: "si_example",
+              price: { id: "price_pro" },
+              current_period_start: start,
+              current_period_end: end,
+            },
           ],
         },
       };

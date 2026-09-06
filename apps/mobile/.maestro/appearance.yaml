@@ -1,0 +1,65 @@
+appId: com.rakazo.app
+name: 2hands native appearance navigation
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: rakazo://account
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 30000
+- tapOn: ${RAKAZO_E2E_APPEARANCE} appearance
+- takeScreenshot: screenshots/account-appearance
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- takeScreenshot: screenshots/conversation
+- tapOn:
+    id: "composer-model-picker"
+- assertVisible: "Search models"
+- takeScreenshot: screenshots/model-picker
+- tapOn: "Close models"
+- openLink: rakazo://
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- tapOn: "Switch workspace"
+- assertVisible: "Search workspaces"
+- takeScreenshot: screenshots/workspace-picker
+- tapOn: "Close workspaces"
+- openLink: rakazo://new
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Name this bot"
+    timeout: 30000
+- assertVisible: "Cancel"
+- takeScreenshot: screenshots/new-bot
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: rakazo://new-space
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Customer support"
+    timeout: 30000
+- assertVisible: "Cancel"
+- hideKeyboard
+- assertVisible: "Cancel"
+- takeScreenshot: screenshots/new-workspace

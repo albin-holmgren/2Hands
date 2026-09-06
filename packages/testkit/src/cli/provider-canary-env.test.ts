@@ -2,11 +2,65 @@ import { describe, expect, it } from "vitest";
 import {
   canaryDatabaseUrl,
   canaryProvider,
+  computerCanaryEnv,
+  computerCanaryModel,
   providerCanaryEnv,
   sandboxCanaryRequest,
 } from "./provider-canary-env.js";
 
 describe("live provider canary isolation", () => {
+  it("runs the computer journey with only its explicitly selected model key and hosted allowance", () => {
+    const source = {
+      E2B_API_KEY: "synthetic-e2b",
+      COMPUTER_E2E_PROVIDER: "vercel-gateway",
+      COMPUTER_E2E_MODEL: "openai/gpt-4.1-mini",
+      AI_GATEWAY_API_KEY: "synthetic-gateway",
+      OPENROUTER_API_KEY: "unrelated-model",
+      VERCEL_OIDC_TOKEN: "unrelated-oidc",
+      STRIPE_SECRET_KEY: "unrelated-payment",
+      STRIPE_WEBHOOK_SECRET: "unrelated-webhook",
+      STRIPE_TEST_SECRET_KEY: "unrelated-test-payment",
+      SANDBOX_IDLE_MS: "999999",
+    };
+    const env = computerCanaryEnv(source, "postgres://test:test@127.0.0.1/computer_test");
+    expect(env).toMatchObject({
+      AI_GATEWAY_API_KEY: "synthetic-gateway",
+      OPENROUTER_API_KEY: undefined,
+      VERCEL_OIDC_TOKEN: undefined,
+      PI_DEFAULT_PROVIDER: "vercel-gateway",
+      PI_DEFAULT_MODEL: "openai/gpt-4.1-mini",
+      BILLING_ENABLED: "true",
+      SANDBOX_IDLE_MS: "180000",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      STRIPE_TEST_SECRET_KEY: "",
+    });
+    expect(computerCanaryModel(env)).toEqual({
+      provider: "vercel-gateway",
+      model: "openai/gpt-4.1-mini",
+      key: "synthetic-gateway",
+    });
+    expect(
+      computerCanaryModel({ ...source, VERCEL_AI_GATEWAY_API_KEY: "canonical-gateway" }).key,
+    ).toBe("canonical-gateway");
+    expect(() => computerCanaryModel({ ...source, AI_GATEWAY_API_KEY: "" })).toThrow(
+      "AI_GATEWAY_API_KEY",
+    );
+    expect(() => computerCanaryModel({ ...source, COMPUTER_E2E_PROVIDER: "typo" })).toThrow(
+      "COMPUTER_E2E_PROVIDER",
+    );
+    expect(
+      computerCanaryModel({
+        COMPUTER_E2E_MODEL: "synthetic-vision-model",
+        OPENROUTER_API_KEY: "synthetic-openrouter",
+      }),
+    ).toEqual({
+      provider: "openrouter",
+      model: "synthetic-vision-model",
+      key: "synthetic-openrouter",
+    });
+  });
+
   it("discards inherited storage, billing, signup locks, and unrelated live services", () => {
     const env = providerCanaryEnv(
       {

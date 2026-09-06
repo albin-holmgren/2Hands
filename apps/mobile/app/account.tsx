@@ -102,7 +102,11 @@ export default function Account() {
       onPress={() => router.push("/usage")}
     >
       <Text style={styles.settingsTitle}>Usage & plan →</Text>
-      {usage ? <Text style={styles.email}>{usage.runs} runs this month</Text> : null}
+      {usage ? (
+        <Text style={styles.email}>
+          {usage.runs} {usage.runs === 1 ? "run" : "runs"} this month
+        </Text>
+      ) : null}
     </Pressable>
   );
 

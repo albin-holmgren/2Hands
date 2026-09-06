@@ -107,6 +107,7 @@ async function main() {
           "packages/db/src/space-membership.postgres.test.ts",
           "packages/db/src/billing.postgres.test.ts",
           "apps/api/src/stripe-webhook.postgres.test.ts",
+          "apps/api/src/computer-budget.postgres.test.ts",
           "packages/adapters/src/wakeup.postgres.test.ts",
           "packages/adapters/src/realtime.postgres.test.ts",
           "packages/adapters/src/job-reconciler.postgres.test.ts",

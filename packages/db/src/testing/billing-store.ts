@@ -57,6 +57,29 @@ export function billingTestStore(overrides: Partial<OrganizationBilling> = {}) {
         Object.assign(row, data);
         return copy(row);
       },
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: Partial<Computer>;
+        data: Partial<Computer>;
+      }) => {
+        let count = 0;
+        for (const row of state.computers.values()) {
+          if (
+            !Object.entries(where).every(([key, expected]) => {
+              const actual = row[key as keyof Computer];
+              return expected instanceof Date && actual instanceof Date
+                ? expected.getTime() === actual.getTime()
+                : expected === actual;
+            })
+          )
+            continue;
+          Object.assign(row, data);
+          count += 1;
+        }
+        return { count };
+      },
       count: async ({
         where,
       }: {

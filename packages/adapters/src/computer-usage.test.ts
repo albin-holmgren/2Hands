@@ -18,6 +18,7 @@ function fixture() {
   vi.stubEnv("HOSTED_COMPUTER_USD_PER_HOUR", "0.15");
   const store = billingTestStore();
   store.addComputer();
+  store.state().computers.get("computer-1")!.state = "running";
   const stop = vi.fn(async () => undefined);
   const sandbox = {
     describe: () => ({ capabilities: { boundedLifetime: true } }),
@@ -68,6 +69,7 @@ describe("hosted computer usage", () => {
   it("enforces concurrent machines and settles confirmed stopped time once", async () => {
     const f = fixture();
     f.addComputer("computer-2");
+    f.state().computers.get("computer-2")!.state = "booting";
     await ensureComputerUsageCoverage(f, "computer-1", now);
     await expect(ensureComputerUsageCoverage(f, "computer-2", now)).rejects.toThrow(
       /parallel computer/,
@@ -143,5 +145,80 @@ describe("hosted computer usage", () => {
     await expect(
       ensureComputerUsageCoverage({ ...f, sandbox: unsupported }, "computer-1", now),
     ).rejects.toThrow(/cannot enforce/);
+  });
+
+  it("does not stop or settle newer coverage after reading a stale expiry snapshot", async () => {
+    const f = fixture();
+    f.state().computers.get("computer-1")!.providerRef = "old-box";
+    await ensureComputerUsageCoverage(f, "computer-1", now);
+    vi.setSystemTime(new Date(now.getTime() + 300_001));
+    let resume!: () => void;
+    let observed!: () => void;
+    const snapshot = new Promise<void>((resolve) => {
+      observed = resolve;
+    });
+    const barrier = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    vi.spyOn(f.prisma.space, "findUniqueOrThrow").mockImplementationOnce((async () => {
+      observed();
+      await barrier;
+      return { organizationId: "org-1" } as never;
+    }) as never);
+    const expiry = suspendComputerForBudget(f, "computer-1");
+    await snapshot;
+    await ensureComputerUsageCoverage(f, "computer-1");
+    const current = f.state().computers.get("computer-1")!;
+    current.providerRef = "new-box";
+    current.executionFence += 1;
+    const reservation = current.billingReservationId;
+    resume();
+    await expiry;
+    expect(f.stop).not.toHaveBeenCalled();
+    expect(f.state().computers.get("computer-1")).toMatchObject({
+      state: "running",
+      providerRef: "new-box",
+      billingReservationId: reservation,
+    });
+    expect(await ensureOrganizationBilling(f.prisma, "org-1")).toMatchObject({
+      spentUsd: 0.0125,
+      reservedUsd: 0.0125,
+    });
+  });
+
+  it("keeps the reservation through stop and rejects a heartbeat queued behind suspension", async () => {
+    const f = fixture();
+    f.state().computers.get("computer-1")!.providerRef = "old-box";
+    await ensureComputerUsageCoverage(f, "computer-1", now);
+    vi.setSystemTime(new Date(now.getTime() + 300_001));
+    let resume!: () => void;
+    let stopping!: () => void;
+    const started = new Promise<void>((resolve) => {
+      stopping = resolve;
+    });
+    f.stop.mockImplementation(async () => {
+      stopping();
+      await new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+    });
+    const expiry = suspendComputerForBudget(f, "computer-1");
+    await started;
+    expect(f.state().computers.get("computer-1")!.state).toBe("suspending");
+    expect([...f.state().reservations.values()][0]!.status).toBe("reserved");
+    const heartbeat = expect(ensureComputerUsageCoverage(f, "computer-1")).rejects.toThrow(
+      "Start the computer",
+    );
+    resume();
+    await Promise.all([expiry, heartbeat]);
+    expect(f.state().computers.get("computer-1")).toMatchObject({
+      state: "suspended",
+      billingReservationId: null,
+    });
+    expect(f.state().reservations.size).toBe(1);
+    expect(await ensureOrganizationBilling(f.prisma, "org-1")).toMatchObject({
+      spentUsd: 0.0125,
+      reservedUsd: 0,
+    });
   });
 });

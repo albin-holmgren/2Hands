@@ -1017,6 +1017,31 @@ export const BillingCheckoutInput = z.object({
 });
 export type BillingCheckoutInput = z.infer<typeof BillingCheckoutInput>;
 
+export const BillingPlanChangeStatusSchema = z.object({
+  currentPlan: PlanIdSchema,
+  currentPeriodEnd: z.string().nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+  pendingChange: z
+    .object({
+      plan: z.enum(["plus", "pro", "ultra"]),
+      priceUsd: z.number(),
+      effectiveAt: z.string(),
+    })
+    .nullable(),
+  canChange: z.boolean(),
+  canManageCancellation: z.boolean(),
+  unavailableReason: z.string().nullable(),
+});
+export type BillingPlanChangeStatus = z.infer<typeof BillingPlanChangeStatusSchema>;
+
+export const BillingSchedulePlanChangeInput = BillingCheckoutInput.extend({
+  expectedPeriodEnd: z.string().datetime(),
+});
+export const BillingSetCancelAtPeriodEndInput = z.object({
+  cancel: z.boolean(),
+  expectedPeriodEnd: z.string().datetime(),
+});
+
 export const AppBootstrapSchema = z.object({
   me: MeSchema,
   bots: z.array(BotSchema),

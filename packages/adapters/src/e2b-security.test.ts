@@ -37,6 +37,7 @@ function fixture() {
     create: vi.fn(async () => desktop),
     connect: vi.fn(async () => desktop),
     pause: vi.fn(),
+    kill: vi.fn(async () => true),
   };
   return { desktop, sdk, run, provider: new E2BSandboxProvider("synthetic-key", sdk) };
 }
