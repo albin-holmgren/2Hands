@@ -16,10 +16,18 @@ name: 2hands native composer and work navigation
 - assertVisible: "Chat"
 - tapOn:
     id: "composer-input"
-- eraseText: 10000
+- longPressOn:
+    id: "composer-input"
+- tapOn:
+    text: "(?i)select all"
+    optional: true
+- eraseText: 1
 - inputText: "Compare two practical approaches and explain their tradeoffs before making a recommendation."
 - takeScreenshot: screenshots/composer-keyboard
-- hideKeyboard
+# Multiline iOS input has no keyboard Done button; tap the transcript to dismiss.
+- tapOn:
+    point: "50%, 27%"
+- waitForAnimationToEnd
 - takeScreenshot: screenshots/composer-draft
 - tapOn:
     id: "composer-model-picker"
@@ -40,7 +48,12 @@ name: 2hands native composer and work navigation
     timeout: 30000
 - tapOn:
     id: "composer-input"
-- eraseText: 10000
+- longPressOn:
+    id: "composer-input"
+- tapOn:
+    text: "(?i)select all"
+    optional: true
+- eraseText: 1
 - inputText: "Keep working until I stop you."
 - tapOn:
     id: "composer-send"
@@ -57,5 +70,8 @@ name: 2hands native composer and work navigation
 - extendedWaitUntil:
     notVisible: "Stop"
     timeout: 30000
-- hideKeyboard
+# Multiline iOS input has no keyboard Done button; tap the transcript to dismiss.
+- tapOn:
+    point: "50%, 27%"
+- waitForAnimationToEnd
 - takeScreenshot: screenshots/conversation
