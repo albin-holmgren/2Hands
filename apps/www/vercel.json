@@ -1,5 +1,42 @@
 {
   "framework": "astro",
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @rakazo/www build"
+  "buildCommand": "pnpm --filter @rakazo/www build",
+  "redirects": [
+    {
+      "source": "/:path(sign-in|sign-up|forgot-password|reset-password|onboarding)",
+      "destination": "https://app.2hands.ai/:path",
+      "permanent": true
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "https://app.2hands.ai/app/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/mcp/:path*",
+      "destination": "https://app.2hands.ai/mcp/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/rpc/:path*",
+      "destination": "https://app.2hands.ai/rpc/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/novnc/:path*",
+      "destination": "https://app.2hands.ai/novnc/:path*",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://app.2hands.ai/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://app.2hands.ai/health"
+    }
+  ]
 }

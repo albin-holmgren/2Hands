@@ -55,7 +55,7 @@ export const DEMO_BOTS: DemoBot[] = [
   {
     id: "chief",
     name: "Chief of Staff",
-    color: "#3EC5A8",
+    color: "#D97757",
     time: "Yesterday",
     preview: "venue booked, contract sent for signature",
     routines: [{ name: "Monday briefing", when: "Mondays 7am" }],
@@ -346,13 +346,13 @@ export const DEMO_ROSTER: RosterBot[] = [
   },
   {
     name: "Paid Media",
-    color: "#3EC5A8",
+    color: "#D97757",
     slug: "rakazo/paid-media",
     desc: "Watches spend daily, pauses what is not converting, reports what changed.",
   },
   {
     name: "Chief of Staff",
-    color: "#8B93A8",
+    color: "#D97757",
     slug: "rakazo/chief-of-staff",
     desc: "Runs the week: briefings, bookings, and handoffs between your other bots.",
   },

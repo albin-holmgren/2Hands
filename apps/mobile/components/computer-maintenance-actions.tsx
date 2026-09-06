@@ -2,6 +2,7 @@ import type { ComputerStatus } from "@rakazo/contracts";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { rpc } from "../lib/api";
+import { useNativeTheme } from "../lib/theme";
 
 type Action = "recover" | "reset" | "update";
 
@@ -14,6 +15,7 @@ export function ComputerMaintenanceActions({
   computer: ComputerStatus | null;
   onChanged: () => Promise<void>;
 }) {
+  const native = useNativeTheme();
   const [pending, setPending] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +56,7 @@ export function ComputerMaintenanceActions({
         onPress={() => void run("recover")}
         style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
       >
-        <Text style={{ color: "#85858A", fontSize: 14 }}>
+        <Text style={{ color: native.muted, fontSize: 14 }}>
           {pending === "recover" ? "Recovering…" : "Recover computer"}
         </Text>
       </Pressable>
@@ -63,7 +65,7 @@ export function ComputerMaintenanceActions({
         onPress={confirmReset}
         style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
       >
-        <Text style={{ color: "#85858A", fontSize: 14 }}>
+        <Text style={{ color: native.muted, fontSize: 14 }}>
           {pending === "reset" ? "Resetting…" : "Reset computer"}
         </Text>
       </Pressable>
@@ -73,12 +75,12 @@ export function ComputerMaintenanceActions({
           onPress={() => void run("update")}
           style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
         >
-          <Text style={{ color: "#85858A", fontSize: 14 }}>
+          <Text style={{ color: native.muted, fontSize: 14 }}>
             {pending === "update" ? "Updating…" : "Update computer"}
           </Text>
         </Pressable>
       ) : null}
-      {error ? <Text style={{ color: "#EF4444", fontSize: 13 }}>{error}</Text> : null}
+      {error ? <Text style={{ color: native.danger, fontSize: 13 }}>{error}</Text> : null}
     </View>
   );
 }

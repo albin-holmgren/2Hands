@@ -55,7 +55,7 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect(chip).toBeVisible({ timeout: 30_000 });
   await expect(chip.getByText(/Messaged|Message from/)).toBeVisible();
   await expect(chip).toHaveAccessibleName(/Messaged Researcher|Message from Researcher/);
-  await expect(chip.locator(".rakazo-bot-avatar")).toBeVisible();
+  await expect(chip.locator(".rakazo-bot-avatar, .rakazo-organic-avatar")).toBeVisible();
   await expect(chip).not.toContainText("{peer}");
   // User bubble still contains the phrase; peer body must not appear outside the chip.
   await expect(chip).not.toContainText("peer-exchange-alpha");
@@ -65,8 +65,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
     const chipBox = await chip.boundingBox();
     expect(transcriptBox).not.toBeNull();
     expect(chipBox).not.toBeNull();
-    // Transcript padding is 16px mobile / 28px desktop; centering must fail this assertion.
-    expect(chipBox!.x - transcriptBox!.x).toBeLessThanOrEqual(32);
+    // Messages share a centered reading column. Receipts align with its left edge.
+    const rowBox = await chip.evaluate((element) =>
+      element.closest("[data-message-id]")!.getBoundingClientRect().toJSON(),
+    );
+    expect(Math.abs(chipBox!.x - rowBox.x)).toBeLessThanOrEqual(1);
+    expect(rowBox.width).toBeLessThanOrEqual(800);
     expect(chipBox!.width).toBeLessThan(transcriptBox!.width / 2);
   };
 
@@ -86,7 +90,9 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await chip.press("Enter");
   const view = page.getByTestId("peer-conversation-view");
   await expect(view).toBeVisible();
-  await expect(view.getByRole("heading", { name: /Chief · Researcher/ })).toBeVisible();
+  await expect(
+    view.getByRole("heading", { name: /Chief(?: of Staff)? · Researcher/ }),
+  ).toBeVisible();
   await expect(view.getByText("This chat is view-only")).toBeVisible();
   await expect(view.getByText("peer-exchange-alpha").first()).toBeVisible({
     timeout: 30_000,

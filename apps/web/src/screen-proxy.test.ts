@@ -1,6 +1,7 @@
 import { createCipheriv, createHash, createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  proxyUpstreamRequestHeaders,
   resolveNovncTarget,
   safeProxyHeaders,
   safeProxyResponseHeaders,
@@ -31,7 +32,10 @@ function remotePath(
   const iv = Buffer.alloc(12, 1);
   const cipher = createCipheriv("aes-256-gcm", createHash("sha256").update(secret).digest(), iv);
   cipher.setAAD(Buffer.from(`${policy}:${expiresAt}`));
-  const ciphertext = Buffer.concat([cipher.update(url, "utf8"), cipher.final()]);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify({ version: 1, url }), "utf8"),
+    cipher.final(),
+  ]);
   const token = Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
   return `/novnc/remote/${policy}/${expiresAt}.${token}/vnc.html`;
 }
@@ -39,6 +43,7 @@ function remotePath(
 describe("noVNC proxy authorization", () => {
   it("accepts signed, unexpired loopback targets", () => {
     expect(resolveNovncTarget(signedPath(49152, 2_000, "secret"), "secret", 1_000)).toEqual({
+      protocol: "http:",
       hostname: "127.0.0.1",
       port: 49152,
       path: "/embed.html?view_only=true",
@@ -114,12 +119,26 @@ describe("noVNC proxy authorization", () => {
     ).toEqual({ upgrade: "websocket", "sec-websocket-key": "key" });
   });
 
+  it("rewrites sandboxed Origin: null to the upstream desktop origin", () => {
+    expect(
+      proxyUpstreamRequestHeaders(
+        { origin: "null", host: "2hands-computers.fly.dev" },
+        { hostname: "6080-desktop.e2b.app", port: 443, protocol: "https:" },
+      ),
+    ).toMatchObject({
+      host: "6080-desktop.e2b.app",
+      origin: "https://6080-desktop.e2b.app",
+    });
+  });
+
   it("does not accept cookie or site-data mutations from a bot computer", () => {
     expect(
       safeProxyResponseHeaders({
         "content-type": "text/html",
         "set-cookie": ["session=attacker"],
         "clear-site-data": '"cookies"',
+        "x-frame-options": "DENY",
+        "content-security-policy": "frame-ancestors 'none'",
       }),
     ).toEqual({ "content-type": "text/html" });
 

@@ -2,6 +2,27 @@ import { describe, expect, it } from "vitest";
 import middleware from "../middleware";
 
 describe("marketing site middleware", () => {
+  it.each([
+    ["/health", "*/*"],
+    ["/health", "application/json"],
+    ["/health", "text/markdown"],
+    ["/api/auth/capabilities", "*/*"],
+    ["/rpc/health", "application/json"],
+    ["/novnc/example/vnc.html", "*/*"],
+  ])("passes %s (%s) through to the app routes", (pathname, accept) => {
+    for (const method of ["GET", "HEAD"]) {
+      const response = middleware(
+        new Request(`https://2hands.ai${pathname}`, {
+          method,
+          headers: { accept },
+        }),
+      );
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("content-type")).toBeNull();
+      expect(response.headers.get("vary")).toBeNull();
+    }
+  });
+
   it("negotiates Markdown on the canonical page URL", async () => {
     const response = middleware(
       new Request("https://2hands.ai/", {

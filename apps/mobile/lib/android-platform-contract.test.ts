@@ -44,8 +44,8 @@ describe("Android mobile platform contract", () => {
     const live = readFileSync(resolve(mobileRoot, "lib/live-notifications.ts"), "utf8");
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
     expect(service).toContain("android.requestPromotedOngoing");
-    expect(service).toContain("liveStatusIcon(primary, avatarStyle)");
-    expect(service).toContain('rpc(endpoint, token, spaceId, "me"');
+    expect(service).toContain(".setSmallIcon(R.drawable.ic_rakazo_notification)");
+    expect(service).not.toContain("Bitmap.createBitmap");
     expect(service).not.toContain("showStarting");
     expect(service).not.toContain("catch (_: IOException) {\n        stop()");
     expect(service).toContain("Expo push owns background completion and attention delivery");
@@ -102,7 +102,12 @@ describe("Android mobile platform contract", () => {
     expect(service).toContain('putString("rakazo.spaceId", run.spaceId)');
     expect(thread).toContain("export default function ThreadRoute()");
     expect(thread).toContain("selectSpace(requestedSpaceId)");
-    expect(thread).toContain("routeMatchesSelectedSpace) return <Thread />");
+    expect(thread).toMatch(
+      /routeMatchesSelectedSpace\)\s*return \([\s\S]*?<Thread\s+key=\{draftKey\}/,
+    );
+    expect(thread).toMatch(
+      /composerDraftKey\(\s*currentApiBase\(\),\s*accountId,\s*selectedSpaceId\(\)/,
+    );
     expect(service).toContain('if (run.groupId != null) put("groupId", run.groupId)');
     expect(service).toContain('if (message.optString("runId") != run.runId) continue');
     expect(service).toContain('if (block.optString("kind") == "handoff") return null');

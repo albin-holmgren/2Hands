@@ -10,7 +10,7 @@ import {
 } from "../demo";
 import { LandingBotAvatar } from "./LandingBotAvatar";
 
-const BOT_COLORS = ["#3EC5A8", "#F5A03C", "#6A6BF5", "#9B5CF6", "#3B82F6", "#F2622A", "#D9508A"];
+const BOT_COLORS = ["#D97757", "#F5A03C", "#34C759", "#6A6BF5", "#9B5CF6", "#3B82F6", "#F2622A"];
 const FREQS = [
   "Every hour",
   "Every day",
@@ -542,7 +542,7 @@ export function ProductDemo() {
   }
 
   function startNewBot() {
-    const color = BOT_COLORS[bots.length % BOT_COLORS.length] ?? "#3EC5A8";
+    const color = BOT_COLORS[bots.length % BOT_COLORS.length] ?? "#D97757";
     const bot: LiveBot = {
       id: `bot-${Date.now()}`,
       name: "New bot",

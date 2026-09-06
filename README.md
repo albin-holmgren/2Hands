@@ -68,15 +68,19 @@ With the development stack running, launch Electron with:
 pnpm --filter @rakazo/desktop dev
 ```
 
-On first run the desktop app asks whether to use the Rakazo stack on this computer
-(`http://127.0.0.1:5173`) or connect to an existing server. Public servers must use HTTPS; HTTP is
-accepted only for loopback and private LAN addresses (not link-local). The app verifies Rakazo's
-health endpoint before saving, and later launches go straight to that instance.
+Installed 2hands builds open https://2hands.ai on first launch. A saved custom server takes
+precedence. Development builds show setup for a local stack (`http://127.0.0.1:5173`) or an existing
+server. Public servers must use HTTPS; HTTP is accepted only for loopback and private LAN addresses
+(not link-local). The app verifies the server's health endpoint before saving.
 
-Use **Change Rakazo Server…** in the application menu to reconnect. Closing that window without
+Use **Change Server…** in the application menu to reconnect. Closing that window without
 saving returns to the previous instance. For development automation, set `RAKAZO_WEB_URL` to point
 the shell somewhere else without changing the saved instance, or `RAKAZO_FORCE_SETUP=1` to run
 setup again.
+
+Electron E2E tests open visible application windows. Run them only when those interactions are
+intended, with `RAKAZO_ELECTRON_E2E=1 pnpm --filter @rakazo/desktop test:e2e`. For checks that do not
+open apps, use `pnpm --filter @rakazo/desktop check` and `pnpm --filter @rakazo/desktop test`.
 
 Mobile build and release instructions live in [docs/mobile-release.md](./docs/mobile-release.md).
 
@@ -122,9 +126,12 @@ pnpm test:e2e -- --sandbox=daytona # the same suite against real Daytona
 pnpm test:e2e -- --sandbox=box # the same suite against real Box
 pnpm test:topology     # local Docker + Graphile worker recovery (needs Docker)
 pnpm test:canary       # live OpenRouter / E2B / Box canaries
+pnpm test:canary --provider=e2b # one E2B desktop with a fixed three-minute expiry
 # explicit real vision-model + real E2B desktop acceptance test:
 COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
 ```
+
+Live canary commands use credentials explicitly supplied in the process environment; they do not load `.env`. Provider selection prevents unrelated credentials from enabling extra checks. Model/API canaries use temporary Postgres, or an explicit loopback `TEST_DATABASE_URL` whose database name ends in `_test`; inherited `DATABASE_URL` is never used.
 
 - [2hands hosting](./docs/2hands-hosting.md)
 - [Self-hosting](./docs/self-host.md)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_SANDBOX_MESSAGE } from "./none-sandbox.js";
+import { NO_SANDBOX_MESSAGE, sandboxProvidesComputers } from "./none-sandbox.js";
 import { createSandboxProvider } from "./sandbox-factory.js";
 
 const ctx = {
@@ -19,6 +19,8 @@ describe("createSandboxProvider", () => {
   it("returns none when requested or when the kind is empty", async () => {
     expect(createSandboxProvider("none", {}).describe().id).toBe("none");
     expect(createSandboxProvider("", {}).describe().id).toBe("none");
+    expect(sandboxProvidesComputers(createSandboxProvider("none", {}))).toBe(false);
+    expect(sandboxProvidesComputers(createSandboxProvider("fake", {}))).toBe(true);
     await expect(
       createSandboxProvider("none", {}).provision({ botId: "b", homePath: "/tmp" }, ctx),
     ).rejects.toThrow(NO_SANDBOX_MESSAGE);

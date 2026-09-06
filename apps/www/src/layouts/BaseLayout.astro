@@ -1,4 +1,7 @@
 ---
+import "@fontsource-variable/geist";
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/newsreader/wght-italic.css";
 import "../styles/global.css";
 import { getMarkdownAlternate } from "../agent-content";
 import {
@@ -18,7 +21,6 @@ type Props = {
   locale?: Locale;
   skipLabel?: string;
   homeAlternates?: boolean;
-  ogImageAlt?: string;
 };
 
 const {
@@ -27,7 +29,6 @@ const {
   structuredData,
   skipLabel = "Skip to content",
   homeAlternates = false,
-  ogImageAlt = "Rakazo — AI teammates you actually own. Your keys, your model, your machine.",
 } = Astro.props;
 
 const locale: Locale = isLocale(Astro.currentLocale)
@@ -35,7 +36,6 @@ const locale: Locale = isLocale(Astro.currentLocale)
   : (Astro.props.locale ?? DEFAULT_LOCALE);
 
 const canonical = new URL(Astro.url.pathname, SITE_URL).toString();
-const socialImage = new URL("/og-image.png", SITE_URL).toString();
 const structuredDataJson = structuredData
   ? JSON.stringify(structuredData).replaceAll("<", "\\u003c")
   : null;
@@ -56,7 +56,7 @@ const homeUrls = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="theme-color" content="#FDFDFD" />
+    <meta name="theme-color" content="#ffffff" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -66,16 +66,9 @@ const homeUrls = {
     {locale !== "en" && <meta property="og:locale:alternate" content={LOCALE_OG.en} />}
     {locale !== "de" && <meta property="og:locale:alternate" content={LOCALE_OG.de} />}
     {locale !== "ko" && <meta property="og:locale:alternate" content={LOCALE_OG.ko} />}
-    <meta property="og:image" content={socialImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content={ogImageAlt} />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={socialImage} />
-    <meta name="twitter:image:alt" content={ogImageAlt} />
     <link rel="canonical" href={canonical} />
     {
       homeAlternates && (
@@ -95,12 +88,6 @@ const homeUrls = {
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap"
-      rel="stylesheet"
-    />
     {structuredDataJson && <script is:inline type="application/ld+json" set:html={structuredDataJson} />}
     <title>{title}</title>
     <script>

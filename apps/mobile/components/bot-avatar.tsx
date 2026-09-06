@@ -1,6 +1,7 @@
 import type { AvatarStyle } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@rakazo/core";
-import { memo, useEffect } from "react";
+import { ACTIVE_RUN_STATUSES, avatarIdentitySeed } from "@rakazo/core";
+import { assistantCharacter, assistantCharacters, assistantPalette } from "@rakazo/ui-tokens";
+import { memo, useEffect, useId } from "react";
 import { View } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -12,8 +13,9 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { G, Path, Rect } from "react-native-svg";
+import Svg, { Defs, G, Path, RadialGradient, Rect, Stop } from "react-native-svg";
 import { workingAvatarDuration, workingAvatarFrame } from "../lib/avatar-motion";
+import { useNativeTheme } from "../lib/theme";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
 
@@ -34,6 +36,8 @@ export const BotAvatar = memo(function BotAvatar({
   variant?: AvatarStyle;
   muted?: boolean;
 }) {
+  const native = useNativeTheme();
+  const palette = assistantPalette(color);
   const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
   const { avatarStyle } = useAvatarStyle();
   const visorW = Math.round(size * 0.68);
@@ -51,7 +55,7 @@ export const BotAvatar = memo(function BotAvatar({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: color,
+            backgroundColor: palette.middle,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -93,7 +97,9 @@ export const BotAvatar = memo(function BotAvatar({
             width: Math.max(6, Math.round(size * 0.18)),
             height: Math.max(6, Math.round(size * 0.18)),
             borderRadius: size,
-            backgroundColor: "#F5A03C",
+            borderWidth: 2,
+            borderColor: native.page,
+            backgroundColor: native.accent,
           }}
         />
       ) : null}
@@ -109,8 +115,8 @@ export const BotAvatar = memo(function BotAvatar({
             height: Math.max(14, Math.round(size * 0.34)),
             borderRadius: size,
             borderWidth: 2,
-            borderColor: "#000",
-            backgroundColor: "#242428",
+            borderColor: native.page,
+            backgroundColor: native.surface2,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -119,7 +125,7 @@ export const BotAvatar = memo(function BotAvatar({
             ios="bell.slash.fill"
             android="notifications-off"
             size={Math.max(8, Math.round(size * 0.17))}
-            color="#ECECEE"
+            color={native.muted}
           />
         </View>
       ) : null}
@@ -138,7 +144,12 @@ function OrganicAvatar({
   size: number;
   isWorking: boolean;
 }) {
-  const seed = avatarIdentitySeed(identity || color || "#8B5CF6");
+  const seed = avatarIdentitySeed(identity || color || "#4B73FF");
+  const character = assistantCharacter(seed);
+  const palette = assistantPalette(color);
+  const gradientId = `assistant-${useId().replace(/:/g, "")}`;
+  const leftEye = character.eyes[0] ?? assistantCharacters[0].eyes[0];
+  const rightEye = character.eyes[1] ?? assistantCharacters[0].eyes[1];
   const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
 
@@ -158,6 +169,7 @@ function OrganicAvatar({
   }, [isWorking, progress, reducedMotion, seed]);
 
   const bodyStyle = useAnimatedStyle(() => {
+    if (!isWorking || reducedMotion) return { transform: [] };
     const frame = workingAvatarFrame(seed, progress.value);
     return {
       transform: [
@@ -171,32 +183,49 @@ function OrganicAvatar({
   });
   const leftEyeProps = useAnimatedProps(() => {
     const frame = workingAvatarFrame(seed, progress.value);
-    return { x: -14 + frame.eyeOffsetX, y: -12 + frame.eyeOffsetY };
+    return {
+      x: leftEye.x + (isWorking && !reducedMotion ? frame.eyeOffsetX * 0.45 : 0),
+      y: leftEye.y + (isWorking && !reducedMotion ? frame.eyeOffsetY * 0.45 : 0),
+    };
   });
   const rightEyeProps = useAnimatedProps(() => {
     const frame = workingAvatarFrame(seed, progress.value);
-    return { x: 7 + frame.eyeOffsetX, y: -12 + frame.eyeOffsetY };
+    return {
+      x: rightEye.x + (isWorking && !reducedMotion ? frame.eyeOffsetX * 0.45 : 0),
+      y: rightEye.y + (isWorking && !reducedMotion ? frame.eyeOffsetY * 0.45 : 0),
+    };
   });
 
   return (
     <View style={{ width: size, height: size }}>
       <Animated.View style={[{ width: size, height: size }, bodyStyle]}>
-        <Svg width={size} height={size} viewBox="-60 -60 120 120">
-          <Path d={organicAvatarPath(seed)} fill={color} />
-          <G transform={`rotate(${(seed % 9) - 4})`}>
+        <Svg width={size} height={size} viewBox="0 0 128 128">
+          <Defs>
+            <RadialGradient
+              id={gradientId}
+              cx={character.gradient.cx}
+              cy={character.gradient.cy}
+              r={character.gradient.r}
+              gradientUnits="userSpaceOnUse"
+            >
+              <Stop offset={0} stopColor={palette.start} />
+              <Stop offset={character.gradient.middleOffset} stopColor={palette.middle} />
+              <Stop offset={1} stopColor={palette.end} />
+            </RadialGradient>
+          </Defs>
+          <Path d={character.path} fill={`url(#${gradientId})`} />
+          <G fill={palette.eye}>
             <AnimatedRect
               animatedProps={leftEyeProps}
-              width={7}
-              height={24}
-              rx={3.5}
-              fill="#101014"
+              width={leftEye.width}
+              height={leftEye.height}
+              rx={leftEye.rx}
             />
             <AnimatedRect
               animatedProps={rightEyeProps}
-              width={7}
-              height={24}
-              rx={3.5}
-              fill="#101014"
+              width={rightEye.width}
+              height={rightEye.height}
+              rx={rightEye.rx}
             />
           </G>
         </Svg>

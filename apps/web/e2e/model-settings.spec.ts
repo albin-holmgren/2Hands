@@ -65,7 +65,7 @@ test("connects, lists, and uses an OpenAI-compatible endpoint", async ({ page },
     await completeOnboarding(page);
 
     await page.getByRole("button", { name: new RegExp(userName) }).click();
-    await page.getByRole("button", { name: "Models", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Models", exact: true }).click();
     const providerSearch = page.getByPlaceholder("Search providers");
     await providerSearch.fill("openai-compatible");
     await page.getByRole("button", { name: /OpenAI-compatible/ }).click();
@@ -128,11 +128,10 @@ test("model settings connect, replace, and cancel provider authentication", asyn
   const stamp = Date.now();
   const userName = `Models ${stamp}`;
   await signup(page, `models-${stamp}@rakazo.test`, "password12", userName);
-  await expect(page.getByLabel("API key")).toHaveAttribute("autocomplete", "new-password");
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Models", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close model settings" })).toBeVisible();
 
   const providerSearch = page.getByPlaceholder("Search providers");

@@ -33,7 +33,7 @@ Human input and agent input may coexist on distinct Team screens. “Take contro
 
 The first cloud implementation uses `@e2b/desktop` directly. Rakazo provisions or reconnects the desktop, maintains its authenticated live-view URL, captures PNG observations, performs mouse/keyboard/scroll/app actions, executes shell commands, and accesses files through the E2B SDK.
 
-On Team Computers, bot index 0 uses the E2B desktop stream and SDK screenshot/input APIs. Additional Team bots get their own Xvfb display, view port (`6080 + 2i`), and interactive control port (`6081 + 2i`) spawned inside the same sandbox via shell commands. Takeover opens the signed control URL for that bot's screen, not the shared primary stream.
+On Team Computers, bot index 0 uses an authenticated, permanently read-only primary view service and SDK screenshot/input APIs. Additional Team bots get their own Xvfb display, view port (`6080 + 2i`), and interactive control port (`6081 + 2i`) spawned inside the same sandbox via shell commands. Takeover opens a separate authenticated control service for that bot, including the primary display. Its password rotates between leases; revocation must confirm that its listeners closed. New E2B machines deny public traffic at the provider boundary. The screen proxy supplies the provider traffic token only upstream, while the authorized client receives only its scoped VNC password. Legacy public machines are normalized before uncached reconnect returns; rollout must also checkpoint/pause or normalize untouched running machines before public signup.
 
 ## Daytona backend
 
@@ -41,7 +41,7 @@ The database stores the provider kind and opaque `providerRef`. That reference i
 
 ## Box backend
 
-The Box adapter uses ASCII's official TypeScript SDK for lifecycle, command, desktop, and file operations. It creates and resumes boxes with `noEnv: true`, as required when a third party supplies the API key, and keeps a two-hour TTL refreshed while the computer is active. The provider's authenticated noVNC page is kept behind Rakazo's encrypted screen capability proxy, which binds the view/control policy and keeps the Box desktop secret out of browser-visible URLs; observations and model actions use the same primary `DISPLAY=:0` through ImageMagick and `xdotool`.
+The Box adapter uses ASCII's official TypeScript SDK for lifecycle, command, desktop, and file operations. It creates and resumes boxes with `noEnv: true`, as required when a third party supplies the API key, and keeps a two-hour TTL refreshed while the computer is active. Primary live streaming and takeover are unavailable because the provider cannot enforce separate read-only and interactive sessions. Snapshots and model actions remain available on the primary `DISPLAY=:0` through ImageMagick and `xdotool`.
 
 Box stop archives the machine and resume reconnects the same opaque box id. Browser profiles live under the portable workspace and are linked into the machine's Chrome/Firefox config, so normal checkpoint/export behavior includes them. Box has one desktop stream per machine, and the Box emulator reproduces that single-screen constraint for deterministic tests.
 
@@ -59,10 +59,24 @@ The disposable OS image is not a portable disk snapshot. System packages install
 
 Offline tests cover tool-result images, action parsing, provider conformance, workspace checkpoint/restore, provider SDK translation, lifecycle integration, and the Box single-screen emulator. They never call a model or live sandbox.
 
-The explicit acceptance test requires Docker (for temporary Postgres), `E2B_API_KEY`, `OPENROUTER_API_KEY`, and a vision-capable OpenRouter model id:
+The bounded provider probe requires only `E2B_API_KEY` in the process environment:
 
 ```bash
+pnpm test:canary --provider=e2b
+```
+
+It provisions one synthetic desktop with a fixed three-minute expiry and checks shell output, a real screen image, and private networking. Through an isolated loopback screen proxy, a minimal RFB client requires password authentication, verifies that view-only input is ignored during takeover, and verifies that control input works. Revocation must close the old stream, and a replacement lease must reject the old password. The probe then checks file preservation across pause/resume and destroys the machine. A missing resource fails the probe instead of allocating a replacement. No model or database is used, and no customer account is created. Cleanup errors fail the command.
+
+The full acceptance test requires Docker (for temporary Postgres), `E2B_API_KEY`, and an explicitly selected vision-capable model through Vercel AI Gateway or OpenRouter. An explicit loopback `TEST_DATABASE_URL` ending in `_test` can replace Docker. Supply keys in the process environment; these live commands never load `.env` or reuse an inherited `DATABASE_URL`:
+
+```bash
+# With VERCEL_AI_GATEWAY_API_KEY (or AI_GATEWAY_API_KEY):
+COMPUTER_E2E_PROVIDER=vercel-gateway COMPUTER_E2E_MODEL=<vision-capable-gateway-model-id> pnpm test:computer
+
+# With OPENROUTER_API_KEY (the default provider for this command):
 COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
 ```
 
-It starts the full API, provisions a real E2B desktop, serves a deterministic page inside the sandbox, and asks a real model to observe and click a button. The button creates a server-side marker; the test then requires the model to use terminal and file tools and verifies both the marker and recorded tool calls. Finally, it destroys the provider machine, boots a replacement through the stale provider reference, and verifies that the external checkpoint restored the model-created file. The command is opt-in and is not run by `pnpm test` or CI unless invoked explicitly.
+It starts the full API with an isolated account and the $1 Free allowance enforced, provisions a real E2B desktop with a three-minute lifetime, serves a deterministic page in the bot's working directory, and asks the selected model to observe and click a button. The button creates a server-side marker; the test then requires the model to use terminal and file tools and verifies both the marker and recorded tool calls. Finally, it destroys the provider machine, boots a replacement through the stale provider reference, and verifies that the external checkpoint restored the model-created file. It then checks that a confirmed Stop releases the remaining computer reservation. Cleanup stops execution before destroying the remaining machine; either failure fails the command. The command is opt-in and is not run by `pnpm test` or CI unless invoked explicitly.
+
+On 5 September 2026, both the real E2B adapter probe and the full computer journey passed. The full journey used `vercel-gateway` with `openai/gpt-4.1-mini`, verified restoration onto a different provider machine, and completed cleanup.

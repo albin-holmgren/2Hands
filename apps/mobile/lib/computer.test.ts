@@ -56,9 +56,32 @@ describe("embeddableScreenUrl", () => {
   it("returns null when there is no screen", () => {
     expect(embeddableScreenUrl(null, "http://127.0.0.1:3100")).toBeNull();
   });
+
+  it.each([
+    "fake://screen/test",
+    "javascript:alert(1)",
+    "data:text/html,screen",
+    "file:///private/screen.html",
+    "not a URL",
+    "https://user:password@screen.example/embed",
+  ])("rejects an unsafe or unsupported preview URL: %s", (url) => {
+    expect(embeddableScreenUrl(url, "https://api.example.test")).toBeNull();
+  });
 });
 
 describe("computer copy", () => {
+  it("distinguishes failed previews from computer lifecycle and control state", () => {
+    expect(previewPlaceholder("running", false, "Chief", "team", true)).toBe("Preview unavailable");
+    expect(previewPlaceholder("running", true, "Chief", "team", true)).toBe(
+      "Booting live desktop…",
+    );
+    expect(previewPlaceholder("suspended", false, "Chief", "team", true)).toBe(
+      "Computer is asleep — take control to wake it",
+    );
+    expect(
+      controlLabel(computer({ controlHolder: "user", controlBotId: "bot-1" }), "Chief", "bot-1"),
+    ).toBe("You have control");
+  });
   it("matches the web pane while booting, asleep, or in control", () => {
     expect(previewPlaceholder("stopped", false, "Chief")).toBe("Computer is stopped");
     expect(previewPlaceholder("suspended", false, "Chief")).toBe(

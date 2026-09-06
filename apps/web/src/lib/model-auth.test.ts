@@ -26,6 +26,16 @@ describe("waitForModelOAuth", () => {
     expect(completeOAuth).toHaveBeenCalledTimes(1);
   });
 
+  it("polls only the captured workspace client", async () => {
+    const captured = { models: { completeOAuth: vi.fn().mockResolvedValue({ status: "ready" }) } };
+    await waitForModelOAuth("workspace-login", undefined, captured as unknown as typeof rpc);
+    expect(captured.models.completeOAuth).toHaveBeenCalledWith(
+      { loginId: "workspace-login" },
+      { signal: undefined },
+    );
+    expect(completeOAuth).not.toHaveBeenCalled();
+  });
+
   it("returns readiness without waiting for another poll", async () => {
     completeOAuth.mockResolvedValue({ status: "ready" });
 

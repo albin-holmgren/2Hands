@@ -52,7 +52,24 @@ test("agent-attached Markdown opens a rendered preview and can be downloaded", a
   await expect(downloadButton).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(closeButton).toBeFocused();
+  expect(
+    await page.getByTestId("composer-bar").evaluate((composer) => {
+      const bounds = composer.getBoundingClientRect();
+      const top = document.elementFromPoint(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+      );
+      return top !== null && composer.contains(top);
+    }),
+  ).toBe(false);
   await captureScreenshot(page, testInfo, "markdown-preview-open");
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light";
+  });
+  await captureScreenshot(page, testInfo, "markdown-preview-light");
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
 
   const downloadPromise = page.waitForEvent("download");
   await downloadButton.click();

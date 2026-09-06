@@ -1,8 +1,15 @@
+const { createHash } = require("node:crypto");
 const { getDefaultConfig } = require("expo/metro-config");
 const { resolveTypeScriptSource } = require("./metro-resolver");
 
 const projectRoot = __dirname;
 const config = getDefaultConfig(projectRoot);
+// Expo embeds public variables in transforms but can reuse those transforms in CI.
+// Separate endpoint configurations even when CI disables an explicit cache reset.
+const apiOriginCacheKey = createHash("sha256")
+  .update(process.env.EXPO_PUBLIC_API_URL ?? "")
+  .digest("hex");
+config.cacheVersion = `${config.cacheVersion ?? ""}:twohands-api:${apiOriginCacheKey}`;
 const defaultResolveRequest = config.resolver.resolveRequest;
 const pinned = new Set(["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-native"]);
 

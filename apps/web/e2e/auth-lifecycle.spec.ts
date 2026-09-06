@@ -25,14 +25,14 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
 
   await page.getByRole("button", { name: new RegExp(userName, "i") }).click();
-  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
   await captureScreenshot(page, testInfo, "36-account-menu");
 
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to 2hands" })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByText(/Your team of always-on agents/)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Sign in/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "A workspace for your AI." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "37-logged-out-welcome");
 
   await page.goto(protectedBotPath);
@@ -66,7 +66,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   const composer = page.getByRole("combobox", { name: "Message Chief" });
   await expect(composer).toHaveAttribute("name", "chat-message");
   await expect(composer).toHaveAttribute("autocomplete", "off");
-  await expect(composer).toHaveAttribute("aria-label", "Message Chief");
+  await expect(composer).toHaveAttribute("aria-label", /^Message Chief(?: of Staff)?$/);
   await expect(page.getByRole("button", { name: new RegExp(userName, "i") })).toBeVisible();
 
   await composer.fill("line one");
@@ -93,7 +93,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   await expect(page.getByTestId("transcript").getByText(message, { exact: true })).toBeVisible();
 });
 
-test("changes and recovers an email password", async ({ page }, testInfo) => {
+test("changes and recovers an email password", async ({ page, browser }, testInfo) => {
   const stamp = Date.now();
   const email = `password-recovery-${stamp}@rakazo.test`;
   const originalPassword = "password12";
@@ -106,7 +106,7 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await page.waitForURL(/\/app\/[^/]+$/);
 
   await page.getByTestId("user-menu-trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await expect(settings).toBeVisible();
   await settings.getByLabel("Current password").fill(originalPassword);
@@ -116,9 +116,16 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await expect(settings.getByText("Password updated")).toBeVisible();
   await captureScreenshot(page, testInfo, "41-password-changed");
   await settings.getByRole("button", { name: "Close user settings" }).click();
+  // A distinct browser session remains active until the reset revokes it.
+  const otherSession = await browser.newContext();
+  const authOrigin = new URL(page.url()).origin;
+  const secondSignIn = await otherSession.request.post(`${authOrigin}/api/auth/sign-in/email`, {
+    data: { email, password: changedPassword },
+  });
+  expect(secondSignIn.ok()).toBe(true);
 
   await page.getByRole("button", { name: new RegExp(userName, "i") }).click();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.getByRole("link", { name: "Forgot password?" })).toBeVisible();
   await page.getByRole("link", { name: "Forgot password?" }).click();
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
@@ -149,9 +156,55 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await page.getByLabel("Confirm password").fill(resetPassword);
   await page.getByRole("button", { name: "Reset password" }).click();
   await expect(page.getByText("Password updated")).toBeVisible();
-  await page.getByRole("link", { name: "Sign in" }).click();
+  const revoked = await otherSession.request.get(`${authOrigin}/api/auth/get-session`);
+  expect(await revoked.json()).toBeNull();
+  const oldPassword = await otherSession.request.post(`${authOrigin}/api/auth/sign-in/email`, {
+    data: { email, password: changedPassword },
+  });
+  expect(oldPassword.status()).toBe(401);
+  await otherSession.close();
+  await page.goto(resetUrl!);
+  await expect(page.getByRole("alert")).toContainText("invalid or expired");
+  await page.getByRole("link", { name: "Back to sign in" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(resetPassword);
   await page.getByRole("button", { name: "Continue with email" }).click();
   await page.waitForURL(/\/app(?:\/|$)/);
+});
+
+test("registration lock keeps sign-in available", async ({ page }, testInfo) => {
+  await page.route("**/api/auth/capabilities", (route) =>
+    route.fulfill({ json: { signupsEnabled: false, passwordReset: false, resetUrl: null } }),
+  );
+  await page.goto("/sign-up");
+  await expect(page.getByText("Registration is currently unavailable")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "registration-unavailable");
+  await page.getByRole("link", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to 2hands" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email" })).toBeEnabled();
+});
+
+test("password recovery waits for its capabilities before submission", async ({ page }) => {
+  let release = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/auth/capabilities", async (route) => {
+    await ready;
+    await route.fulfill({
+      json: {
+        signupsEnabled: true,
+        passwordReset: true,
+        resetUrl: "http://127.0.0.1:5180/reset-password",
+      },
+    });
+  });
+  await page.goto("/forgot-password");
+  await page.getByLabel("Email").fill("recovery@example.test");
+  const submit = page.getByRole("button", { name: "Send reset link" });
+  await expect(submit).toBeDisabled();
+  release();
+  await expect(submit).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });

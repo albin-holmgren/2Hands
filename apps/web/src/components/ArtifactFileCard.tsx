@@ -4,12 +4,14 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import { Download, FileText, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type ArtifactTarget,
   downloadArtifact,
   downloadArtifactBytes,
   fetchArtifactBytes,
 } from "../lib/artifact-open";
+import { useWorkspaceRpc } from "../lib/workspace-context";
 
 type ArtifactFileCardProps = {
   target: ArtifactTarget;
@@ -20,6 +22,7 @@ type ArtifactFileCardProps = {
 };
 
 export function ArtifactFileCard(props: ArtifactFileCardProps) {
+  const rpc = useWorkspaceRpc();
   const { t } = useLingui();
   const markdown = props.mimeType === "text/markdown";
   const previewButton = useRef<HTMLButtonElement>(null);
@@ -29,7 +32,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   async function startDownload() {
     setDownloadError(null);
     try {
-      await downloadArtifact(props.target, props.artifactId, props.name, props.mimeType);
+      await downloadArtifact(props.target, props.artifactId, props.name, props.mimeType, rpc);
     } catch {
       setDownloadError(t`Could not download ${props.name}. Try again.`);
     }
@@ -46,10 +49,10 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
         <button
           type="button"
           onClick={() => void startDownload()}
-          className="rounded-[20px] border border-[#26262A] bg-[#17171A] px-4 py-3 text-left text-[14px] text-[#DFDFE2] hover:bg-[#1F1F22]"
+          className="rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-4 py-3 text-left text-[14px] text-[var(--rk-body)] hover:bg-[var(--rk-surface-2)]"
         >
           <div className="font-medium">{props.name}</div>
-          <div className="mt-1 text-[#85858A]">
+          <div className="mt-1 text-[var(--rk-muted)]">
             {props.mimeType} · {formatBytes(props.size)}
           </div>
         </button>
@@ -61,20 +64,20 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   return (
     <>
       <div>
-        <div className="flex min-w-[280px] overflow-hidden rounded-[20px] border border-[#343438] bg-[#1B1B1E] text-left text-[#DFDFE2]">
+        <div className="flex min-w-[280px] overflow-hidden rounded-[20px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface-2)] text-left text-[var(--rk-body)]">
           <button
             ref={previewButton}
             type="button"
             aria-label={t`Preview ${props.name}`}
             onClick={() => setPreviewOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-[#222226]"
+            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-[var(--rk-surface-2)]"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#24344A] text-[#68A7FF]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[var(--rk-selected)] text-[var(--rk-selected-ink)]">
               <FileText size={21} strokeWidth={1.8} />
             </span>
             <span className="min-w-0">
               <span className="block truncate text-[14px] font-medium">{props.name}</span>
-              <span className="mt-0.5 block text-[13px] text-[#85858A]">
+              <span className="mt-0.5 block text-[13px] text-[var(--rk-muted)]">
                 {formatBytes(props.size)}
               </span>
             </span>
@@ -84,7 +87,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
             aria-label={t`Download ${props.name}`}
             title={t`Download ${props.name}`}
             onClick={() => void startDownload()}
-            className="grid w-14 shrink-0 place-items-center border-l border-[#343438] text-[#9A9AA0] hover:bg-[#222226] hover:text-[#ECECEE]"
+            className="grid w-14 shrink-0 place-items-center border-l border-[var(--rk-hairline-strong)] text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
           >
             <Download size={19} strokeWidth={1.8} />
           </button>
@@ -103,10 +106,13 @@ function MarkdownPreview({
   mimeType,
   onClose,
 }: ArtifactFileCardProps & { onClose: () => void }) {
+  const rpc = useWorkspaceRpc();
   const { t } = useLingui();
   const titleId = useId();
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [state, setState] = useState<
     | { status: "loading" }
@@ -121,7 +127,7 @@ function MarkdownPreview({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -146,13 +152,13 @@ function MarkdownPreview({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     const artifactTarget: ArtifactTarget =
       targetBotId !== undefined ? { botId: targetBotId } : { groupId: targetGroupId! };
-    void fetchArtifactBytes(artifactTarget, artifactId)
+    void fetchArtifactBytes(artifactTarget, artifactId, rpc)
       .then((bytes) => {
         if (cancelled) return;
         try {
@@ -174,8 +180,8 @@ function MarkdownPreview({
     };
   }, [artifactId, targetBotId, targetGroupId, t]);
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-5 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-5 backdrop-blur-sm">
       <button
         type="button"
         tabIndex={-1}
@@ -188,12 +194,12 @@ function MarkdownPreview({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex h-[min(88vh,900px)] w-[min(960px,94vw)] flex-col overflow-hidden rounded-[18px] border border-[#2B2B2F] bg-[#0D0D0F] shadow-2xl"
+        className="relative flex h-[min(88vh,900px)] w-[min(960px,94vw)] flex-col overflow-hidden rounded-[18px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-panel)] shadow-2xl"
       >
-        <header className="flex h-14 shrink-0 items-center border-b border-[#27272B] px-5">
+        <header className="flex h-14 shrink-0 items-center border-b border-[var(--rk-hairline)] px-5">
           <h2
             id={titleId}
-            className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#E7E7E9]"
+            className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--rk-ink)]"
           >
             {name}
           </h2>
@@ -206,13 +212,13 @@ function MarkdownPreview({
                 setDownloadError(null);
                 try {
                   if (state.status === "ready") downloadArtifactBytes(name, mimeType, state.bytes);
-                  else await downloadArtifact(target, artifactId, name, mimeType);
+                  else await downloadArtifact(target, artifactId, name, mimeType, rpc);
                 } catch {
                   setDownloadError(t`Could not download ${name}. Try again.`);
                 }
               })()
             }
-            className="grid h-9 w-9 place-items-center rounded-full text-[#929298] hover:bg-[#1D1D20] hover:text-[#ECECEE]"
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
           >
             <Download size={18} strokeWidth={1.8} />
           </button>
@@ -221,7 +227,7 @@ function MarkdownPreview({
             type="button"
             aria-label={t`Close preview`}
             onClick={onClose}
-            className="grid h-9 w-9 place-items-center rounded-full text-[#929298] hover:bg-[#1D1D20] hover:text-[#ECECEE]"
+            className="grid h-9 w-9 place-items-center rounded-full text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)]"
           >
             <X size={19} strokeWidth={1.8} />
           </button>
@@ -232,13 +238,13 @@ function MarkdownPreview({
           </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <article className="mx-auto w-full max-w-[760px] px-8 py-10 text-[16px] leading-7 text-[#D5D5D8] sm:px-12 sm:py-12">
+          <article className="mx-auto w-full max-w-[760px] px-8 py-10 text-[16px] leading-7 text-[var(--rk-body)] sm:px-12 sm:py-12">
             {state.status === "loading" ? (
-              <div className="text-[#85858A]">
+              <div className="text-[var(--rk-muted)]">
                 <Trans>Loading preview…</Trans>
               </div>
             ) : state.status === "error" ? (
-              <div className="rounded-[14px] border border-[#5A2A2A] bg-[#2A1717] px-4 py-3 text-[#FCA5A5]">
+              <div className="rounded-[14px] border border-[var(--rk-danger)] bg-[var(--rk-danger-surface)] px-4 py-3 text-[var(--rk-danger-soft)]">
                 {state.message}
               </div>
             ) : (
@@ -247,13 +253,14 @@ function MarkdownPreview({
           </article>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 function DownloadError({ message }: { message: string }) {
   return (
-    <div role="alert" className="mt-2 text-left text-[13px] text-[#EF4444]">
+    <div role="alert" className="mt-2 text-left text-[13px] text-[var(--rk-danger)]">
       {message}
     </div>
   );

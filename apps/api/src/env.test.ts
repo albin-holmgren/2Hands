@@ -7,6 +7,13 @@ const base = {
 };
 
 describe("loadEnv", () => {
+  it("locks new messaging accounts along with web signup without changing self-host defaults", () => {
+    expect(loadEnv({ ...base, MESSAGING_OPEN_SIGNUP: "true" }).messagingOpenSignup).toBe(true);
+    expect(
+      loadEnv({ ...base, MESSAGING_OPEN_SIGNUP: "true", SIGNUPS_LOCKED: "true" }),
+    ).toMatchObject({ signupsLocked: "true", messagingOpenSignup: false });
+  });
+
   it("defaults the product path to Pi, Docker, and Graphile Worker", () => {
     const env = loadEnv(base);
     expect(env.agentRuntime).toBe("pi");
@@ -151,6 +158,21 @@ describe("loadEnv", () => {
     expect(loadEnv({ ...base, RAKAZO_GIT_SHA: "abc1234" }).gitSha).toBe("abc1234");
   });
 
+  it("does not serve the SPA locally, and does on Fly production", () => {
+    expect(loadEnv(base).serveWeb).toBe(false);
+    expect(
+      loadEnv({
+        ...base,
+        NODE_ENV: "production",
+        BETTER_AUTH_SECRET: "prod-auth-secret-with-enough-length",
+        ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
+        SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
+        SANDBOX_PROVIDER: "none",
+        FLY_APP_NAME: "2hands-computers",
+      }).serveWeb,
+    ).toBe(true);
+  });
+
   it("loads optional updater sidecar wiring without requiring the token at boot", () => {
     expect(loadEnv(base).updaterUrl).toBeUndefined();
     expect(loadEnv(base).updaterToken).toBeUndefined();
@@ -189,4 +211,29 @@ describe("loadEnv", () => {
     ).toBe(false);
     expect(loadEnv({ ...base, NODE_ENV: "development" }).nodeEnv).toBe("development");
   });
+});
+
+it("accepts only explicit complete compatibility origins", () => {
+  const base = {
+    NODE_ENV: "test",
+    DATABASE_URL: "postgres://local/test",
+    SANDBOX_PROVIDER: "none",
+  };
+  expect(
+    loadEnv({
+      ...base,
+      TRUSTED_WEB_ORIGINS:
+        "https://old.example.test, https://www.old.example.test,https://old.example.test",
+    }).trustedWebOrigins,
+  ).toEqual(["https://old.example.test", "https://www.old.example.test"]);
+  expect(loadEnv(base).trustedWebOrigins).toEqual([]);
+  for (const value of [
+    "*",
+    "https://*.example.test",
+    "https://old.example.test/path",
+    "https://user:password@old.example.test",
+    "javascript:alert(1)",
+  ]) {
+    expect(() => loadEnv({ ...base, TRUSTED_WEB_ORIGINS: value })).toThrow("TRUSTED_WEB_ORIGINS");
+  }
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearSpaceSelection, selectedSpaceId, selectSpace } from "./rpc.js";
+import { clearSpaceSelection, createWorkspaceRpc, selectedSpaceId, selectSpace } from "./rpc.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -47,5 +47,49 @@ describe("space selection storage", () => {
 
     expect(selectSpace("space-support")).toBe(true);
     expect(setItem).toHaveBeenCalledWith("rakazo:space-id", "space-support");
+  });
+});
+
+describe("workspace request scope", () => {
+  it("keeps a captured workspace on delayed follow-up requests after selection changes", async () => {
+    let selected = "personal";
+    vi.stubGlobal("window", {
+      location: { origin: "https://app.example.test" },
+      localStorage: { getItem: () => selected },
+    });
+    const observed: Array<string | null> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: Request, init: RequestInit) => {
+        observed.push(new Headers(init.headers).get("x-rakazo-space-id"));
+        return new Response(JSON.stringify({ json: { spaceId: observed.at(-1) } }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const personal = createWorkspaceRpc("personal");
+    await personal.me();
+    selected = "work";
+    await personal.me();
+    await createWorkspaceRpc("work").me();
+    expect(observed).toEqual(["personal", "personal", "work"]);
+  });
+
+  it("propagates workspace disposal to requests instead of continuing into a new scope", async () => {
+    vi.stubGlobal("window", { location: { origin: "https://app.example.test" } });
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | null | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: Request, init: RequestInit) => {
+        requestSignal = init.signal;
+        return new Response(JSON.stringify({ json: {} }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    await createWorkspaceRpc("personal", controller.signal).me();
+    controller.abort();
+    expect(requestSignal?.aborted).toBe(true);
   });
 });

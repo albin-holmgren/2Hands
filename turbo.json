@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["COREPACK_ENABLE_DOWNLOAD_PROMPT"],
+  "globalPassThroughEnv": ["COREPACK_ENABLE_DOWNLOAD_PROMPT", "RAKAZO_IGNORE_ENV_FILES"],
   "tasks": {
     "generate": {
       "cache": false

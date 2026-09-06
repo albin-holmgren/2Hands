@@ -1,30 +1,22 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { createServer } from "node:http";
+import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { BoxSandboxProvider, E2BSandboxProvider, PiAgentRuntime } from "@rakazo/adapters";
 import { afterAll, describe, expect, it } from "vitest";
+import { sandboxCanaryRequest } from "./cli/provider-canary-env.js";
+import { testDatabaseUrl } from "./cli/test-database-url.js";
 import { sessionCookieHeader } from "./index.js";
+import { CanaryRfbConnection } from "./rfb-canary.js";
 
-function loadEnvFile() {
-  const file = path.resolve(".env");
-  if (!existsSync(file)) return;
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq < 1) continue;
-    const key = trimmed.slice(0, eq);
-    const value = trimmed.slice(eq + 1).replace(/^["']|["']$/g, "");
-    if (!(key in process.env)) process.env[key] = value;
-  }
-}
-
-loadEnvFile();
-
-const liveE2b = Boolean(process.env.VERIFY_PROVIDERS && process.env.E2B_API_KEY);
-const liveBox = Boolean(process.env.VERIFY_PROVIDERS && process.env.BOX_API_KEY);
-const livePi = Boolean(process.env.VERIFY_PROVIDERS && process.env.OPENROUTER_API_KEY);
+const liveE2b = process.env.VERIFY_PROVIDERS === "1" && Boolean(process.env.E2B_API_KEY);
+const liveBox = process.env.VERIFY_PROVIDERS === "1" && Boolean(process.env.BOX_API_KEY);
+const livePi = process.env.VERIFY_PROVIDERS === "1" && Boolean(process.env.OPENROUTER_API_KEY);
 const livePiApp = Boolean(livePi && process.env.DATABASE_URL);
+if (livePiApp) testDatabaseUrl(process.env.DATABASE_URL);
 
 const describeE2b = liveE2b ? describe : describe.skip;
 const describeBox = liveBox ? describe : describe.skip;
@@ -32,19 +24,20 @@ const describePi = livePi ? describe : describe.skip;
 const describePiApp = livePiApp ? describe : describe.skip;
 
 describeE2b("live E2B canary", () => {
-  it("provisions a desktop, runs a command, and destroys it", async () => {
+  it("checks desktop, files and pause/resume within a fixed lifetime, then destroys it", async () => {
     const sandbox = new E2BSandboxProvider(process.env.E2B_API_KEY!);
     const ctx = {
       operationId: "canary",
       traceId: "canary",
       spaceId: "canary",
       userId: "canary",
-      signal: new AbortController().signal,
+      signal: AbortSignal.timeout(150_000),
     };
-    const computer = await sandbox.provision(
-      { botId: "canary", homePath: "/home/user/rakazo-home" },
-      ctx,
-    );
+    const request = sandboxCanaryRequest();
+    let computer = await sandbox.provision(request, ctx);
+    const failures: unknown[] = [];
+    const connections: CanaryRfbConnection[] = [];
+    let closeProxy: (() => Promise<void>) | undefined;
     try {
       await sandbox.prepare(computer, ctx);
       let stdout = "";
@@ -53,10 +46,123 @@ describeE2b("live E2B canary", () => {
         if (event.type === "exit") expect(event.code).toBe(0);
       }
       expect(stdout).toContain("e2b-ok");
-    } finally {
-      await sandbox.destroy(computer, ctx);
+      await sandbox.writeFile(
+        computer,
+        { path: "canary.txt", content: new TextEncoder().encode("e2b-preserved") },
+        ctx,
+      );
+      const observed = await sandbox.observe(computer, ctx);
+      expect(observed.width).toBeGreaterThan(1);
+      expect(observed.height).toBeGreaterThan(1);
+      expect(observed.image.byteLength).toBeGreaterThan(100);
+      const view = await sandbox.connectScreen(computer, { view: "stream" }, ctx);
+      if (!view.url || !view.upstreamHeaders?.["e2b-traffic-access-token"]) {
+        throw new Error("Computer must provide a private screen connection");
+      }
+      const direct = new URL(view.url);
+      direct.search = "";
+      const anonymous = await fetch(direct, {
+        signal: AbortSignal.timeout(10_000),
+        redirect: "manual",
+      });
+      expect([401, 403]).toContain(anonymous.status);
+      await anonymous.body?.cancel();
+
+      // Exercise the same sealed upstream header boundary used by the product.
+      const { attachNovncProxy } = await import("../../../apps/api/src/novnc-proxy.js");
+      const { addScreenProxyCapability } = await import("../../../apps/api/src/screen-proxy.js");
+      const secret = randomBytes(32).toString("hex");
+      const server = createServer((_req, res) => {
+        res.writeHead(404);
+        res.end();
+      });
+      const sockets = new Set<Socket>();
+      server.on("connection", (socket) => {
+        sockets.add(socket);
+        socket.on("close", () => sockets.delete(socket));
+      });
+      attachNovncProxy(server, secret);
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      closeProxy = async () => {
+        for (const socket of sockets) socket.destroy();
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      };
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Canary proxy did not listen");
+      const origin = `http://127.0.0.1:${address.port}`;
+      const connect = async (screen: typeof view, password?: string) => {
+        if (!screen.url) throw new Error("Screen URL missing");
+        const proxy = new URL(
+          addScreenProxyCapability(screen.url, secret, origin, Date.now(), {
+            proxyExternal: true,
+            upstreamHeaders: screen.upstreamHeaders,
+          }),
+        );
+        proxy.protocol = "ws:";
+        proxy.pathname = proxy.pathname.replace(/\/vnc.html$/, "/websockify");
+        proxy.search = "";
+        const connection = await CanaryRfbConnection.connect(
+          proxy.toString(),
+          password ?? new URL(screen.url).searchParams.get("password") ?? "",
+        );
+        connections.push(connection);
+        return connection;
+      };
+      const viewer = await connect(view);
+      await sandbox.act(
+        computer,
+        { actions: [{ kind: "pointer", type: "move", x: 100, y: 100 }], observe: false },
+        ctx,
+      );
+      viewer.move(500, 500);
+      await delay(250, undefined, { signal: ctx.signal });
+      expect((await sandbox.observe(computer, ctx)).cursor).toEqual({ x: 100, y: 100 });
+      const control = await sandbox.connectScreen(
+        computer,
+        { view: "stream", interactive: true, controlToken: "canary-control-1" },
+        ctx,
+      );
+      const controller = await connect(control);
+      controller.move(500, 500);
+      await delay(250, undefined, { signal: ctx.signal });
+      expect((await sandbox.observe(computer, ctx)).cursor).toEqual({ x: 500, y: 500 });
+      // A view capability remains read-only while the separate control lease is active.
+      viewer.move(200, 200);
+      await delay(250, undefined, { signal: ctx.signal });
+      expect((await sandbox.observe(computer, ctx)).cursor).toEqual({ x: 500, y: 500 });
+      await sandbox.setScreenControl(computer, false, ctx, "canary-control-1");
+      await controller.expectClosed();
+      const replacement = await sandbox.connectScreen(
+        computer,
+        { view: "stream", interactive: true, controlToken: "canary-control-2" },
+        ctx,
+      );
+      const oldPassword = new URL(control.url!).searchParams.get("password")!;
+      await expect(connect(replacement, oldPassword)).rejects.toThrow("VNC authentication denied");
+      const replacementController = await connect(replacement);
+      await sandbox.setScreenControl(computer, false, ctx, "canary-control-2");
+      await replacementController.expectClosed();
+      viewer.close();
+      await sandbox.stop(computer, ctx);
+      // Reconnect the same handle. provision() could replace a missing sandbox;
+      // this one-resource probe must fail without creating another.
+      computer = { ...computer, fresh: false };
+      await sandbox.prepare(computer, ctx);
+      expect(new TextDecoder().decode(await sandbox.readFile(computer, "canary.txt", ctx))).toBe(
+        "e2b-preserved",
+      );
+    } catch (error) {
+      failures.push(error);
     }
-  }, 120_000);
+    for (const connection of connections) connection.close();
+    await closeProxy?.().catch((error) => failures.push(error));
+    await sandbox
+      .destroy(computer, { ...ctx, signal: AbortSignal.timeout(15_000) })
+      .catch((error) => failures.push(error));
+    if (failures.length) throw new AggregateError(failures, "Sandbox canary or cleanup failed");
+  }, 170_000);
 });
 
 describeBox("live Box canary", () => {
@@ -173,32 +279,34 @@ describePiApp("live OpenRouter product journey", () => {
       instructions: "Reply briefly. Prefer the write_file tool when asked to write a file.",
       notifyOnFinish: true,
     });
-    await rpc(handles.app, cookie, "threads/send", {
+    const sent = await rpc<{ runId: string }>(handles.app, cookie, "threads/send", {
       botId: botRes.id,
       text: "Use write_file to save notes/result.txt containing exactly openrouter-ok",
     });
-    const snap = await waitFor(handles.app, cookie, botRes.id, 90_000);
+    // Bot snapshots omit completed runs. Follow the exact durable run rather than
+    // mistaking an idle snapshot for completion or expecting a terminal UI run.
+    await expect
+      .poll(
+        () =>
+          handles.prisma.run.findUnique({
+            where: { id: sent.runId },
+            select: { status: true },
+          }),
+        { timeout: 90_000 },
+      )
+      .toMatchObject({ status: "completed" });
+    const snap = await rpc(handles.app, cookie, "threads/get", { botId: botRes.id });
     const blob = JSON.stringify(snap);
     expect(blob).not.toMatch(/sk-or-/i);
     const file = await rpc<{ content: string }>(handles.app, cookie, "computer/readFile", {
       botId: botRes.id,
       path: "notes/result.txt",
-    }).catch(() => ({ content: "" }));
-    const ok =
-      file.content.includes("openrouter-ok") ||
-      blob.toLowerCase().includes("openrouter-ok") ||
-      blob.toLowerCase().includes("pong") ||
-      snap.messages.some((m) => m.role === "bot");
-    expect(ok).toBe(true);
-    if (file.content) expect(file.content).toContain("openrouter-ok");
+    });
+    expect(file.content).toBe("openrouter-ok");
   }, 120_000);
 });
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
-type Snap = {
-  messages: Array<{ role: string; blocks: unknown[] }>;
-  run: { status: string } | null;
-};
 
 async function rpc<T>(app: App, cookie: string, proc: string, body: unknown = {}): Promise<T> {
   const res = await app.request(`/rpc/${proc}`, {
@@ -210,15 +318,4 @@ async function rpc<T>(app: App, cookie: string, proc: string, body: unknown = {}
   if (res.status >= 400 || parsed.error)
     throw new Error(`${proc} ${res.status}: ${parsed.error?.message ?? "failed"}`);
   return parsed.json as T;
-}
-
-async function waitFor(app: App, cookie: string, botId: string, ms: number): Promise<Snap> {
-  const start = Date.now();
-  let last: Snap | null = null;
-  while (Date.now() - start < ms) {
-    last = await rpc<Snap>(app, cookie, "threads/get", { botId });
-    if (!last.run || ["completed", "failed", "cancelled"].includes(last.run.status)) return last;
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error(`timeout waiting for live model turn: ${JSON.stringify(last)}`);
 }

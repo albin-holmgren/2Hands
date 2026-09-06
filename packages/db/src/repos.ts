@@ -4,9 +4,18 @@ import {
   type Bot,
   type BotSection,
   type MessageBlock,
+  SandboxKind,
   type SpaceBot,
 } from "@rakazo/contracts";
-import { parseCodingHarness, userVisibleMessages } from "@rakazo/core";
+import {
+  assertBotLimit,
+  CHIEF_OF_STAFF_SPAWN_KEY,
+  hostedBillingEnabled,
+  parseCodingHarness,
+  userVisibleMessages,
+} from "@rakazo/core";
+import { countOrganizationBots } from "./billing.js";
+import { currentBillingTerms, lockBillingRow } from "./billing-ledger.js";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
@@ -16,7 +25,7 @@ import { activeRunSelection, previewFromBlocks } from "./thread-listing.js";
 /** Newest messages loaded for sidebar preview; enough to skip a short peer-run tail. */
 const SIDEBAR_PREVIEW_MESSAGE_WINDOW = 16;
 
-function mapBot(
+export function mapBot(
   bot: {
     id: string;
     spaceId: string;
@@ -366,9 +375,31 @@ export function createRepos(prisma: PrismaClient) {
       }
       const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
       const envKind = process.env.SANDBOX_PROVIDER ?? "docker";
-      const kind =
+      const hostedKind =
         envKind === "docker" && settings?.computerHost === "this-mac" ? "desktop" : envKind;
+      const kind = SandboxKind.safeParse(hostedKind).success ? hostedKind : "fake";
       const bot = await prisma.$transaction(async (tx) => {
+        if (
+          hostedBillingEnabled(process.env.BILLING_ENABLED) &&
+          input.spawnKey !== CHIEF_OF_STAFF_SPAWN_KEY
+        ) {
+          const space = await tx.space.findUniqueOrThrow({
+            where: { id: actor.spaceId },
+            select: { organizationId: true },
+          });
+          const billing = await lockBillingRow(tx, space.organizationId);
+          const replay = input.spawnKey
+            ? await tx.bot.findUnique({
+                where: { spaceId_spawnKey: { spaceId: actor.spaceId, spawnKey: input.spawnKey } },
+                select: { id: true },
+              })
+            : null;
+          if (!replay)
+            assertBotLimit(
+              currentBillingTerms(billing, new Date()).entitlements,
+              await countOrganizationBots(tx, space.organizationId),
+            );
+        }
         const positions = await tx.bot.aggregate({
           where: { spaceId: actor.spaceId, userId: actor.userId },
           _max: { position: true },

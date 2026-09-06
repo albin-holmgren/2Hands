@@ -1,6 +1,14 @@
 import * as SecureStore from "expo-secure-store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  composerDraftKey,
+  composerSessionEpoch,
+  configureComposerDraftStorage,
+  flushComposerDrafts,
+  saveComposerDraft,
+  setComposerAccount,
+} from "./composer-drafts";
+import {
   clearSessionToken,
   loadSessionToken,
   restoreSessionToken,
@@ -32,6 +40,32 @@ describe("mobile session storage", () => {
 
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "secret-token");
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("rakazo.session_token");
+  });
+
+  it("removes persistent drafts when signing out", async () => {
+    let saved: string | null = null;
+    await configureComposerDraftStorage({
+      read: async () => saved,
+      write: async (value) => {
+        saved = value;
+      },
+      clear: async () => {
+        saved = null;
+      },
+      restoreAttachment: async () => null,
+    });
+    setComposerAccount("https://example.test", "account", composerSessionEpoch());
+    saveComposerDraft(composerDraftKey("https://example.test", "account", "work", "thread"), {
+      text: "Private draft",
+      attachments: [],
+      mentions: [],
+      skill: null,
+      reply: null,
+    });
+    await flushComposerDrafts();
+    expect(saved).toContain("Private draft");
+    await clearSessionToken();
+    expect(saved).toBeNull();
   });
 
   it("overwrites the token when SecureStore delete fails", async () => {

@@ -37,7 +37,7 @@ export async function pickFromLibrary(existingCount = 0): Promise<{
       const name = asset.fileName ?? `photo-${asset.assetId ?? Date.now()}.jpg`;
       const mimeType = inferAttachmentMimeType(name, asset.mimeType ?? undefined);
       const { contentBase64, size } = await readUriAsBase64(asset.uri);
-      return { name, mimeType, size, contentBase64, previewUri: asset.uri };
+      return { name, mimeType, size, contentBase64, fileUri: asset.uri, previewUri: asset.uri };
     }),
   );
   return filterPickedAttachments(existingCount, candidates);
@@ -59,7 +59,7 @@ export async function takePhoto(existingCount = 0): Promise<{
   const mimeType = inferAttachmentMimeType(name, asset.mimeType ?? undefined);
   const { contentBase64, size } = await readUriAsBase64(asset.uri);
   return filterPickedAttachments(existingCount, [
-    { name, mimeType, size, contentBase64, previewUri: asset.uri },
+    { name, mimeType, size, contentBase64, fileUri: asset.uri, previewUri: asset.uri },
   ]);
 }
 
@@ -78,7 +78,7 @@ export async function pickDocuments(existingCount = 0): Promise<{
       const name = asset.name ?? "file";
       const mimeType = inferAttachmentMimeType(name, asset.mimeType ?? undefined);
       const { contentBase64, size } = await readUriAsBase64(asset.uri);
-      return { name, mimeType, size, contentBase64 };
+      return { name, mimeType, size, contentBase64, fileUri: asset.uri };
     }),
   );
   return filterPickedAttachments(existingCount, candidates);

@@ -20,6 +20,7 @@ export * from "./computer-lifecycle.js";
 export * from "./computer-screens.js";
 export * from "./computer-support.js";
 export * from "./computer-tools.js";
+export { settleComputerUsage } from "./computer-usage.js";
 export * from "./computer-workspace.js";
 export * from "./daytona-emulator.js";
 export * from "./daytona-sandbox.js";

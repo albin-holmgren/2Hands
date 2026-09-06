@@ -11,7 +11,7 @@ const context = {
 };
 
 describe("DaytonaSandboxProvider", () => {
-  it("implements the portable command, file, screen, and computer-use contract", async () => {
+  it("preserves commands, files, snapshots, and agent actions with primary streaming disabled", async () => {
     const fixture = daytonaFixture();
     const provider = new DaytonaSandboxProvider({ apiKey: "test-key" }, fixture.client);
     const computer = await provider.provision({ botId: "bot-a", homePath: "/unused" }, context);
@@ -94,18 +94,23 @@ describe("DaytonaSandboxProvider", () => {
     expect(fixture.type).toHaveBeenCalledWith("hello");
     expect(fixture.scroll).toHaveBeenCalledWith(10, 20, "down", 2);
 
-    const [screen, interactiveScreen] = await Promise.all([
-      provider.connectScreen(computer, { view: "stream", interactive: false }, context),
-      provider.connectScreen(computer, { view: "stream", interactive: true }, context),
-    ]);
-    expect(screen.url).toContain("/vnc.html");
-    expect(screen.url).toContain("view_only=true");
-    await screen.close();
-    expect(interactiveScreen.url).toContain("view_only=false");
-    expect(fixture.getSignedPreviewUrl).toHaveBeenCalledTimes(1);
+    for (const interactive of [false, true]) {
+      await expect(
+        provider.connectScreen(
+          computer,
+          { view: "stream", interactive, controlToken: "test-control-lease" },
+          context,
+        ),
+      ).rejects.toMatchObject({ code: "COMPUTER_UNAVAILABLE" });
+    }
+    await expect(
+      provider.setScreenControl(computer, true, context, "test-control-lease"),
+    ).rejects.toMatchObject({ code: "COMPUTER_UNAVAILABLE" });
+    await expect(provider.setScreenControl(computer, false, context)).resolves.toBeUndefined();
+    expect(fixture.getSignedPreviewUrl).not.toHaveBeenCalled();
 
     await provider.stop(computer, context);
-    expect(fixture.expireSignedPreviewUrl).toHaveBeenCalledWith(6080, "preview-token");
+    expect(fixture.expireSignedPreviewUrl).not.toHaveBeenCalled();
     expect(fixture.stop).toHaveBeenCalledWith(120);
   });
 
@@ -212,7 +217,7 @@ describe("DaytonaSandboxProvider", () => {
     await expect(provider.stop(computer, context)).resolves.toBeUndefined();
   });
 
-  it("gives Team bots distinct Daytona previews without a second computerUse.start", async () => {
+  it("retains isolated extra-display viewing and takeover while primary streaming is disabled", async () => {
     const fixture = daytonaFixture();
     const provider = new DaytonaSandboxProvider({ apiKey: "test-key" }, fixture.client);
     const computer = await provider.provision({ botId: "team-home", homePath: "/unused" }, context);
@@ -247,17 +252,14 @@ describe("DaytonaSandboxProvider", () => {
 
     await provider.observe(computer, writer);
     await provider.observe(computer, researcher);
-    const writerView = await provider.connectScreen(
-      computer,
-      { view: "stream", interactive: false },
-      writer,
-    );
+    await expect(
+      provider.connectScreen(computer, { view: "stream", interactive: false }, writer),
+    ).rejects.toMatchObject({ code: "COMPUTER_UNAVAILABLE" });
     const researcherView = await provider.connectScreen(
       computer,
       { view: "stream", interactive: false },
       researcher,
     );
-    expect(writerView.url).toContain("6080-preview");
     expect(researcherView.url).toContain("6082-preview");
     expect(researcherView.url).toContain("password=test-view-password");
     expect(fixture.computerUse.start).toHaveBeenCalledTimes(1);
@@ -289,11 +291,32 @@ describe("DaytonaSandboxProvider", () => {
     );
     expect(researcherControl.url).toContain("6083-preview");
     expect(researcherControl.url).not.toContain("6082-preview");
+    expect(researcherControl.url).toContain("password=test-view-password");
+    expect(researcherControl.url).toContain("view_only=false");
     expect(
       fixture.executeCommand.mock.calls.some(([command]) =>
         String(command).includes("-rfbport 5903"),
       ),
     ).toBe(true);
+
+    const executeCommand = fixture.executeCommand.getMockImplementation()!;
+    fixture.executeCommand.mockImplementation(async (command, ...args) => {
+      if (command.includes("RAKAZO_SCREEN_PASSWORD=") || command.includes(".slot")) {
+        return executeCommand(command, ...args);
+      }
+      if (command.includes("control-token-2")) {
+        return { exitCode: 1, result: "Screen listener did not stop" };
+      }
+      return executeCommand(command, ...args);
+    });
+    await expect(provider.setScreenControl(computer, false, researcher, "lease-1")).rejects.toThrow(
+      "Computer control could not be revoked",
+    );
+
+    await provider.stop(computer, context);
+    expect(fixture.expireSignedPreviewUrl).toHaveBeenCalledWith(6082, "token-6082");
+    expect(fixture.expireSignedPreviewUrl).toHaveBeenCalledWith(6083, "token-6083");
+    expect(fixture.getSignedPreviewUrl.mock.calls.map(([port]) => port)).toEqual([6082, 6083]);
 
     expect(provider.describe().capabilities.multiScreen).toBe(true);
   });

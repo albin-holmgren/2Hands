@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
+import { ExecutionErrorCodeSchema } from "./execution-errors.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
@@ -685,7 +686,9 @@ export const RunSchema = z.object({
   routineId: Id.nullable(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
+  modelFunding: z.enum(["hosted", "byok"]).nullable().optional(),
   error: z.string().nullable(),
+  errorCode: ExecutionErrorCodeSchema.optional(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -810,6 +813,12 @@ export const ModelCatalogEntrySchema = z.object({
   placeholder: z.boolean().optional(),
   platform: z.boolean().optional(),
   tier: ModelTierSchema.optional(),
+  inputUsdPerMillion: z.number().nonnegative().optional(),
+  outputUsdPerMillion: z.number().nonnegative().optional(),
+  cacheReadUsdPerMillion: z.number().nonnegative().optional(),
+  cacheWriteUsdPerMillion: z.number().nonnegative().optional(),
+  supportsImages: z.boolean().optional(),
+  supportsTools: z.boolean().optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
@@ -992,6 +1001,14 @@ export const BillingSchema = z.object({
   computerHours: z.number(),
   computerSecondsUsed: z.number(),
   checkoutEnabled: z.boolean(),
+  billingEnabled: z.boolean(),
+  legacyUntil: z.string().nullable(),
+  allowanceUsd: z.number(),
+  spentUsd: z.number(),
+  reservedUsd: z.number(),
+  remainingUsd: z.number(),
+  resetAt: z.string(),
+  exhausted: z.boolean(),
 });
 export type Billing = z.infer<typeof BillingSchema>;
 
@@ -999,6 +1016,31 @@ export const BillingCheckoutInput = z.object({
   plan: z.enum(["plus", "pro", "ultra"]),
 });
 export type BillingCheckoutInput = z.infer<typeof BillingCheckoutInput>;
+
+export const BillingPlanChangeStatusSchema = z.object({
+  currentPlan: PlanIdSchema,
+  currentPeriodEnd: z.string().nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+  pendingChange: z
+    .object({
+      plan: z.enum(["plus", "pro", "ultra"]),
+      priceUsd: z.number(),
+      effectiveAt: z.string(),
+    })
+    .nullable(),
+  canChange: z.boolean(),
+  canManageCancellation: z.boolean(),
+  unavailableReason: z.string().nullable(),
+});
+export type BillingPlanChangeStatus = z.infer<typeof BillingPlanChangeStatusSchema>;
+
+export const BillingSchedulePlanChangeInput = BillingCheckoutInput.extend({
+  expectedPeriodEnd: z.string().datetime(),
+});
+export const BillingSetCancelAtPeriodEndInput = z.object({
+  cancel: z.boolean(),
+  expectedPeriodEnd: z.string().datetime(),
+});
 
 export const AppBootstrapSchema = z.object({
   me: MeSchema,

@@ -12,6 +12,7 @@ import type { ComputerMode } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { normalizeWorkspacePath, teamBotWorkspaceDirectory } from "./computer-support.js";
 import { LocalAgentHomeStore } from "./home.js";
+import { sandboxProvidesComputers } from "./none-sandbox.js";
 
 export const PORTABLE_BROWSER_STOP_COMMAND =
   "pkill -f '[g]oogle-chrome|[c]hromium|[f]irefox' || true";
@@ -108,7 +109,8 @@ export async function checkpointAndRecordComputerWorkspace(
   computerRecord: { id: string; homeKey: string },
   computer: ComputerRef,
   context: AdapterContext,
-): Promise<string> {
+): Promise<string | undefined> {
+  if (!sandboxProvidesComputers(deps.sandbox)) return undefined;
   const revision = await checkpointComputerWorkspace(
     deps.home,
     deps.sandbox,

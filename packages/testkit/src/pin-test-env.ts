@@ -3,6 +3,7 @@
  * Pi, Docker, Graphile, or live Composio. Opt-in canaries set VERIFY_PROVIDERS.
  */
 if (!process.env.VERIFY_PROVIDERS) {
+  process.env.RAKAZO_IGNORE_ENV_FILES = "1";
   process.env.AGENT_RUNTIME = "scripted";
   process.env.SANDBOX_PROVIDER = "fake";
   process.env.WAKEUP_DRIVER = "memory";

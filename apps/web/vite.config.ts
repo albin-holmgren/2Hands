@@ -9,8 +9,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type PreviewServer, type ViteDevServer } from "vite";
 import { resolveScreenProxySecret } from "../../packages/core/src/secrets-guard.ts";
 import {
+  proxyUpstreamRequestHeaders,
   resolveNovncTarget,
-  safeProxyHeaders,
   safeProxyResponseHeaders,
   stripSensitiveHandshakeHeaders,
 } from "./src/screen-proxy.js";
@@ -29,10 +29,7 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string)
       res.end("Invalid or expired screen capability");
       return;
     }
-    const headers = {
-      ...safeProxyHeaders(req.headers),
-      host: `${target.hostname}:${target.port}`,
-    };
+    const headers = proxyUpstreamRequestHeaders(req.headers, target);
     const transport = target.protocol === "https:" ? https : http;
     const upstream = transport.request(
       {
@@ -45,15 +42,17 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string)
       },
       (incoming) => {
         res.writeHead(incoming.statusCode ?? 502, {
-          ...safeProxyResponseHeaders(incoming.headers),
+          ...safeProxyResponseHeaders(incoming.headers, target.upstreamHeaders),
           "access-control-allow-origin": "*",
+          "cache-control": "no-store",
+          "referrer-policy": "no-referrer",
         });
         incoming.pipe(res);
       },
     );
-    upstream.on("error", (error) => {
+    upstream.on("error", () => {
       res.statusCode = 502;
-      res.end(error.message);
+      res.end("The computer connection is unavailable.");
     });
     req.pipe(upstream);
   });
@@ -70,11 +69,9 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string)
         ? tls.connect({ port: target.port, host: target.hostname, servername: target.hostname })
         : net.connect(target.port, target.hostname);
     upstream.once(target.protocol === "https:" ? "secureConnect" : "connect", () => {
-      const headerLines = [
-        `${req.method ?? "GET"} ${target.path} HTTP/1.1`,
-        `Host: ${target.hostname}:${target.port}`,
-      ];
-      for (const [key, value] of Object.entries(safeProxyHeaders(req.headers))) {
+      const headers = proxyUpstreamRequestHeaders(req.headers, target);
+      const headerLines = [`${req.method ?? "GET"} ${target.path} HTTP/1.1`];
+      for (const [key, value] of Object.entries(headers)) {
         headerLines.push(`${key}: ${Array.isArray(value) ? value.join(",") : value}`);
       }
       upstream.write(`${headerLines.join("\r\n")}\r\n\r\n`);
@@ -97,7 +94,7 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string)
           return;
         }
         const responseHead = Buffer.concat(responseChunks, responseSize);
-        const safe = stripSensitiveHandshakeHeaders(responseHead);
+        const safe = stripSensitiveHandshakeHeaders(responseHead, target.upstreamHeaders);
         if (!safe) {
           socket.destroy();
           upstream.destroy();
@@ -115,7 +112,10 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string)
 }
 
 export default defineConfig(({ mode }) => {
-  const rootEnv = loadEnv(mode, path.resolve(import.meta.dirname, "../.."), "");
+  const ignoreEnvFiles = process.env.RAKAZO_IGNORE_ENV_FILES === "1";
+  const rootEnv = ignoreEnvFiles
+    ? {}
+    : loadEnv(mode, path.resolve(import.meta.dirname, "../.."), "");
   const api = process.env.API_PROXY_TARGET ?? rootEnv.API_PROXY_TARGET ?? "http://127.0.0.1:3100";
   const previewHost = process.env.RAKAZO_HOST ?? rootEnv.RAKAZO_HOST ?? "localhost";
   const screenProxySecret = () =>
@@ -128,6 +128,9 @@ export default defineConfig(({ mode }) => {
     });
   const performanceAssetDelayMs = Number(process.env.RAKAZO_PERFORMANCE_ASSET_DELAY_MS ?? 0);
   return {
+    ...(ignoreEnvFiles ? { envDir: "/tmp/rakazo-offline-no-env" } : {}),
+    // Concurrent fixture/preview servers must not invalidate each other's optimized dependencies.
+    cacheDir: path.resolve(import.meta.dirname, `node_modules/.vite-${webPort}`),
     plugins: [
       react({
         babel: {

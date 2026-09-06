@@ -1,0 +1,39 @@
+appId: com.rakazo.app
+name: 2hands bot actions and safe cancellation
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- tapOn: "Bot actions"
+- assertVisible: "(?i)Delete…"
+- takeScreenshot: screenshots/bot-actions
+- tapOn: "(?i)Delete…"
+- assertVisible: "(?i)Cancel"
+- takeScreenshot: screenshots/delete-confirmation
+- tapOn: "(?i)Cancel"
+- assertVisible:
+    id: "composer-input"
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- assertVisible: "${RAKAZO_E2E_BOT_NAME}.*"
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- takeScreenshot: screenshots/conversation-after-cancel

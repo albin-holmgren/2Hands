@@ -1,0 +1,29 @@
+---
+import { PLAN_IDS, PLANS } from "@rakazo/core";
+import { DOCS_URL, HOSTED_PREVIEW_NOTICE } from "../site";
+import { getLandingCopy } from "../i18n/landing";
+import { DEFAULT_LOCALE, type Locale } from "../i18n/locales";
+const { locale = DEFAULT_LOCALE } = Astro.props as { locale?: Locale };
+const copy = getLandingCopy(locale);
+---
+<section id="pricing" class="landing-pricing" aria-labelledby="pricing-title">
+  <div class="landing-pricing__intro"><p class="landing-eyebrow">{copy.pricingEyebrow}</p><h2 id="pricing-title">{copy.pricingHeading}</h2><p>{copy.pricingDescription}</p></div>
+  <div class="pricing-grid">
+    {PLAN_IDS.map((id, index) => {
+      const plan = PLANS[id];
+      return <article class:list={["plan-card", id === "plus" && "plan-card--featured"]}>
+        <div class="plan-card__top"><h3>{plan.name}</h3>{id === "plus" && <span>{copy.planBadge}</span>}</div>
+        <p class="plan-card__description">{copy.planDescriptions[index]}</p>
+        <p class="plan-price"><span>${plan.priceUsd}</span><small>{copy.monthly}</small></p>
+        <p class="plan-allowance"><b>${plan.allowanceUsd}</b> {copy.included}</p>
+        <ul>
+          <li><span aria-hidden="true">✓</span>{id === "free" ? copy.freeModels : copy.paidModels}</li>
+          <li><span aria-hidden="true">✓</span>{copy.sharedBalance}</li>
+          <li><span aria-hidden="true">✓</span>{id === "free" ? copy.noCard : copy.byok}</li>
+        </ul>
+      </article>;
+    })}
+  </div>
+  <div class="pricing-access"><div><p>{copy.pricingAvailability}</p><span>{HOSTED_PREVIEW_NOTICE}</span></div><a class="button button--secondary" href={DOCS_URL} target="_blank" rel="noreferrer">{copy.selfHost}<span aria-hidden="true">↗</span></a></div>
+  <details class="pricing-details"><summary>{copy.pricingRates}<span aria-hidden="true">+</span></summary><p>{copy.pricingDetails}</p></details>
+</section>

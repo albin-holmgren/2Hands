@@ -1,3 +1,5 @@
+import { ExecutionError } from "./execution-errors.js";
+
 export const PLAN_IDS = ["free", "plus", "pro", "ultra"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 
@@ -11,6 +13,7 @@ export type PlanEntitlements = {
   id: PlanId;
   name: string;
   priceUsd: number;
+  allowanceUsd: number;
   maxBots: number;
   harnesses: Exclude<CodingHarness, "none">[];
   maxPlugins: number;
@@ -25,6 +28,7 @@ export const PLANS: Record<PlanId, PlanEntitlements> = {
     id: "free",
     name: "Free",
     priceUsd: 0,
+    allowanceUsd: 1,
     maxBots: 1,
     harnesses: [],
     maxPlugins: 1,
@@ -37,10 +41,11 @@ export const PLANS: Record<PlanId, PlanEntitlements> = {
     id: "plus",
     name: "Plus",
     priceUsd: 20,
+    allowanceUsd: 10,
     maxBots: 3,
     harnesses: ["codex"],
     maxPlugins: 10,
-    modelTiers: ["cheap", "mid"],
+    modelTiers: [...MODEL_TIERS],
     monthlyTokens: 4_000_000,
     computerHours: 40,
     maxParallelScreens: 2,
@@ -49,10 +54,11 @@ export const PLANS: Record<PlanId, PlanEntitlements> = {
     id: "pro",
     name: "Pro",
     priceUsd: 60,
+    allowanceUsd: 30,
     maxBots: 10,
     harnesses: ["codex", "claude"],
     maxPlugins: Number.POSITIVE_INFINITY,
-    modelTiers: ["cheap", "mid", "frontier"],
+    modelTiers: [...MODEL_TIERS],
     monthlyTokens: 20_000_000,
     computerHours: 150,
     maxParallelScreens: 5,
@@ -61,6 +67,7 @@ export const PLANS: Record<PlanId, PlanEntitlements> = {
     id: "ultra",
     name: "Ultra",
     priceUsd: 200,
+    allowanceUsd: 100,
     maxBots: 100,
     harnesses: ["codex", "claude", "cursor"],
     maxPlugins: Number.POSITIVE_INFINITY,
@@ -87,10 +94,9 @@ export function parseCodingHarness(value: string | null | undefined): CodingHarn
   return isCodingHarness(value) ? value : "none";
 }
 
-export class PlanLimitError extends Error {
-  readonly code = "PLAN_LIMIT";
-  constructor(message: string) {
-    super(message);
+export class PlanLimitError extends ExecutionError {
+  constructor(message: string, code: "PLAN_LIMIT" | "ALLOWANCE_EXHAUSTED" = "PLAN_LIMIT") {
+    super(code, message);
     this.name = "PlanLimitError";
   }
 }
@@ -111,10 +117,7 @@ export function assertPluginLimit(plan: PlanEntitlements, currentPlugins: number
   }
 }
 
-export function assertHarnessAllowed(
-  plan: PlanEntitlements,
-  harness: CodingHarness,
-): void {
+export function assertHarnessAllowed(plan: PlanEntitlements, harness: CodingHarness): void {
   if (harness === "none") return;
   if (!plan.harnesses.includes(harness)) {
     throw new PlanLimitError(
@@ -135,6 +138,7 @@ export function assertTokenBudget(plan: PlanEntitlements, usedTokens: number): v
   if (usedTokens >= plan.monthlyTokens) {
     throw new PlanLimitError(
       `${plan.name} included tokens are used up for this month. Upgrade or wait for the next period.`,
+      "ALLOWANCE_EXHAUSTED",
     );
   }
 }
@@ -143,6 +147,7 @@ export function assertComputerHours(plan: PlanEntitlements, usedSeconds: number)
   if (usedSeconds >= plan.computerHours * 3600) {
     throw new PlanLimitError(
       `${plan.name} included computer hours are used up for this month. Upgrade or wait for the next period.`,
+      "ALLOWANCE_EXHAUSTED",
     );
   }
 }
@@ -153,4 +158,9 @@ export function stripePriceEnvName(plan: Exclude<PlanId, "free">): string {
     : plan === "pro"
       ? "STRIPE_PRICE_PRO"
       : "STRIPE_PRICE_ULTRA";
+}
+
+/** Hosted commercial limits are opt-in; self-hosted installs remain provider-neutral. */
+export function hostedBillingEnabled(value: string | undefined): boolean {
+  return value === "true";
 }

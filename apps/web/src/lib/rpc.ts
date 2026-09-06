@@ -49,18 +49,30 @@ export function withSpaceHeaders(
   return headers;
 }
 
-const link = new RPCLink<RpcClientContext>({
-  url: () =>
-    typeof window === "undefined" ? "http://127.0.0.1:5173/rpc" : `${window.location.origin}/rpc`,
-  fetch: (input, init, options) => {
-    const request = new Request(input, init);
-    const spaceId =
-      options.context.spaceId === undefined ? selectedSpaceId() : options.context.spaceId;
-    return fetch(request, {
-      headers: withSpaceHeaders(request.headers, spaceId),
-      credentials: "include",
-    });
-  },
-});
+export function createWorkspaceRpc(spaceId?: string | null, signal?: AbortSignal) {
+  const link = new RPCLink<RpcClientContext>({
+    url: () =>
+      typeof window === "undefined" ? "http://127.0.0.1:5173/rpc" : `${window.location.origin}/rpc`,
+    fetch: async (input, init, options) => {
+      const request = new Request(input, init);
+      const capturedSpace =
+        options.context.spaceId === undefined
+          ? spaceId === undefined
+            ? selectedSpaceId()
+            : spaceId
+          : options.context.spaceId;
+      const response = await fetch(request, {
+        headers: withSpaceHeaders(request.headers, capturedSpace),
+        credentials: "include",
+        signal: signal ? AbortSignal.any([signal, request.signal]) : request.signal,
+      });
+      if (response.status === 401 && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("rakazo:session-unauthorized"));
+      }
+      return response;
+    },
+  });
+  return createORPCClient<ContractRouterClient<AppContract, RpcClientContext>>(link);
+}
 
-export const rpc: ContractRouterClient<AppContract, RpcClientContext> = createORPCClient(link);
+export const rpc = createWorkspaceRpc();

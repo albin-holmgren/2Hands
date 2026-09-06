@@ -10,9 +10,14 @@ import type {
   SandboxProvider,
   ScreenRequest,
 } from "@rakazo/adapter-kit";
+import { ExecutionError } from "@rakazo/core";
 
 export const NO_SANDBOX_MESSAGE =
-  "Computers unavailable. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or use e2b, daytona, or box with its API key.";
+  "Computers are not available on this server. You can continue chatting.";
+
+export function sandboxProvidesComputers(sandbox: { describe(): { id: string } }): boolean {
+  return sandbox.describe().id !== "none";
+}
 
 /** Boots the API without a computer host. Provision and runtime calls fail closed. */
 export class NoneSandboxProvider implements SandboxProvider {
@@ -35,7 +40,7 @@ export class NoneSandboxProvider implements SandboxProvider {
   }
 
   private fail(): never {
-    throw new Error(this.message);
+    throw new ExecutionError("COMPUTER_UNAVAILABLE", this.message);
   }
 
   async provision(

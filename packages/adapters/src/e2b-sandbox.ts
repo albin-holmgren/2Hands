@@ -17,7 +17,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, hostedBillingEnabled, PlanLimitError } from "@rakazo/core";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError, screenSessionKey } from "./computer-screens.js";
 import {
@@ -36,6 +36,7 @@ import {
 import {
   allocateExtraDisplayCommand,
   ensureExtraDisplayCommand,
+  ensurePrimaryNovncCommand,
   extraDisplayActionCommand,
   extraDisplayControlStartCommand,
   extraDisplayControlStopCommand,
@@ -48,7 +49,6 @@ import {
   parseReleasedExtraDisplay,
   primaryStreamCleanupCommand,
   releaseExtraDisplayCommand,
-  screenControlKey,
 } from "./extra-displays.js";
 
 const E2B_WORKSPACE = "/home/user/rakazo-home";
@@ -58,15 +58,32 @@ export interface E2BSandboxSdk {
   create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
   connect(id: string, options: { apiKey: string; timeoutMs: number }): Promise<Sandbox>;
   pause(id: string, options: { apiKey: string }): Promise<void>;
+  kill(
+    id: string,
+    options: { apiKey: string; signal: AbortSignal; requestTimeoutMs: number },
+  ): Promise<boolean>;
 }
 
-export function e2bCreateOptions(botId: string, apiKey: string) {
+export function e2bLifetimeMs(expiresAt?: string, now = Date.now()): number {
+  if (!expiresAt) {
+    if (hostedBillingEnabled(process.env.BILLING_ENABLED))
+      throw new Error("Hosted computers require prepaid lifetime coverage.");
+    return sandboxIdleMs();
+  }
+  const remaining = Date.parse(expiresAt) - now;
+  if (!Number.isFinite(remaining) || remaining <= 0)
+    throw new PlanLimitError("Computer usage coverage has expired.");
+  return Math.max(1, Math.min(sandboxIdleMs(), Math.floor(remaining)));
+}
+
+export function e2bCreateOptions(botId: string, apiKey: string, expiresAt?: string) {
   return {
     apiKey,
-    timeoutMs: sandboxIdleMs(),
+    timeoutMs: e2bLifetimeMs(expiresAt),
     metadata: { botId, rakazo: "computer" },
     resolution: [1280, 800] as [number, number],
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
+    network: { allowPublicTraffic: false },
   };
 }
 
@@ -131,6 +148,27 @@ export function isSandboxGoneError(error: unknown): boolean {
   return false;
 }
 
+/** E2B returns 409 when stream.start runs against a sandbox that already has a stream. */
+export function isStreamAlreadyStartedError(error: unknown): boolean {
+  if (errorHttpStatus(error) === 409) return true;
+  return /already (?:started|running)|stream is already/i.test(errorMessage(error));
+}
+
+/** E2B waits with `netstat`, which desktop images often lack, then throws even if noVNC is up. */
+export function isNovncWaitError(error: unknown): boolean {
+  return /could not start novnc/i.test(errorMessage(error));
+}
+
+function errorHttpStatus(error: unknown): number | undefined {
+  for (let current: unknown = error; current && typeof current === "object"; ) {
+    const record = current as { status?: unknown; statusCode?: unknown; cause?: unknown };
+    const status = Number(record.status ?? record.statusCode);
+    if (Number.isInteger(status) && status > 0) return status;
+    current = record.cause;
+  }
+  return undefined;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -180,9 +218,8 @@ export async function openDesktopUrl(
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly boxes = new Map<string, Sandbox>();
   private readonly lastTouchedAt = new Map<string, number>();
-  private readonly streamReady = new Set<string>();
+  private readonly streamReady = new Map<string, string>();
   private readonly streamStarts = new Map<string, Promise<void>>();
-  private readonly controlStreams = new Map<string, { password: string; controlToken: string }>();
 
   constructor(
     private readonly apiKey: string,
@@ -201,11 +238,13 @@ export class E2BSandboxProvider implements SandboxProvider {
         takeover: true,
         persistentHome: true,
         multiScreen: true,
+        boundedLifetime: true,
       },
     };
   }
 
   private async box(computer: ComputerRef): Promise<Sandbox> {
+    const timeoutMs = e2bLifetimeMs(computer.expiresAt);
     const id = computer.providerRef || computer.id;
     const existing = this.boxes.get(id);
     if (existing) {
@@ -213,9 +252,12 @@ export class E2BSandboxProvider implements SandboxProvider {
       if (Date.now() - lastTouched < 60_000) return existing;
       // A cached handle to a sandbox E2B already killed keeps throwing on every call, and the
       // process never reconnects. The keepalive is the cheapest place to notice and drop it.
-      const gone = await existing.setTimeout(sandboxIdleMs()).then(
+      const gone = await existing.setTimeout(timeoutMs).then(
         () => false,
-        (error: unknown) => isSandboxGoneError(error),
+        (error: unknown) => {
+          if (computer.expiresAt && !isSandboxGoneError(error)) throw error;
+          return isSandboxGoneError(error);
+        },
       );
       if (!gone) {
         this.lastTouchedAt.set(id, Date.now());
@@ -225,8 +267,9 @@ export class E2BSandboxProvider implements SandboxProvider {
     }
     const connected = await this.sdk.connect(id, {
       apiKey: this.apiKey,
-      timeoutMs: sandboxIdleMs(),
+      timeoutMs,
     });
+    await this.hardenReconnect(connected, computer.expiresAt);
     this.boxes.set(connected.sandboxId, connected);
     this.lastTouchedAt.set(connected.sandboxId, Date.now());
     return connected;
@@ -250,20 +293,70 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   private async initializeStream(desktop: Sandbox) {
-    await desktop.commands.run(primaryStreamCleanupCommand()).catch(() => undefined);
-    await desktop.stream.start({ requireAuth: true });
-    try {
-      await desktop.commands.run("x11vnc -R viewonly");
-    } catch (error) {
-      await desktop.stream.stop().catch(() => undefined);
-      throw error;
-    }
+    // Do not call E2B `stream.start()`: it waits with `netstat` (often missing) and can
+    // 409 without setting `this.url`. Start noVNC ourselves and build the URL from getHost(6080).
+    const password = await this.ensurePrimaryView(desktop);
     const current = this.boxes.get(desktop.sandboxId);
     if (current !== desktop) {
-      if (!current) await desktop.stream.stop().catch(() => undefined);
+      if (!current) await desktop.commands.run(primaryStreamCleanupCommand());
       throw new Error("screen stream stopped during computer teardown");
     }
-    this.streamReady.add(desktop.sandboxId);
+    this.streamReady.set(desktop.sandboxId, password);
+  }
+
+  private async ensurePrimaryView(desktop: Sandbox): Promise<string> {
+    const ensured = await this.runSetupCommand(
+      desktop,
+      ensurePrimaryNovncCommand(desktop.display ?? ":0", randomBytes(6).toString("base64url")),
+      undefined,
+      45_000,
+    );
+    if (ensured.exitCode !== 0) {
+      const detail = [ensured.stderr, ensured.stdout]
+        .filter((value) => value?.trim())
+        .join("\n")
+        .trim();
+      throw new Error(detail || `desktop stream failed to start (exit ${ensured.exitCode})`);
+    }
+    return parseExtraDisplayViewPassword(ensured.stdout);
+  }
+
+  private async hardenReconnect(desktop: Sandbox, expiresAt?: string): Promise<void> {
+    // connect() only extends running deadlines; explicitly shorten to prepaid coverage.
+    if (expiresAt) await desktop.setTimeout(e2bLifetimeMs(expiresAt));
+    if (desktop.trafficAccessToken) return;
+    // Legacy public machines must be safe before any caller can reuse the handle.
+    // Preserve the machine/files; never replace a computer after an unknown outcome.
+    const stopped = await this.runSetupCommand(
+      desktop,
+      extraDisplayControlStopCommand(extraDisplayLayout(0, desktop.display ?? ":0")),
+    );
+    if (stopped.exitCode !== 0) throw new Error("Legacy computer control could not be revoked");
+    const password = await this.ensurePrimaryView(desktop);
+    this.streamReady.set(desktop.sandboxId, password);
+  }
+
+  private screenSession(
+    desktop: Sandbox,
+    layout: ReturnType<typeof extraDisplayLayout>,
+    password: string,
+    interactive: boolean,
+  ): ScreenSession {
+    const url = new URL(
+      `https://${desktop.getHost(interactive ? layout.controlPort : layout.viewPort)}/vnc.html`,
+    );
+    url.searchParams.set("autoconnect", "true");
+    url.searchParams.set("resize", "scale");
+    url.searchParams.set("view_only", interactive ? "false" : "true");
+    url.searchParams.set("password", password);
+    return {
+      url: url.toString(),
+      mimeType: "text/html",
+      ...(desktop.trafficAccessToken
+        ? { upstreamHeaders: { "e2b-traffic-access-token": desktop.trafficAccessToken } }
+        : {}),
+      close: async () => undefined,
+    };
   }
 
   async provision(
@@ -272,15 +365,32 @@ export class E2BSandboxProvider implements SandboxProvider {
       homePath: string;
       providerRef?: string;
       providerKind?: ComputerRef["kind"];
+      expiresAt?: string;
     },
     _context: AdapterContext,
   ): Promise<ComputerRef> {
     if (request.providerRef && request.providerKind === "e2b") {
+      let desktop: Sandbox | undefined;
       try {
-        const desktop = await this.sdk.connect(request.providerRef, {
+        desktop = await this.sdk.connect(request.providerRef, {
           apiKey: this.apiKey,
-          timeoutMs: sandboxIdleMs(),
+          timeoutMs: e2bLifetimeMs(request.expiresAt),
         });
+      } catch (error) {
+        this.forget(request.providerRef);
+        // Never allocate a second paid machine while the first machine's outcome is unknown.
+        const gone = request.expiresAt
+          ? isSandboxGoneError(error)
+          : isUnrecoverableSandboxError(error) || isUnreachableTransportError(error);
+        if (!gone) throw error;
+      }
+      if (desktop) {
+        try {
+          await this.hardenReconnect(desktop, request.expiresAt);
+        } catch (error) {
+          this.forget(request.providerRef);
+          throw error;
+        }
         this.boxes.set(desktop.sandboxId, desktop);
         this.lastTouchedAt.set(desktop.sandboxId, Date.now());
         return {
@@ -289,16 +399,17 @@ export class E2BSandboxProvider implements SandboxProvider {
           kind: "e2b",
           providerRef: desktop.sandboxId,
           fresh: false,
+          ...(request.expiresAt ? { expiresAt: request.expiresAt } : {}),
         };
-      } catch (error) {
-        this.boxes.delete(request.providerRef);
-        // Permanent gone (404/killed) or unreachable transport: boot fresh. Other errors rethrow.
-        if (!isUnrecoverableSandboxError(error) && !isUnreachableTransportError(error)) {
-          throw error;
-        }
       }
     }
-    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey));
+    const desktop = await this.sdk.create(
+      e2bCreateOptions(request.botId, this.apiKey, request.expiresAt),
+    );
+    if (!desktop.trafficAccessToken) {
+      await desktop.kill();
+      throw new Error("Computer private networking could not be confirmed");
+    }
     this.boxes.set(desktop.sandboxId, desktop);
     this.lastTouchedAt.set(desktop.sandboxId, Date.now());
     return {
@@ -307,6 +418,7 @@ export class E2BSandboxProvider implements SandboxProvider {
       kind: "e2b",
       providerRef: desktop.sandboxId,
       fresh: true,
+      ...(request.expiresAt ? { expiresAt: request.expiresAt } : {}),
     };
   }
 
@@ -354,77 +466,23 @@ export class E2BSandboxProvider implements SandboxProvider {
     request: ScreenRequest,
     context: AdapterContext,
   ): Promise<ScreenSession> {
+    if (request.interactive && !request.controlToken) {
+      throw new Error("interactive screen requires a control token");
+    }
     const desktop = await this.box(computer);
     const screenKey = screenSessionKey(context);
     const layout = await this.resolveLayout(desktop, screenKey, context.screenLeaseId);
-    if (layout.isPrimary) {
-      await this.startStream(desktop);
-      if (request.interactive) {
-        if (!request.controlToken) throw new Error("interactive screen requires a control token");
-        const password = await this.startControlStream(desktop, request.controlToken, screenKey);
-        const url = new URL(`https://${desktop.getHost(layout.controlPort)}/vnc.html`);
-        url.searchParams.set("autoconnect", "true");
-        url.searchParams.set("resize", "scale");
-        url.searchParams.set("password", password);
-        return {
-          url: url.toString(),
-          mimeType: "text/html",
-          close: async () => undefined,
-        };
-      }
-      let authKey: string | undefined;
-      try {
-        authKey = desktop.stream.getAuthKey();
-      } catch {
-        authKey = undefined;
-      }
-      const url =
-        typeof desktop.stream.getUrl === "function"
-          ? desktop.stream.getUrl({
-              autoConnect: true,
-              viewOnly: true,
-              resize: "scale",
-              ...(authKey ? { authKey } : {}),
-            })
-          : null;
-      return {
-        url,
-        mimeType: "text/html",
-        close: async () => {
-          await desktop.stream.stop().catch(() => undefined);
-          this.streamReady.delete(desktop.sandboxId);
-        },
-      };
-    }
-    const viewPassword = await this.ensureExtraDisplay(desktop, layout, context);
+    const viewPassword = await this.ensureViewStream(desktop, layout, context);
     if (request.interactive) {
-      if (!request.controlToken) throw new Error("interactive screen requires a control token");
       const password = await this.startControlStream(
         desktop,
-        request.controlToken,
+        request.controlToken!,
         screenKey,
         layout,
       );
-      const url = new URL(`https://${desktop.getHost(layout.controlPort)}/vnc.html`);
-      url.searchParams.set("autoconnect", "true");
-      url.searchParams.set("resize", "scale");
-      url.searchParams.set("password", password);
-      return {
-        url: url.toString(),
-        mimeType: "text/html",
-        close: async () => undefined,
-      };
+      return this.screenSession(desktop, layout, password, true);
     }
-    const url = new URL(`https://${desktop.getHost(layout.viewPort)}/vnc.html`);
-    url.searchParams.set("autoconnect", "true");
-    url.searchParams.set("resize", "scale");
-    url.searchParams.set("view_only", "true");
-    url.searchParams.set("password", viewPassword);
-    return {
-      url: url.toString(),
-      mimeType: "text/html",
-      close: async () => undefined,
-    };
+    return this.screenSession(desktop, layout, viewPassword, false);
   }
 
   async setScreenControl(
@@ -433,25 +491,29 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
     controlToken?: string,
   ): Promise<void> {
+    if (interactive && !controlToken)
+      throw new Error("interactive screen requires a control token");
     const desktop = await this.box(computer);
     const screenKey = screenSessionKey(context);
     const layout = await this.resolveLayout(desktop, screenKey, context.screenLeaseId);
-    if (layout.isPrimary) {
-      if (interactive) {
-        if (!controlToken) throw new Error("interactive screen requires a control token");
-        await this.startControlStream(desktop, controlToken, screenKey);
-      } else {
-        await this.stopControlStream(desktop, controlToken, screenKey);
-      }
-      return;
-    }
-    await this.ensureExtraDisplay(desktop, layout, context);
     if (interactive) {
-      if (!controlToken) throw new Error("interactive screen requires a control token");
-      await this.startControlStream(desktop, controlToken, screenKey, layout);
+      await this.ensureViewStream(desktop, layout, context);
+      await this.startControlStream(desktop, controlToken!, screenKey, layout);
     } else {
       await this.stopControlStream(desktop, controlToken, screenKey, layout);
     }
+  }
+
+  private async ensureViewStream(
+    desktop: Sandbox,
+    layout: ReturnType<typeof extraDisplayLayout>,
+    context: AdapterContext,
+  ): Promise<string> {
+    if (!layout.isPrimary) return this.ensureExtraDisplay(desktop, layout, context);
+    await this.startStream(desktop);
+    const password = this.streamReady.get(desktop.sandboxId);
+    if (!password) throw new ComputerScreenUnavailableError();
+    return password;
   }
 
   async sendInput(
@@ -627,11 +689,13 @@ export class E2BSandboxProvider implements SandboxProvider {
     return { id: observation.frameId, createdAt: observation.capturedAt };
   }
 
-  async keepAlive(computer: ComputerRef): Promise<void> {
-    const desktop = await this.box(computer);
+  async keepAlive(computer: ComputerRef, options?: { expiresAt?: string }): Promise<void> {
+    const covered = options?.expiresAt ? { ...computer, expiresAt: options.expiresAt } : computer;
+    const desktop = await this.box(covered);
     try {
-      await desktop.setTimeout(sandboxIdleMs());
+      await desktop.setTimeout(e2bLifetimeMs(covered.expiresAt));
     } catch (error) {
+      if (covered.expiresAt) throw error;
       // Heartbeats refresh lastTouchedAt; if we swallow a gone error here, box() never
       // reaches its 60s probe and keeps handing back the dead cached handle.
       if (isSandboxGoneError(error)) {
@@ -647,14 +711,14 @@ export class E2BSandboxProvider implements SandboxProvider {
     const screenKey = screenSessionKey(context);
     const desktop = this.boxes.get(id) ?? (await this.box(computer).catch(() => undefined));
     if (!desktop) return;
-    const released = await desktop.commands
-      .run(releaseExtraDisplayCommand(screenKey, context.screenLeaseId))
-      .catch(() => undefined);
-    const index = released ? parseReleasedExtraDisplay(released.stdout) : undefined;
+    const released = await this.runSetupCommand(
+      desktop,
+      releaseExtraDisplayCommand(screenKey, context.screenLeaseId, desktop.display ?? ":0"),
+    );
+    if (released.exitCode !== 0) throw new ComputerScreenUnavailableError();
+    const index = parseReleasedExtraDisplay(released.stdout);
     if (index === undefined) return;
-    const controlKey = screenControlKey(id, screenKey);
-    this.controlStreams.delete(controlKey);
-    if (index === 0) return;
+    if (index === 0) this.streamReady.delete(id);
     // Non-primary teardown runs inside the registry lock before the slot is reusable.
   }
 
@@ -664,20 +728,45 @@ export class E2BSandboxProvider implements SandboxProvider {
     const desktop = this.boxes.get(id);
     this.forget(id);
     await settleForTeardown(pending);
-    if (desktop) {
-      await desktop.pause().catch(() => undefined);
+    if (computer.expiresAt) {
+      const timeout = new AbortController();
+      try {
+        await Promise.race([
+          desktop ? desktop.pause() : this.sdk.pause(id, { apiKey: this.apiKey }),
+          delay(10_000, undefined, { signal: timeout.signal, ref: false }).then(() => {
+            throw new Error("Computer pause outcome is unknown");
+          }),
+        ]);
+      } finally {
+        timeout.abort();
+      }
       return;
     }
-    await this.sdk.pause(id, { apiKey: this.apiKey }).catch(() => undefined);
+    if (desktop) {
+      await Promise.race([
+        desktop.pause().catch(() => undefined),
+        delay(10_000, undefined, { ref: false }),
+      ]);
+      return;
+    }
+    await Promise.race([
+      this.sdk.pause(id, { apiKey: this.apiKey }).catch(() => undefined),
+      delay(10_000, undefined, { ref: false }),
+    ]);
   }
 
-  async destroy(computer: ComputerRef, _context: AdapterContext): Promise<void> {
+  async destroy(computer: ComputerRef, context: AdapterContext): Promise<void> {
     const id = computer.providerRef || computer.id;
-    const desktop = this.boxes.get(id) ?? (await this.box(computer).catch(() => undefined));
     const pending = this.streamStarts.get(id);
     this.forget(id);
     await settleForTeardown(pending);
-    await desktop?.kill();
+    // Delete through the provider API without reconnecting/resuming an expired
+    // computer. The SDK returns false only for confirmed 404; other errors reject.
+    await this.sdk.kill(id, {
+      apiKey: this.apiKey,
+      signal: context.signal,
+      requestTimeoutMs: 10_000,
+    });
   }
 
   private forget(id: string): void {
@@ -685,9 +774,6 @@ export class E2BSandboxProvider implements SandboxProvider {
     this.lastTouchedAt.delete(id);
     this.streamReady.delete(id);
     this.streamStarts.delete(id);
-    for (const key of [...this.controlStreams.keys()]) {
-      if (key.startsWith(`${id}:`)) this.controlStreams.delete(key);
-    }
   }
 
   /** Apply the deployment timeout (SDK default is 60s) and return failed results instead of throwing. */
@@ -695,19 +781,22 @@ export class E2BSandboxProvider implements SandboxProvider {
     desktop: Sandbox,
     command: string,
     signal?: AbortSignal,
+    timeoutMs?: number,
   ): Promise<CommandResult> {
     try {
-      return await desktop.commands.run(command, {
+      // The SDK uses login bash. Keep `set -e` in a non-login child so a
+      // template's .bash_logout (e.g. clear_console without a TTY) cannot
+      // turn a successful setup into a failed command when the shell exits.
+      return await desktop.commands.run(`bash -c ${shellQuote(command)}`, {
         ...(signal ? { signal } : {}),
-        timeoutMs: boundedSandboxCommandTimeoutMs(undefined),
+        timeoutMs: boundedSandboxCommandTimeoutMs(timeoutMs),
       });
     } catch (error) {
-      if (error instanceof TimeoutError) {
+      if (error instanceof TimeoutError || /deadline_exceeded/i.test(errorMessage(error))) {
         return {
           exitCode: 124,
           stdout: "",
-          stderr: error.message,
-          error: error.message,
+          stderr: errorMessage(error),
         };
       }
       const result = (error as { result?: CommandResult }).result;
@@ -740,7 +829,7 @@ export class E2BSandboxProvider implements SandboxProvider {
           homeDir: "/home/user",
           browserProfilesDir: E2B_BROWSER_PROFILES,
         },
-        randomBytes(9).toString("base64url"),
+        randomBytes(6).toString("base64url"),
       ),
       context.signal,
     );
@@ -751,84 +840,35 @@ export class E2BSandboxProvider implements SandboxProvider {
   private async startControlStream(
     desktop: Sandbox,
     controlToken: string,
-    screenKey: string,
+    _screenKey: string,
     layout = extraDisplayLayout(0, desktop.display ?? ":0"),
   ): Promise<string> {
-    const controlKey = screenControlKey(desktop.sandboxId, screenKey);
-    const existing = this.controlStreams.get(controlKey);
-    if (existing?.controlToken === controlToken) return existing.password;
     const password = randomBytes(6).toString("base64url");
-    if (layout.isPrimary) {
-      const passwordFile = "/tmp/rakazo-control.vncpass";
-      const tokenFile = "/tmp/rakazo-control.token";
-      const vncPort = layout.controlVncPort;
-      const proxyPort = layout.controlPort;
-      const command = [
-        controlStreamStopCommand(),
-        // Old x11vnc may outlive pkill briefly; do not store a new password until the VNC port is free.
-        `for i in $(seq 1 50); do netstat -tuln | grep -q ':${vncPort} ' || break; sleep 0.1; done`,
-        `if netstat -tuln | grep -q ':${vncPort} '; then exit 1; fi`,
-        `printf %s ${shellQuote(controlToken)} > ${tokenFile}`,
-        `x11vnc -storepasswd ${shellQuote(password)} ${passwordFile} >/dev/null`,
-        `x11vnc -bg -display ${shellQuote(desktop.display)} -forever -wait 50 -shared -rfbport ${vncPort} -rfbauth ${passwordFile} 2>/tmp/rakazo-control-x11vnc.log`,
-        // Require the new x11vnc itself — proxy listen alone can pass with a leftover server.
-        `for i in $(seq 1 50); do netstat -tuln | grep -q ':${vncPort} ' && break; sleep 0.1; done`,
-        `if ! netstat -tuln | grep -q ':${vncPort} '; then exit 1; fi`,
-        "cd /opt/noVNC/utils",
-        `(nohup ./novnc_proxy --vnc localhost:${vncPort} --listen ${proxyPort} --web /opt/noVNC >/tmp/rakazo-control-novnc.log 2>&1 &)`,
-        `for i in $(seq 1 50); do netstat -tuln | grep -q ':${proxyPort} ' && exit 0; sleep 0.1; done`,
-        "exit 1",
-      ].join(" && ");
-      const result = await this.runSetupCommand(desktop, command);
-      if (result.exitCode !== 0) throw new Error(result.stderr || "control stream failed to start");
-    } else {
-      const result = await this.runSetupCommand(
-        desktop,
-        extraDisplayControlStartCommand(layout, controlToken, password),
-      );
-      if (result.exitCode !== 0) throw new Error(result.stderr || "control stream failed to start");
-    }
-    this.controlStreams.set(controlKey, { password, controlToken });
-    return password;
+    const result = await this.runSetupCommand(
+      desktop,
+      extraDisplayControlStartCommand(layout, controlToken, password),
+    );
+    if (result.exitCode !== 0) throw new Error(result.stderr || "control stream failed to start");
+    return parseExtraDisplayViewPassword(result.stdout);
   }
 
   private async stopControlStream(
     desktop: Sandbox,
     controlToken: string | undefined,
-    screenKey: string,
+    _screenKey: string,
     layout = extraDisplayLayout(0, desktop.display ?? ":0"),
   ): Promise<void> {
-    const controlKey = screenControlKey(desktop.sandboxId, screenKey);
-    if (layout.isPrimary) {
-      await desktop.commands.run(controlStreamStopCommand(controlToken));
-    } else {
-      await desktop.commands.run(extraDisplayControlStopCommand(layout, controlToken));
-    }
-    const existing = this.controlStreams.get(controlKey);
-    if (!controlToken || existing?.controlToken === controlToken) {
-      this.controlStreams.delete(controlKey);
-    }
+    const stopped = await this.runSetupCommand(
+      desktop,
+      extraDisplayControlStopCommand(layout, controlToken),
+    );
+    if (stopped.exitCode !== 0) throw new Error("Computer control could not be revoked");
   }
 }
 
 async function settleForTeardown(pending: Promise<void> | undefined): Promise<void> {
   if (!pending) return;
   await Promise.race([pending.catch(() => undefined), delay(5_000, undefined, { ref: false })]);
-}
-
-function controlStreamStopCommand(controlToken?: string) {
-  // Anchor to the x11vnc binary (path-prefixed OK). Do not use an unanchored
-  // `x11vnc.*` pattern — E2B embeds the full script in the runner argv, so that
-  // would pkill the runner itself.
-  const stop = [
-    "pkill -f '(^|/)x11vnc .* -rfbport 5901' || true",
-    "pkill -f '^/usr/bin/python3 .*websockify.*6081' || true",
-    "pkill -f 'novnc_proxy.*--listen 6081' || true",
-    "rm -f /tmp/rakazo-control.vncpass",
-    "rm -f /tmp/rakazo-control.token",
-  ].join("; ");
-  if (!controlToken) return stop;
-  return `[ -f /tmp/rakazo-control.token ] && [ "$(cat /tmp/rakazo-control.token)" != ${shellQuote(controlToken)} ] || { ${stop}; }`;
 }
 
 async function observeE2BDesktop(
@@ -908,18 +948,22 @@ async function configurePortableBrowserProfiles(desktop: Sandbox): Promise<boole
   return true;
 }
 
+// Some desktop templates omit the URL field from Chrome's launcher. gtk-launch
+// then opens a blank tab when Chrome is already running. Preserve the vendor's
+// flags in a user-level override; do not replace an existing user customization.
+export const E2B_DEFAULT_BROWSER_SETUP_COMMAND = [
+  "command -v google-chrome >/dev/null 2>&1 || exit 0",
+  'mkdir -p "$HOME/.config/xfce4" "$HOME/.local/share/applications"',
+  'if [ ! -f "$HOME/.local/share/applications/google-chrome.desktop" ] && [ -f /usr/share/applications/google-chrome.desktop ]; then ' +
+    'awk \'/^\\[/ { main = ($0 == "[Desktop Entry]") } main && /^Exec=/ && $0 !~ /%[uUfF]/ { $0 = $0 " %U" } { print }\' ' +
+    '/usr/share/applications/google-chrome.desktop > "$HOME/.local/share/applications/google-chrome.desktop"; fi',
+  "printf 'WebBrowser=google-chrome\\n' > \"$HOME/.config/xfce4/helpers.rc\"",
+  "xdg-settings set default-web-browser google-chrome.desktop",
+].join(" && ");
+
 /** Point xdg-open / XFCE exo-open at Chrome. Lives outside the checkpointed workspace. */
 async function configureDefaultWebBrowser(desktop: Sandbox): Promise<void> {
-  await desktop.commands
-    .run(
-      [
-        "command -v google-chrome >/dev/null 2>&1 || exit 0",
-        'mkdir -p "$HOME/.config/xfce4"',
-        "printf 'WebBrowser=google-chrome\\n' > \"$HOME/.config/xfce4/helpers.rc\"",
-        "xdg-settings set default-web-browser google-chrome.desktop",
-      ].join(" && "),
-    )
-    .catch(() => undefined);
+  await desktop.commands.run(E2B_DEFAULT_BROWSER_SETUP_COMMAND).catch(() => undefined);
 }
 
 async function stopDesktopBrowsers(desktop: Sandbox): Promise<void> {

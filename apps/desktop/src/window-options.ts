@@ -12,7 +12,7 @@ export function warmWindowTtlMs(value: string | undefined) {
 function windowChrome(platform: NodeJS.Platform) {
   const mac = platform === "darwin";
   return {
-    backgroundColor: "#050506",
+    backgroundColor: "#F8F8F8",
     show: true,
     autoHideMenuBar: true,
     frame: mac,

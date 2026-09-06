@@ -14,8 +14,9 @@ export function decodeArtifactBase64(contentBase64: string): Uint8Array {
 export async function fetchArtifactBytes(
   target: ArtifactTarget,
   artifactId: string,
+  client = rpc,
 ): Promise<Uint8Array> {
-  const artifact = await rpc.artifacts.get({ ...target, artifactId });
+  const artifact = await client.artifacts.get({ ...target, artifactId });
   return decodeArtifactBase64(artifact.contentBase64);
 }
 
@@ -34,7 +35,8 @@ export async function downloadArtifact(
   artifactId: string,
   name: string,
   mimeType: string,
+  client = rpc,
 ): Promise<void> {
-  const bytes = await fetchArtifactBytes(target, artifactId);
+  const bytes = await fetchArtifactBytes(target, artifactId, client);
   downloadArtifactBytes(name, mimeType, bytes);
 }

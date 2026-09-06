@@ -4,13 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Your team of always-on agents." />
-    <meta name="theme-color" content="#050506" />
+    <meta name="theme-color" content="#FAFAFC" />
     <meta name="apple-mobile-web-app-title" content="2hands" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <title>2hands</title>
+    <script data-theme-bootstrap>
+      (() => {
+        let preference = "system";
+        try {
+          const saved = localStorage.getItem("rakazo.ui-theme");
+          if (saved === "light" || saved === "dark" || saved === "system") preference = saved;
+        } catch {}
+        const light = preference === "light" ||
+          (preference === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
+        const theme = light ? "light" : "dark";
+        const color = light ? "#FAFAFC" : "#121316";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.documentElement.style.backgroundColor = color;
+        document.querySelector('meta[name="theme-color"]').content = color;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
 import { rpc } from "../lib/api";
 import { appConnectPresentation } from "../lib/app-connect";
-import { native } from "../lib/native";
+import { useNativeTheme } from "../lib/theme";
 
 export function AppConnectCard({
   botId,
@@ -13,6 +13,7 @@ export function AppConnectCard({
   botId: string;
   block: Extract<MessageBlock, { kind: "app_connect" }>;
 }) {
+  const native = useNativeTheme();
   const [busy, setBusy] = useState(false);
   const [localStatus, setLocalStatus] = useState<"pending" | "connected">(block.status);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +76,8 @@ export function AppConnectCard({
         width: "90%",
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: "#232326",
-        backgroundColor: "#17171A",
+        borderColor: native.hairlineStrong,
+        backgroundColor: native.surface,
         paddingHorizontal: 16,
         paddingVertical: 14,
         gap: 8,
@@ -98,8 +99,8 @@ export function AppConnectCard({
           </Text>
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: "#ECECEE", fontSize: 15, fontWeight: "600" }}>{view.title}</Text>
-          <Text style={{ color: "#85858A", fontSize: 13.5 }} numberOfLines={2}>
+          <Text style={{ color: native.ink, fontSize: 15, fontWeight: "600" }}>{view.title}</Text>
+          <Text style={{ color: native.muted, fontSize: 13.5 }} numberOfLines={2}>
             {view.description}
           </Text>
         </View>
@@ -127,12 +128,12 @@ export function AppConnectCard({
             )}
           </Pressable>
         ) : (
-          <Text style={{ color: "#4ECB71", fontSize: 13.5, fontWeight: "600" }}>
+          <Text style={{ color: native.successSoft, fontSize: 13.5, fontWeight: "600" }}>
             {view.actionLabel}
           </Text>
         )}
       </View>
-      {error ? <Text style={{ color: "#E96B6B", fontSize: 13 }}>{error}</Text> : null}
+      {error ? <Text style={{ color: native.danger, fontSize: 13 }}>{error}</Text> : null}
     </View>
   );
 }

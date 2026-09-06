@@ -11,27 +11,30 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background: #050506;
-  color: #dfdfe2;
+  background: var(--rk-page);
+  color: var(--rk-body);
   font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 .rk-scroll::-webkit-scrollbar {
   width: 6px;
 }
 .rk-scroll {
-  scrollbar-color: #2a2a2e transparent;
+  scrollbar-color: var(--rk-hairline-strong) transparent;
   scrollbar-width: thin;
 }
 .rk-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .rk-scroll::-webkit-scrollbar-thumb {
-  background: #2a2a2e;
+  background: var(--rk-hairline-strong);
   border-radius: 3px;
 }
 .rk-scroll::-webkit-scrollbar-thumb:hover {
-  background: #414147;
+  background: var(--rk-muted-2);
 }
 
 .app-drag {
@@ -45,7 +48,7 @@ body,
 
 .rk-schedule-select {
   appearance: none;
-  background-color: #24242a;
+  background-color: var(--rk-surface-2);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%239A9AA0' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
@@ -53,7 +56,7 @@ body,
   border-radius: 8px;
   padding-block: 7px;
   padding-inline: 11px 26px;
-  color: #ececee;
+  color: var(--rk-ink);
   font: inherit;
   font-size: 14px;
   cursor: pointer;
@@ -71,5 +74,154 @@ body,
   }
   50% {
     opacity: 0.3;
+  }
+}
+
+/* Shared interaction treatment across the application, including native-sized touch targets. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--rk-focus-ring);
+  outline-offset: 3px;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+[data-testid="transcript"] > [data-message-id] {
+  width: 100%;
+  max-width: 800px;
+  margin-inline: auto;
+}
+[data-testid="composer-bar"] {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+[data-testid="composer-bar"]:focus-within {
+  border-color: color-mix(in srgb, var(--rk-focus-ring) 45%, var(--rk-hairline-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rk-focus-ring) 7%, transparent);
+}
+@media (max-width: 767px) {
+  [data-testid="composer-bar"] button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  [data-testid="bot-model-picker"] {
+    min-height: 44px;
+  }
+}
+
+.rk-balance-meter {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--rk-surface-2);
+}
+.rk-balance-meter::-webkit-meter-bar {
+  border: 0;
+  border-radius: 999px;
+  background: var(--rk-surface-2);
+}
+.rk-balance-meter::-webkit-meter-optimum-value {
+  border-radius: 999px;
+  background: var(--rk-accent);
+}
+.rk-balance-meter::-moz-meter-bar {
+  border-radius: 999px;
+  background: var(--rk-accent);
+}
+
+[data-testid="composer-bar"] textarea:focus-visible {
+  outline: none;
+}
+
+.rk-shell-sidebar .rk-roster-row {
+  transition: background-color 120ms ease;
+}
+.rk-shell-sidebar .rk-roster-row:hover {
+  box-shadow: inset 0 0 0 1px var(--rk-hairline);
+}
+.rk-conversation-header {
+  min-height: 60px;
+}
+.rk-composer-region > * {
+  max-width: 800px;
+  margin-inline: auto;
+}
+.rk-composer {
+  grid-template-columns: 36px 36px minmax(0, 1fr) auto auto;
+  border-radius: var(--rk-radius-composer, 24px);
+  box-shadow: 0 2px 10px #00000004;
+}
+.rk-composer-input {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding: 3px 3px 0;
+}
+.rk-composer-input textarea {
+  min-height: 44px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.rk-composer > button {
+  grid-row: 2;
+  align-self: center;
+  border-color: transparent;
+  border-radius: 10px;
+}
+.rk-composer > button:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--rk-hairline-strong);
+}
+.rk-composer-send {
+  grid-column: 4;
+}
+.rk-composer-stop {
+  grid-column: 5;
+}
+.rk-user-message {
+  max-width: min(84%, 640px);
+  padding: 12px 16px;
+  border: 1px solid var(--rk-user-message-border);
+  border-radius: 24px 24px 4px 24px;
+  background: var(--rk-user-message);
+  color: var(--rk-user-message-ink);
+  box-shadow: 0 1.5px 2px #00000005;
+  font-size: 16px;
+  line-height: 1.5;
+}
+[dir="rtl"] .rk-user-message {
+  border-radius: 24px 24px 24px 4px;
+}
+.rk-assistant-message {
+  width: 100%;
+  padding: 0 2px;
+  color: var(--rk-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.rk-assistant-message > :first-child {
+  margin-top: 0;
+}
+.rk-overlay-backdrop {
+  background: rgb(25 26 35 / 22%);
+  backdrop-filter: blur(3px);
+}
+[data-theme="dark"] .rk-overlay-backdrop {
+  background: rgb(0 0 0 / 48%);
+}
+@media (max-width: 767px) {
+  .rk-composer {
+    grid-template-columns: 44px 44px minmax(0, 1fr) auto auto;
+    gap: 6px;
+  }
+  .rk-conversation-header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .rk-user-message {
+    max-width: 92%;
   }
 }

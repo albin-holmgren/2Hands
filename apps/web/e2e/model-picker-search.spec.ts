@@ -8,7 +8,7 @@ test("model dropdown search and provider group headers", async ({ page }, testIn
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Models", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close model settings" })).toBeVisible();
 
   // OpenRouter has many models so group headers and search are obvious.

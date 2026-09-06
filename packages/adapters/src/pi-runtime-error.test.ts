@@ -13,6 +13,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
 
 vi.mock("@earendil-works/pi-ai/providers/all", () => ({
   builtinModels: () => ({
+    setProvider: vi.fn(),
     getModel: () => ({ provider: "openai-codex", id: "gpt-test" }),
     streamSimple: vi.fn(),
   }),

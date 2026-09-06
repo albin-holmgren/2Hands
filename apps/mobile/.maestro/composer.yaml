@@ -1,0 +1,77 @@
+appId: com.rakazo.app
+name: 2hands native composer and computer access
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- longPressOn:
+    id: "composer-input"
+- tapOn:
+    text: "(?i)select all"
+    optional: true
+- eraseText: 1
+- inputText: "Compare two practical approaches and explain their tradeoffs before making a recommendation."
+- takeScreenshot: screenshots/composer-keyboard
+# Multiline iOS input has no keyboard Done button; tap the transcript to dismiss.
+- tapOn:
+    point: "50%, 27%"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/composer-draft
+- tapOn:
+    id: "composer-model-picker"
+- assertVisible: "Search models"
+- takeScreenshot: screenshots/composer-models
+- tapOn: "Close models"
+- waitForAnimationToEnd
+- tapOn: "Open computer"
+- extendedWaitUntil:
+    visible: "Teach a task"
+    timeout: 30000
+- takeScreenshot: screenshots/work
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Compare two practical approaches and explain their tradeoffs before making a recommendation."
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- longPressOn:
+    id: "composer-input"
+- tapOn:
+    text: "(?i)select all"
+    optional: true
+- eraseText: 1
+- inputText: "Keep working until I stop you."
+- tapOn:
+    id: "composer-send"
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- inputText: "Include a short comparison table."
+- takeScreenshot: screenshots/composer-followup
+- tapOn:
+    id: "composer-send"
+- tapOn: "Stop"
+- extendedWaitUntil:
+    notVisible: "Stop"
+    timeout: 30000
+# Multiline iOS input has no keyboard Done button; tap the transcript to dismiss.
+- tapOn:
+    point: "50%, 27%"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/conversation

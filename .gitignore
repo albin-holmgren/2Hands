@@ -17,6 +17,7 @@ playwright-report
 data
 apps/**/data
 .tmp
+apps/web/e2e/.tmp-*
 .DS_Store
 apps/web/dist
 apps/desktop/dist
@@ -25,6 +26,7 @@ apps/desktop/e2e/screenshots
 apps/mobile/.expo
 apps/mobile/dist
 apps/mobile/ios
+apps/mobile/android
 packages/db/src/generated
 infra/sandboxes/supervisor/dist
 *.log
@@ -44,3 +46,6 @@ PRODUCT_PLAN.md
 apps/web/src/locales/**/*.mjs
 apps/web/src/locales/**/*.js
 apps/web/scripts/msgids.json
+# Local browser release evidence is uploaded by CI, never committed.
+**/playwright-report-marketing/
+**/test-results-marketing/

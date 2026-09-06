@@ -1,6 +1,8 @@
-import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@rakazo/core";
-import { type CSSProperties, memo, useId, useSyncExternalStore } from "react";
+import { ACTIVE_RUN_STATUSES, avatarIdentitySeed } from "@rakazo/core";
+import { assistantCharacter, assistantPalette } from "@rakazo/ui-tokens";
+import { type CSSProperties, memo, useId } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
+import { BrandMark } from "./brand.js";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
 
@@ -27,6 +29,7 @@ export const BotAvatar = memo(function BotAvatar({
   if ((variant ?? preferredVariant) === "organic") {
     return (
       <OrganicAvatar
+        gradId={gradId}
         color={color}
         identity={identity}
         size={size}
@@ -161,91 +164,76 @@ function OrganicAvatar({
   size,
   isWorking,
   className,
+  gradId,
 }: {
   color: string;
   identity?: string;
   size: number;
   isWorking: boolean;
   className?: string;
+  gradId: string;
 }) {
-  const reducedMotion = useSyncExternalStore(
-    subscribeToReducedMotion,
-    reducedMotionSnapshot,
-    () => false,
-  );
-  const seed = avatarIdentitySeed(identity || color || "#8B5CF6");
-  const duration = `${4.8 + (seed % 24) / 10}s`;
-  const shapeA = organicAvatarPath(seed);
-  const shapeB = organicAvatarPath(seed, 0.42);
+  const seed = avatarIdentitySeed(identity || color || "#4B73FF");
+  const character = assistantCharacter(seed);
+  const palette = assistantPalette(color);
+  const bodyGradient = `${gradId}-body`;
 
   return (
-    <svg
-      viewBox="-60 -60 120 120"
+    <div
       aria-hidden="true"
-      className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
+      className={cn(
+        "rakazo-bot-avatar rakazo-organic-avatar relative shrink-0 select-none",
+        className,
+      )}
       data-working={isWorking}
-      data-shape-family={seed % 10}
-      data-eye-pattern={seed % 4}
-      style={{
-        width: size,
-        height: size,
-        flex: "none",
-      }}
+      data-avatar-family={character.name.toLowerCase()}
+      style={{ width: size, height: size, flex: "none" }}
     >
-      {(["idle", "working"] as const).map((mode) => (
-        <path
-          key={mode}
-          className={`rakazo-organic-avatar-body rakazo-organic-avatar-body-${mode}`}
-          d={shapeA}
-          fill={color}
-          style={
-            {
-              "--rakazo-organic-path": `path("${shapeA}")`,
-              filter:
-                mode === "working"
-                  ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
-                  : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
-            } as CSSProperties
-          }
-        >
-          {!reducedMotion ? (
-            <animate
-              attributeName="d"
-              values={`${shapeA};${shapeB};${shapeA}`}
-              dur={duration}
-              repeatCount="indefinite"
-            />
-          ) : null}
-        </path>
-      ))}
-      <g transform={`rotate(${(seed % 9) - 4})`}>
-        {(["idle", "working"] as const).map((mode) => (
-          <g
-            key={mode}
-            className={`rakazo-organic-avatar-eyes rakazo-organic-avatar-eyes-${mode}`}
-            fill="#101014"
+      <svg className="block h-full w-full" viewBox="0 0 128 128" fill="none">
+        <defs>
+          <radialGradient
+            id={bodyGradient}
+            cx={character.gradient.cx}
+            cy={character.gradient.cy}
+            r={character.gradient.r}
+            gradientUnits="userSpaceOnUse"
           >
-            <rect x="-14" y="-12" width="7" height="24" rx="3.5" />
-            <rect x="7" y="-12" width="7" height="24" rx="3.5" />
-          </g>
-        ))}
-      </g>
-    </svg>
+            <stop stopColor={palette.start} />
+            <stop offset={character.gradient.middleOffset} stopColor={palette.middle} />
+            <stop offset="1" stopColor={palette.end} />
+          </radialGradient>
+        </defs>
+        <path d={character.path} fill={`url(#${bodyGradient})`} />
+        <g fill={palette.eye}>
+          {character.eyes.map((eye, index) => (
+            <rect key={index} {...eye} />
+          ))}
+        </g>
+      </svg>
+      <svg
+        className="rakazo-bot-avatar-ring pointer-events-none absolute inset-0 h-full w-full"
+        viewBox="0 0 128 128"
+        fill="none"
+      >
+        <circle
+          cx="64"
+          cy="64"
+          r="60"
+          stroke={`url(#${gradId})`}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="82 295"
+        />
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop stopColor={palette.middle} />
+            <stop offset="1" stopColor={palette.end} stopOpacity="0.2" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
   );
 }
-
-const reducedMotionMedia = "(prefers-reduced-motion: reduce)";
-
-function reducedMotionSnapshot(): boolean {
-  return window.matchMedia(reducedMotionMedia).matches;
-}
-
-function subscribeToReducedMotion(onChange: () => void): () => void {
-  const media = window.matchMedia(reducedMotionMedia);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
 function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -287,14 +275,9 @@ function adjustColor(hex: string, percent: number): string {
 
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <div className="flex h-11 w-11 items-center justify-center gap-1.5 rounded-full bg-[#16161A]">
-        <span className="h-4 w-[7px] rounded-full bg-[#F7F7F4]" />
-        <span className="h-4 w-[7px] rounded-full bg-[#F7F7F4]" />
-      </div>
-      <span className="font-[Aeonik,ui-sans-serif] text-[28px] tracking-tight text-[#1B1B1E]">
-        2hands
-      </span>
+    <div className={cn("flex items-center gap-2.5 text-[var(--rk-ink)]", className)}>
+      <BrandMark size={36} />
+      <span className="text-[24px] font-semibold tracking-tight">2hands</span>
     </div>
   );
 }

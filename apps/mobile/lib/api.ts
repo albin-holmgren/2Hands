@@ -11,16 +11,19 @@ import type {
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
+  executionErrorFromResponse,
   isRunTerminalEvent,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
   reduceLiveMessageBlocks,
+  runFailureCode,
   runFailureError,
   type ThreadHistory,
   upsertMessageById,
 } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
+import { clearComposerDrafts, composerSessionEpoch, setComposerAccount } from "./composer-drafts";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import { resumeLiveNotifications } from "./live-notifications";
 import {
@@ -39,6 +42,16 @@ const RPC_TIMEOUT_MS = 8_000;
 
 let cachedApiBase: string | undefined;
 let cachedSpaceId = "";
+// Endpoint and bearer persistence form one boundary: neither may change halfway through the other.
+let credentialTransitionPending = false;
+const sessionExpiredListeners = new Set<() => void>();
+export function subscribeSessionExpired(listener: () => void) {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+const credentialTransitionError = "Wait for the current sign-in or server change to finish";
 
 function responseErrorMessage(body: unknown, fallback: string): string {
   return typeof body === "object" && body && "message" in body
@@ -54,12 +67,16 @@ export function currentApiBase() {
 
 export async function loadApiBase() {
   let apiBase = defaultApiBase();
+  let migrateHostedOrigin = false;
   try {
     const stored = await SecureStore.getItemAsync(ENDPOINT_KEY);
     if (stored) {
       const parsed = normalizeApiBase(stored);
       if (parsed.ok) {
         apiBase = parsed.url;
+        // Match the saved value before normalization: custom ports, paths and
+        // lookalike hosts must never opt into the official hostname migration.
+        migrateHostedOrigin = /^https:\/\/(?:www\.)?2hands\.ai\/?$/.test(stored);
       }
     }
   } catch {
@@ -72,6 +89,11 @@ export async function loadApiBase() {
     if (!storedSpace) await recoverSpaceRollback(cachedApiBase);
   } catch {
     // Keep any in-memory selection when SecureStore is temporarily unavailable.
+  }
+  if (migrateHostedOrigin) {
+    // Reuse the same credential/draft wipe and rollback as an explicit server
+    // change. A cross-origin redirect cannot carry the old bearer safely.
+    await saveApiBase("https://app.2hands.ai");
   }
   return cachedApiBase;
 }
@@ -220,10 +242,10 @@ async function recoverSpaceRollback(apiBase: string) {
   }
 }
 
-export async function saveApiBase(input: string): Promise<EndpointResult> {
+async function saveApiBaseUnlocked(input: string): Promise<EndpointResult> {
   const parsed = normalizeApiBase(input);
   if (!parsed.ok) return parsed;
-  if (parsed.url === defaultApiBase()) return resetApiBase();
+  if (parsed.url === defaultApiBase()) return resetApiBaseUnlocked();
   const previous = currentApiBase();
   let cleared: { previousToken: string; previousSpace: string } | undefined;
   if (parsed.url !== previous) {
@@ -242,7 +264,7 @@ export async function saveApiBase(input: string): Promise<EndpointResult> {
   return parsed;
 }
 
-export async function resetApiBase(): Promise<EndpointResult> {
+async function resetApiBaseUnlocked(): Promise<EndpointResult> {
   const previous = currentApiBase();
   const url = defaultApiBase();
   let cleared: { previousToken: string; previousSpace: string } | undefined;
@@ -262,6 +284,22 @@ export async function resetApiBase(): Promise<EndpointResult> {
   cachedApiBase = url;
   await clearStoredValue(SPACE_ROLLBACK_KEY);
   return { ok: true, url };
+}
+
+export async function saveApiBase(input: string): Promise<EndpointResult> {
+  return changeApiBase(() => saveApiBaseUnlocked(input));
+}
+export async function resetApiBase(): Promise<EndpointResult> {
+  return changeApiBase(resetApiBaseUnlocked);
+}
+async function changeApiBase(change: () => Promise<EndpointResult>): Promise<EndpointResult> {
+  if (credentialTransitionPending) return { ok: false, error: credentialTransitionError };
+  credentialTransitionPending = true;
+  try {
+    return await change();
+  } finally {
+    credentialTransitionPending = false;
+  }
 }
 
 export async function authHeaders(
@@ -292,20 +330,35 @@ async function authenticateWithEmail(
   action: "sign-in" | "sign-up",
   input: { email: string; password: string; name?: string },
 ) {
-  const res = await fetch(`${currentApiBase()}/api/auth/${action}/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://" },
-    body: JSON.stringify(input),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(responseErrorMessage(body, `Could not ${action.replace("-", " ")}`));
+  if (credentialTransitionPending) throw new Error(credentialTransitionError);
+  credentialTransitionPending = true;
+  const requestBase = currentApiBase();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(`${requestBase}/api/auth/${action}/email`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json", origin: "rakazo://" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(responseErrorMessage(body, `Could not ${action.replace("-", " ")}`));
+    }
+    const token = tokenFromAuthResponse(res, body);
+    if (!token)
+      throw new Error(`${action === "sign-in" ? "Sign-in" : "Sign-up"} did not return a session`);
+    if (!(await clearSpace())) throw new Error("Could not clear the previous space");
+    await clearComposerDrafts();
+    await saveSessionToken(token);
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("Sign-in timed out. Try again.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    credentialTransitionPending = false;
   }
-  const token = tokenFromAuthResponse(res, body);
-  if (!token)
-    throw new Error(`${action === "sign-in" ? "Sign-in" : "Sign-up"} did not return a session`);
-  if (!(await clearSpace())) throw new Error("Could not clear the previous space");
-  await saveSessionToken(token);
 }
 
 export function signIn(email: string, password: string) {
@@ -316,7 +369,11 @@ export function signUp(email: string, password: string, name: string) {
   return authenticateWithEmail("sign-up", { email, password, name });
 }
 
-export type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: string | null };
+export type PasswordResetCapabilities = {
+  passwordReset: boolean;
+  resetUrl: string | null;
+  signupsEnabled?: boolean;
+};
 
 export async function passwordResetCapabilities(): Promise<PasswordResetCapabilities> {
   const response = await fetch(`${currentApiBase()}/api/auth/capabilities`, {
@@ -337,9 +394,10 @@ export async function requestPasswordReset(email: string, redirectTo: string): P
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const response = await fetch(`${currentApiBase()}/api/auth/change-password`, {
+  const context = await captureApiRequestContext();
+  const response = await fetch(`${context.apiBase}/api/auth/change-password`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
+    headers: { "content-type": "application/json", origin: "rakazo://", ...context.headers },
     body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
   });
   const body = await response.json().catch(() => ({}));
@@ -347,30 +405,53 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function signOut() {
-  await rpc("notifications/unregisterPush").catch(() => undefined);
-  const headers = await authHeaders();
-  await fetch(`${currentApiBase()}/api/auth/sign-out`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...headers },
-  }).catch(() => undefined);
-  const sessionCleared = await clearSessionToken();
-  const spaceCleared = await clearSpace();
-  if (!sessionCleared || !spaceCleared) throw new Error("Could not clear the local session");
+  if (credentialTransitionPending) throw new Error(credentialTransitionError);
+  credentialTransitionPending = true;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const context = await captureApiRequestContext();
+    await rpc("notifications/unregisterPush", {}, { requestContext: context }).catch(
+      () => undefined,
+    );
+    await fetch(`${context.apiBase}/api/auth/sign-out`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json", origin: "rakazo://", ...context.headers },
+    }).catch(() => undefined);
+    const sessionCleared = await clearSessionToken();
+    const spaceCleared = await clearSpace();
+    if (!sessionCleared || !spaceCleared) throw new Error("Could not clear the local session");
+  } finally {
+    clearTimeout(timer);
+    credentialTransitionPending = false;
+  }
 }
 
 export async function deleteAccount(password: string) {
-  await rpc("notifications/unregisterPush").catch(() => undefined);
-  const res = await fetch(`${currentApiBase()}/api/auth/delete-user`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
-    body: JSON.stringify({ password }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(responseErrorMessage(body, "Could not delete account"));
+  if (credentialTransitionPending) throw new Error(credentialTransitionError);
+  credentialTransitionPending = true;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const context = await captureApiRequestContext();
+    await rpc("notifications/unregisterPush", {}, { requestContext: context }).catch(
+      () => undefined,
+    );
+    const res = await fetch(`${context.apiBase}/api/auth/delete-user`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json", origin: "rakazo://", ...context.headers },
+      body: JSON.stringify({ password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(responseErrorMessage(body, "Could not delete account"));
+    await clearSessionToken();
+    await clearSpace();
+  } finally {
+    clearTimeout(timer);
+    credentialTransitionPending = false;
   }
-  await clearSessionToken();
-  await clearSpace();
 }
 
 export async function rpc<T>(
@@ -382,6 +463,7 @@ export async function rpc<T>(
     requestContext?: ApiRequestContext;
   } = {},
 ): Promise<T> {
+  const draftEpoch = composerSessionEpoch();
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (options.signal?.aborted) abort();
@@ -389,22 +471,48 @@ export async function rpc<T>(
   const timer =
     options.timeoutMs === null ? undefined : setTimeout(abort, options.timeoutMs ?? RPC_TIMEOUT_MS);
   try {
-    const res = await fetch(`${options.requestContext?.apiBase ?? currentApiBase()}/rpc/${proc}`, {
+    const context = options.requestContext ?? (await captureApiRequestContext());
+    const requestBase = context.apiBase;
+    const requestAuth = context.headers;
+    const res = await fetch(`${requestBase}/rpc/${proc}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         origin: "rakazo://",
-        ...(options.requestContext?.headers ?? (await authHeaders())),
+        ...requestAuth,
       },
       body: JSON.stringify({ json: body }),
       signal: controller.signal,
     });
+    if (res.status === 401) {
+      await expireCurrentSession(
+        requestBase,
+        requestAuth.authorization?.replace(/^Bearer /, "") ?? "",
+      );
+    }
     const parsed = (await res.json()) as { json?: T; error?: { message?: string } };
-    if (!res.ok || parsed.error) throw new Error(parsed.error?.message ?? `rpc ${proc} failed`);
+    if (!res.ok || parsed.error) throw executionErrorFromResponse(parsed, `rpc ${proc} failed`);
+    if (proc === "me" && requestBase === currentApiBase()) {
+      const me = parsed.json as { userId?: unknown } | undefined;
+      if (typeof me?.userId === "string") setComposerAccount(requestBase, me.userId, draftEpoch);
+    }
     return parsed.json as T;
   } finally {
     if (timer) clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
+  }
+}
+
+async function expireCurrentSession(requestBase: string, requestToken: string) {
+  if (!requestToken || requestBase !== currentApiBase() || credentialTransitionPending) return;
+  credentialTransitionPending = true;
+  try {
+    const current = await snapshotSessionToken();
+    if (!current.ok || current.value !== requestToken) return;
+    await clearSessionToken();
+    for (const listener of sessionExpiredListeners) listener();
+  } finally {
+    credentialTransitionPending = false;
   }
 }
 
@@ -425,7 +533,7 @@ export type MobileBot = Pick<
   | "updatedAt"
   | "computerMode"
 > &
-  Partial<Pick<Bot, "parentBotId" | "spaceId">>;
+  Partial<Pick<Bot, "parentBotId" | "spaceId" | "modelProvider" | "modelId" | "thinkingLevel">>;
 
 export type MobileBotSection = BotSection;
 
@@ -475,7 +583,13 @@ export type MobileSnapshot = {
   cursor?: number;
   messages: MobileMessage[];
   olderCursor: number | null;
-  run: { id: string; botId?: string; status: string; error?: string | null } | null;
+  run: {
+    id: string;
+    botId?: string;
+    status: string;
+    error?: string | null;
+    errorCode?: import("@rakazo/contracts").ExecutionErrorCode;
+  } | null;
   activeRuns?: Array<{ id: string; botId?: string; status: string }>;
   members?: MobileGroup["members"];
   computer?: {
@@ -678,7 +792,7 @@ export function applyMobileThreadEvent(
       // A failed run stays in run so the thread can say why it stopped (see reduceThreadSnapshot).
       run:
         endedRun && failure
-          ? { ...endedRun, status: "failed", error: failure }
+          ? { ...endedRun, status: "failed", error: failure, errorCode: runFailureCode(event) }
           : primaryEnded
             ? (activeRuns?.[0] ?? null)
             : prev.run,

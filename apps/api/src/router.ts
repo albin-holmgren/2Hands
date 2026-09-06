@@ -63,6 +63,7 @@ import {
   screenLeaseIdForRun,
   scriptedCatalogEntry,
   serializeModelSecret,
+  settleComputerUsage,
   takeoverLeaseMs,
   toComputerRef,
   toStringRecord,
@@ -95,6 +96,7 @@ import {
   createSpaceForMember,
   createThreadMessageInTransaction,
   deleteUnreferencedCredentialSecret,
+  ensureChiefOfStaffBot,
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
@@ -122,6 +124,7 @@ import {
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
+import { throwExecutionRpcError } from "./execution-errors.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import { chooseFocus, markAppConnected, startOnboarding } from "./onboarding.js";
 import {
@@ -132,7 +135,7 @@ import {
   platformGatewayConfigured,
 } from "./plan-gates.js";
 import { listSpaceRuns } from "./runs.js";
-import { addScreenProxyCapability } from "./screen-proxy.js";
+import { addScreenProxyCapability, proxyExternalScreen } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import {
@@ -143,6 +146,12 @@ import {
   UpdaterProxyError,
 } from "./server-update.js";
 import { billingSnapshot, createCheckoutUrl, createPortalUrl } from "./stripe-billing.js";
+import {
+  cancelPlanChange,
+  planChangeStatus,
+  schedulePlanChange,
+  setCancelAtPeriodEnd,
+} from "./stripe-plan-changes.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import { isPeerRun, loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 import {
@@ -372,7 +381,11 @@ export function createRouter(deps: RouterDeps) {
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
-    return next({ context: { ...context, actor: context.actor } });
+    try {
+      return await next({ context: { ...context, actor: context.actor } });
+    } catch (error) {
+      throwExecutionRpcError(error);
+    }
   });
 
   return os.router({
@@ -388,6 +401,37 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     billing: {
+      planChangeStatus: authed.billing.planChangeStatus.handler(async ({ context }) =>
+        planChangeStatus({
+          prisma: deps.prisma,
+          spaceId: context.actor.spaceId,
+          userId: context.actor.userId,
+        }),
+      ),
+      schedulePlanChange: authed.billing.schedulePlanChange.handler(async ({ context, input }) =>
+        schedulePlanChange({
+          prisma: deps.prisma,
+          spaceId: context.actor.spaceId,
+          userId: context.actor.userId,
+          ...input,
+        }),
+      ),
+      cancelPlanChange: authed.billing.cancelPlanChange.handler(async ({ context }) =>
+        cancelPlanChange({
+          prisma: deps.prisma,
+          spaceId: context.actor.spaceId,
+          userId: context.actor.userId,
+        }),
+      ),
+      setCancelAtPeriodEnd: authed.billing.setCancelAtPeriodEnd.handler(
+        async ({ context, input }) =>
+          setCancelAtPeriodEnd({
+            prisma: deps.prisma,
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            ...input,
+          }),
+      ),
       get: authed.billing.get.handler(async ({ context }) =>
         billingSnapshot(deps.prisma, context.actor.spaceId),
       ),
@@ -396,12 +440,14 @@ export function createRouter(deps: RouterDeps) {
           const url = await createCheckoutUrl({
             prisma: deps.prisma,
             spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
             email: context.actor.email,
             plan: input.plan,
             webOrigin: deps.env.webOrigin,
           });
           return { url };
         } catch (error) {
+          if (error instanceof ORPCError) throw error;
           throw new ORPCError("BAD_REQUEST", {
             message: error instanceof Error ? error.message : "Could not start checkout",
           });
@@ -412,10 +458,12 @@ export function createRouter(deps: RouterDeps) {
           const url = await createPortalUrl({
             prisma: deps.prisma,
             spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
             webOrigin: deps.env.webOrigin,
           });
           return { url };
         } catch (error) {
+          if (error instanceof ORPCError) throw error;
           throw new ORPCError("BAD_REQUEST", {
             message: error instanceof Error ? error.message : "Could not open billing portal",
           });
@@ -764,8 +812,9 @@ export function createRouter(deps: RouterDeps) {
           }
         }
         await assertBotModelAndHarness(deps.prisma, context.actor, {
-          modelProvider: input.modelProvider,
-          modelId: input.modelId,
+          modelProvider:
+            input.modelProvider === undefined ? existing.modelProvider : input.modelProvider,
+          modelId: input.modelId === undefined ? existing.modelId : input.modelId,
           codingHarness: input.codingHarness,
         });
         const thinkingLevel = input.thinkingLevel;
@@ -1337,10 +1386,6 @@ export function createRouter(deps: RouterDeps) {
       boot: authed.computer.boot.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);
         if (!bot.computer) throw new IsolationError();
-        if (bot.computer.state === "running" && bot.computer.providerRef) {
-          scheduleComputerSleep(deps.jobs, bot.computer.id);
-          return computerStatus(deps, context.actor, input.botId);
-        }
         const ctx = computerContext(context.actor, bot.id, "boot");
         const manualRunId = `boot:${randomUUID()}`;
         let lease: ComputerExecutionLease | null;
@@ -1352,6 +1397,17 @@ export function createRouter(deps: RouterDeps) {
           });
         } catch (error) {
           if (error instanceof ComputerBusyError) {
+            // Opening the Computer pane must not interrupt an active bot's
+            // lease. That run owns provisioning; the pane can observe its state.
+            if (
+              bot.computer.state === "running" &&
+              bot.computer.providerRef &&
+              (await deps.prisma.run.findFirst({
+                where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+                select: { id: true },
+              }))
+            )
+              return computerStatus(deps, context.actor, input.botId);
             throw new ORPCError("CONFLICT", { message: "Computer is busy" });
           }
           throw error;
@@ -1375,7 +1431,7 @@ export function createRouter(deps: RouterDeps) {
         const claimed = await deps.prisma.computer.updateMany({
           where: {
             id: bot.computer.id,
-            state: { not: "suspending" },
+            state: { notIn: ["suspending", "booting"] },
             executionLeases: {
               none: { botId: { not: bot.id }, expiresAt: { gt: now } },
             },
@@ -1384,7 +1440,10 @@ export function createRouter(deps: RouterDeps) {
         });
         if (claimed.count !== 1) {
           throw new ORPCError("CONFLICT", {
-            message: "Other Team bots are still using this computer",
+            message:
+              bot.computer.state === "booting"
+                ? "Computer is starting. Try again shortly."
+                : "Other Team bots are still using this computer",
           });
         }
         const otherRun = await deps.prisma.run.findFirst({
@@ -1410,9 +1469,18 @@ export function createRouter(deps: RouterDeps) {
         try {
           if (bot.computer.providerRef) {
             const ctx = computerContext(context.actor, bot.id, "stop");
+            const computerId = bot.computer.id;
             const ref = toComputerRef(bot.computer);
-            await checkpointAndRecordComputerWorkspace(deps, bot.computer, ref, ctx);
+            await Promise.race([
+              checkpointAndRecordComputerWorkspace(deps, bot.computer, ref, ctx),
+              new Promise<void>((_, reject) => {
+                setTimeout(() => reject(new Error("computer checkpoint timed out")), 20_000);
+              }),
+            ]).catch((error: unknown) => {
+              console.error(`computer ${computerId} stop checkpoint`, error);
+            });
             await deps.sandbox.stop(ref, ctx);
+            await settleComputerUsage(deps.prisma, bot.computer.id);
           }
           await deps.prisma.computer.update({
             where: { id: bot.computer.id },
@@ -1781,7 +1849,10 @@ export function createRouter(deps: RouterDeps) {
             deps.env.screenProxySecret,
             deps.env.webOrigin,
             undefined,
-            { proxyExternal: bot.computer.kind === "box" },
+            {
+              proxyExternal: proxyExternalScreen(bot.computer.kind),
+              upstreamHeaders: session.upstreamHeaders,
+            },
           ),
         };
       }),
@@ -1793,7 +1864,7 @@ export function createRouter(deps: RouterDeps) {
             data: { updatedAt: new Date() },
           });
           await touchRunningComputer(
-            { sandbox: deps.sandbox, jobs: deps.jobs },
+            { prisma: deps.prisma, sandbox: deps.sandbox, jobs: deps.jobs },
             {
               id: bot.computer.id,
               homeKey: bot.computer.homeKey,
@@ -2766,6 +2837,11 @@ export function createRouter(deps: RouterDeps) {
       },
     },
     onboarding: {
+      ensureChiefOfStaff: authed.onboarding.ensureChiefOfStaff.handler(async ({ context }) => {
+        const existing = await repos.listBots(context.actor);
+        if (existing[0]) return existing[0];
+        return ensureChiefOfStaffBot(deps.prisma, context.actor);
+      }),
       start: authed.onboarding.start.handler(async ({ context, input }) => {
         await startOnboarding(
           { prisma: deps.prisma, events: deps.events, composio: deps.composio },
@@ -3727,7 +3803,7 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
     computerHost: computerHostFor(settings?.computerHost, deps.env.sandboxProvider),
     canChooseHostComputer: actor.isDeploymentOwner && deps.env.sandboxProvider === "docker",
     sandboxProvider: deps.env.sandboxProvider,
-    avatarStyle: user.avatarStyle === "organic" ? "organic" : "robot",
+    avatarStyle: user.avatarStyle === "robot" ? "robot" : "organic",
     plan: billing?.plan,
     planName: billing?.entitlements.name,
   };

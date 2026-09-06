@@ -24,7 +24,7 @@ test("pinned bots and sidebar sections persist", async ({ page }, testInfo) => {
   await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   await captureScreenshot(page, testInfo, "move-to-section-menu");
   await page
-    .getByRole("menu", { name: /Move Chief to section/ })
+    .getByRole("menu", { name: /Move Chief.* to section/ })
     .getByText("New section")
     .click();
   const dialog = page.getByRole("dialog", { name: "New section" });
@@ -43,7 +43,7 @@ test("pinned bots and sidebar sections persist", async ({ page }, testInfo) => {
   await bot.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   await page
-    .getByRole("menu", { name: /Move Chief to section/ })
+    .getByRole("menu", { name: /Move Chief.* to section/ })
     .getByRole("menuitem", { name: "Unassigned", exact: true })
     .click();
   await expect(sidebar.locator('[data-sidebar-group="unassigned"]')).toContainText("Chief");
@@ -124,8 +124,12 @@ test("bots can be reordered by drag or keyboard and keep that order", async ({ p
 
   const betaRow = sidebar.locator(`[data-roster-bot-id="${beta.id}"]`);
   await betaRow.focus();
+  const keyboardReorderSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/reorder") && response.ok(),
+  );
   await page.keyboard.press("Alt+ArrowDown");
   await expect.poll(order).toEqual([chiefId, beta.id, alpha.id]);
+  await keyboardReorderSaved;
   await page.reload();
   await expect.poll(order).toEqual([chiefId, beta.id, alpha.id]);
 
@@ -164,21 +168,38 @@ test("bots can be reordered by drag or keyboard and keep that order", async ({ p
   await expect.poll(order).toEqual([beta.id, alpha.id, chiefId]);
 });
 
-test("chat composer controls are vertically centered", async ({ page }) => {
+test("composer toolbar is aligned below its full-width input", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `composer-layout-${stamp}@rakazo.test`, "password12", "Composer Layout");
   await completeOnboarding(page);
 
-  const centers = await page.getByTestId("composer-bar").evaluate((composer) =>
-    ["Attach file", "Dictate", "Message Chief", "Send"].map((label) => {
-      const element = composer.querySelector<HTMLElement>(`[aria-label="${label}"]`);
-      if (!element) throw new Error(`Missing composer control: ${label}`);
-      const box = element.getBoundingClientRect();
-      return box.top + box.height / 2;
-    }),
-  );
-
-  expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await page.getByTestId("composer-bar").evaluate((composer) => {
+      const bounds = (selector: string) => {
+        const element = composer.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing composer control: ${selector}`);
+        return element.getBoundingClientRect().toJSON();
+      };
+      return {
+        input: bounds('textarea[name="chat-message"]'),
+        controls: [
+          '[aria-label="Attach file"]',
+          '[aria-label="Dictate"]',
+          '[aria-label="Send"]',
+        ].map(bounds),
+      };
+    });
+    const centers = layout.controls.map((box) => box.y + box.height / 2);
+    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
+    expect(layout.input.bottom).toBeLessThan(Math.min(...layout.controls.map((box) => box.y)));
+    if (width === 390) {
+      for (const control of layout.controls) {
+        expect(control.width).toBeGreaterThanOrEqual(44);
+        expect(control.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+  }
 });
 
 test("group chats share every context-menu action", async ({ page }, testInfo) => {

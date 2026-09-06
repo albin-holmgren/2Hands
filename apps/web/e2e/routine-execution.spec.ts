@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import type { RunsListOutput } from "@rakazo/contracts";
+import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 
 test("routine test-run completes and survives reload", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -31,13 +32,32 @@ test("routine test-run completes and survives reload", async ({ page }, testInfo
   await captureScreenshot(page, testInfo, "33-routine-scheduled");
 
   await routine.click();
+  const started = page.waitForResponse((response) =>
+    response.url().includes("/rpc/routines/testRun"),
+  );
   await page.getByRole("button", { name: "Test run" }).click();
-  await expect(page.getByText(/routine-run-now-ok/i).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 30_000 });
+  const response = await started;
+  expect(response.ok()).toBe(true);
+  const { json: run } = (await response.json()) as { json: { runId: string } };
+  await expect
+    .poll(
+      async () =>
+        (await rpc<RunsListOutput>(page, "runs/list", { filter: "recent" })).runs.find(
+          (candidate) => candidate.runId === run.runId,
+        )?.status,
+      { timeout: 30_000 },
+    )
+    .toBe("completed");
+  // The editor contains the same marker; only the conversation proves a result was rendered.
+  const result = page
+    .getByTestId("transcript")
+    .getByText(/routine-run-now-ok/i)
+    .first();
+  await expect(result).toBeVisible();
   await captureScreenshot(page, testInfo, "34-routine-run-completed");
 
   await page.reload();
-  await expect(page.getByText(/routine-run-now-ok/i).first()).toBeVisible();
+  await expect(result).toBeVisible();
   await page.getByTitle("Agent computer").click();
   await expect(page.getByRole("button", { name: /Daily verification/ })).toContainText(
     "Weekdays at 9:00 AM",

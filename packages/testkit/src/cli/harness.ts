@@ -4,8 +4,7 @@ import path from "node:path";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { runProcess } from "./process.js";
-
-loadRootEnv();
+import { testDatabaseUrl } from "./test-database-url.js";
 
 const integration = process.argv.includes("--integration");
 const e2e = process.argv.includes("--e2e");
@@ -13,10 +12,20 @@ const sandboxArg = process.argv.find((arg) => arg.startsWith("--sandbox="));
 const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
 const grepArg = process.argv.find((arg) => arg.startsWith("--grep="));
 const runtimeArg = process.argv.find((arg) => arg.startsWith("--runtime="));
+const workersArg = process.argv.find((arg) => arg.startsWith("--workers="));
+const workers = workersArg ? Number(workersArg.slice("--workers=".length)) : undefined;
+if (workers !== undefined && (!Number.isSafeInteger(workers) || workers < 1)) {
+  throw new Error("--workers must be a positive integer");
+}
 const sandboxProvider = sandboxArg?.slice("--sandbox=".length) ?? "fake";
 const e2eSpec = specArg?.slice("--spec=".length);
 const e2eGrep = grepArg?.slice("--grep=".length);
 const agentRuntime = runtimeArg?.slice("--runtime=".length) ?? "scripted";
+if (sandboxProvider === "fake" && agentRuntime === "scripted") {
+  process.env.RAKAZO_IGNORE_ENV_FILES = "1";
+  process.env.BILLING_ENABLED = "false";
+}
+loadRootEnv();
 
 if (Number(integration) + Number(e2e) !== 1) {
   throw new Error("Pass exactly one of --integration or --e2e");
@@ -44,9 +53,12 @@ async function main() {
   const mode = integration ? "integration" : "e2e";
   const reportDir = path.resolve("test-report", mode);
   await mkdir(reportDir, { recursive: true });
-  const container = await new PostgreSqlContainer("postgres:16-alpine").start();
+  const suppliedDatabase = testDatabaseUrl(process.env.TEST_DATABASE_URL);
+  const container = suppliedDatabase
+    ? undefined
+    : await new PostgreSqlContainer("postgres:16-alpine").withDatabase("rakazo_test").start();
   try {
-    const databaseUrl = container.getConnectionUri();
+    const databaseUrl = suppliedDatabase ?? container!.getConnectionUri();
     const apiPort = Number(process.env.API_PORT ?? 3110);
     const webPort = Number(process.env.WEB_PORT ?? 5180);
     const webOrigin = `http://127.0.0.1:${webPort}`;
@@ -70,6 +82,7 @@ async function main() {
     process.env.PLAYWRIGHT_BASE_URL = webOrigin;
     process.env.DATA_DIR = path.join(reportDir, "data");
     process.env.SIGNUPS_ENABLED = "true";
+    process.env.SIGNUPS_LOCKED = "false";
     process.env.SIGNUP_ALLOWLIST = "";
     process.env.CI = "1";
 
@@ -92,6 +105,9 @@ async function main() {
           "packages/testkit/src/executor-lifecycle.test.ts",
           "packages/testkit/src/connections.test.ts",
           "packages/db/src/space-membership.postgres.test.ts",
+          "packages/db/src/billing.postgres.test.ts",
+          "apps/api/src/stripe-webhook.postgres.test.ts",
+          "apps/api/src/computer-budget.postgres.test.ts",
           "packages/adapters/src/wakeup.postgres.test.ts",
           "packages/adapters/src/realtime.postgres.test.ts",
           "packages/adapters/src/job-reconciler.postgres.test.ts",
@@ -173,6 +189,7 @@ async function main() {
             "test",
             ...(e2eSpec ? [e2eSpec] : []),
             ...(e2eGrep ? ["--grep", e2eGrep] : []),
+            ...(workers ? ["--workers", String(workers)] : []),
           ],
           {
             ...process.env,
@@ -240,7 +257,7 @@ async function main() {
       }
     }
   } finally {
-    await container.stop().catch(() => undefined);
+    await container?.stop().catch(() => undefined);
   }
 }
 

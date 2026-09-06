@@ -1,15 +1,18 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { BrandMark } from "@rakazo/ui-web";
+import { useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
+import { useAuthCapabilities } from "../lib/auth-capabilities";
+import { authReturnPath } from "../lib/auth-return-path";
 import { clearSpaceSelection } from "../lib/rpc";
 
 type AuthMode = "in" | "up" | "forgot";
-type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: string | null };
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const { t } = useLingui();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -17,7 +20,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [reset, setReset] = useState<PasswordResetCapabilities | null>(null);
+  const { capabilities: reset, unavailable, retry } = useAuthCapabilities();
   const passwordFieldId = mode === "in" ? "current-password" : "new-password";
   const title =
     mode === "in" ? (
@@ -28,25 +31,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       <Trans>Reset your password</Trans>
     );
 
-  useEffect(() => {
-    if (mode === "up") return;
-    let active = true;
-    void fetch("/api/auth/capabilities")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Could not load authentication capabilities");
-        return (await response.json()) as PasswordResetCapabilities;
-      })
-      .then((capabilities) => {
-        if (active) setReset(capabilities);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [mode]);
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending || ((mode === "up" || mode === "forgot") && !reset)) return;
+    if (mode === "up" && reset?.signupsEnabled === false) return;
     setPending(true);
     setError(null);
     try {
@@ -69,17 +57,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       const result =
         mode === "up"
           ? await authClient.signUp.email({
-              email,
+              email: email.trim(),
               password,
-              name: name || email.split("@")[0] || "User",
+              name: name.trim() || email.trim().split("@")[0] || "User",
             })
-          : await authClient.signIn.email({ email, password });
+          : await authClient.signIn.email({ email: email.trim(), password });
       if (result.error) {
         setError(result.error.message ?? t`Could not continue`);
         return;
       }
       clearSpaceSelection();
-      navigate(mode === "up" ? "/onboarding" : "/app");
+      navigate(mode === "up" ? "/onboarding" : authReturnPath(location.state), { replace: true });
     } catch {
       setError(t`Could not reach the server`);
     } finally {
@@ -88,29 +76,70 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#F7F7F4] px-6 py-16 text-[#1B1B1E]">
-      <form onSubmit={submit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[#16161A]">
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-        </div>
-        <h1 className="mb-[38px] mt-[30px] text-[38px] tracking-[-0.02em]">{title}</h1>
-        {sent ? (
+    <div
+      data-rakazo-route-ready="true"
+      className="flex min-h-full items-center justify-center bg-[var(--rk-page)] px-6 py-16 text-[var(--rk-ink)]"
+    >
+      <form
+        onSubmit={submit}
+        aria-busy={pending}
+        className="flex w-full max-w-[400px] flex-col items-center"
+      >
+        <BrandMark size={52} />
+        <h1 className="mb-8 mt-6 text-[28px] font-medium tracking-[-0.025em]">{title}</h1>
+        {unavailable && mode !== "in" ? (
+          <div className="w-full text-center">
+            <p role="alert" className="text-sm text-[var(--rk-muted)]">
+              <Trans>Could not load account options.</Trans>
+            </p>
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-4 min-h-11 rounded-[10px] bg-[var(--rk-cream)] px-5 text-sm text-[var(--rk-cream-ink)]"
+            >
+              <Trans>Try again</Trans>
+            </button>
+            <Link to="/sign-in" className="mt-5 block text-sm">
+              <Trans>Back to sign in</Trans>
+            </Link>
+          </div>
+        ) : mode === "forgot" && reset && (!reset.passwordReset || !reset.resetUrl) ? (
           <div role="status" className="w-full text-center">
-            <p className="text-[17px] text-[#1B1B1E]">
+            <p className="text-[15px] text-[var(--rk-muted)]">
+              <Trans>Password recovery is not available on this server.</Trans>
+            </p>
+            <Link to="/sign-in" className="mt-6 inline-block text-sm">
+              <Trans>Back to sign in</Trans>
+            </Link>
+          </div>
+        ) : mode === "up" && reset?.signupsEnabled === false ? (
+          <div role="status" className="w-full text-center">
+            <p className="text-[15px] text-[var(--rk-ink)]">
+              <Trans>Registration is currently unavailable</Trans>
+            </p>
+            <Link
+              to="/sign-in"
+              className="mt-6 inline-block rounded-full bg-[var(--rk-cream)] px-6 py-3 font-medium text-[var(--rk-cream-ink)]"
+            >
+              <Trans>Sign in</Trans>
+            </Link>
+          </div>
+        ) : sent ? (
+          <div role="status" className="w-full text-center">
+            <p className="text-[15px] text-[var(--rk-ink)]">
               <Trans>Check your email</Trans>
             </p>
-            <p className="mt-3 text-[15px] leading-relaxed text-[#6E6E68]">
+            <p className="mt-3 text-[15px] leading-relaxed text-[var(--rk-muted)]">
               <Trans>If an account exists for that address, we sent a password reset link.</Trans>
             </p>
-            <Link to="/sign-in" className="mt-6 inline-block font-medium text-[#1B1B1E]">
+            <Link to="/sign-in" className="mt-6 inline-block font-medium text-[var(--rk-ink)]">
               <Trans>Back to sign in</Trans>
             </Link>
           </div>
         ) : (
           <>
             {mode === "up" ? (
-              <label className="mb-4 w-full text-[16px] text-[#6E6E68]">
+              <label className="mb-4 w-full text-[14px] text-[var(--rk-muted)]">
                 <Trans>Name</Trans>
                 <input
                   id="name"
@@ -119,26 +148,28 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t`Your name`}
-                  className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+                  className="mt-2 w-full rounded-[10px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-3 text-[15px] text-[var(--rk-ink)] outline-none"
                 />
               </label>
             ) : null}
-            <label className="w-full text-[16px] text-[#6E6E68]">
+            <label className="w-full text-[14px] text-[var(--rk-muted)]">
               <Trans>Email</Trans>
               <input
                 id="email"
                 name="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t`Your email address`}
                 type="email"
                 required
-                className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+                className="mt-2 w-full rounded-[10px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-3 text-[15px] text-[var(--rk-ink)] outline-none"
               />
             </label>
             {mode !== "forgot" ? (
-              <div className="mt-4 w-full text-[16px] text-[#6E6E68]">
+              <div className="mt-4 w-full text-[14px] text-[var(--rk-muted)]">
                 <label htmlFor={passwordFieldId}>
                   <Trans>Password</Trans>
                 </label>
@@ -152,15 +183,17 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     placeholder={t`Password`}
                     type={showPassword ? "text" : "password"}
                     required
-                    minLength={8}
-                    className="w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] py-[17px] pl-[18px] pr-[52px] text-[17px] text-[#1B1B1E] outline-none"
+                    minLength={mode === "in" ? undefined : 8}
+                    maxLength={mode === "up" ? 128 : undefined}
+                    aria-describedby={mode === "up" ? "password-hint" : undefined}
+                    className="w-full rounded-[10px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] py-3 pl-3.5 pr-[52px] text-[15px] text-[var(--rk-ink)] outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((shown) => !shown)}
                     aria-label={showPassword ? t`Hide password` : t`Show password`}
                     aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-0 flex items-center px-[18px] text-[#8C8C86] hover:text-[#1B1B1E]"
+                    className="absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--rk-muted)] hover:text-[var(--rk-ink)]"
                   >
                     {showPassword ? (
                       <svg
@@ -197,9 +230,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     )}
                   </button>
                 </div>
+                {mode === "up" ? (
+                  <p id="password-hint" className="mt-2 text-xs text-[var(--rk-muted)]">
+                    <Trans>At least 8 characters</Trans>
+                  </p>
+                ) : null}
                 {mode === "in" && reset?.passwordReset ? (
                   <div className="mt-2 text-right text-[14px]">
-                    <Link to="/forgot-password" className="font-medium text-[#1B1B1E]">
+                    <Link to="/forgot-password" className="font-medium text-[var(--rk-ink)]">
                       <Trans>Forgot password?</Trans>
                     </Link>
                   </div>
@@ -207,14 +245,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               </div>
             ) : null}
             {error ? (
-              <p role="alert" className="mt-3 w-full text-sm text-[#B91C1C]">
+              <p role="alert" className="mt-3 w-full text-sm text-[var(--rk-danger)]">
                 {error}
               </p>
             ) : null}
             <button
               type="submit"
-              disabled={pending}
-              className="mt-3 w-full rounded-[13px] bg-[#121215] py-[18px] text-center text-[17px] font-medium text-[#FBFBF9] hover:bg-[#26262B]"
+              disabled={pending || ((mode === "up" || mode === "forgot") && reset === null)}
+              className="mt-3 w-full rounded-[10px] bg-[var(--rk-cream)] py-3 text-center text-[15px] font-medium text-[var(--rk-cream-ink)] hover:opacity-90 disabled:opacity-50"
             >
               {pending ? (
                 <Trans>Working…</Trans>
@@ -226,26 +264,30 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 <Trans>Create account</Trans>
               )}
             </button>
-            <p className="mt-[30px] text-[16px] text-[#8C8C86]">
-              {mode === "in" ? (
+            <p className="mt-[30px] text-[14px] text-[var(--rk-muted)]">
+              {mode === "in" && reset?.signupsEnabled !== false ? (
                 <>
                   <Trans>Don’t have an account?</Trans>{" "}
-                  <Link to="/sign-up" className="font-medium text-[#1B1B1E]">
+                  <Link
+                    to="/sign-up"
+                    state={location.state}
+                    className="font-medium text-[var(--rk-ink)]"
+                  >
                     <Trans>Sign up</Trans>
                   </Link>
                 </>
               ) : mode === "up" ? (
                 <>
                   <Trans>Already have an account?</Trans>{" "}
-                  <Link to="/sign-in" className="font-medium text-[#1B1B1E]">
+                  <Link to="/sign-in" className="font-medium text-[var(--rk-ink)]">
                     <Trans>Sign in</Trans>
                   </Link>
                 </>
-              ) : (
-                <Link to="/sign-in" className="font-medium text-[#1B1B1E]">
+              ) : mode === "forgot" ? (
+                <Link to="/sign-in" className="font-medium text-[var(--rk-ink)]">
                   <Trans>Back to sign in</Trans>
                 </Link>
-              )}
+              ) : null}
             </p>
           </>
         )}
@@ -261,14 +303,14 @@ export function PasswordResetPage() {
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
-  const [error, setError] = useState<string | null>(
-    params.get("error") || !params.get("token") ? t`This reset link is invalid or expired` : null,
-  );
+  const [rejectedLink, setRejectedLink] = useState(false);
+  const invalidLink = rejectedLink || Boolean(params.get("error")) || !params.get("token");
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const token = params.get("token");
-    if (!token) return;
+    if (!token || invalidLink || pending) return;
     if (password !== confirmation) {
       setError(t`Passwords do not match`);
       return;
@@ -278,6 +320,7 @@ export function PasswordResetPage() {
     try {
       const result = await authClient.resetPassword({ newPassword: password, token });
       if (result.error) {
+        if (result.error.code === "INVALID_TOKEN") setRejectedLink(true);
         setError(result.error.message ?? t`Could not reset password`);
         return;
       }
@@ -290,18 +333,37 @@ export function PasswordResetPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#F7F7F4] px-6 py-16 text-[#1B1B1E]">
-      <form onSubmit={submit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-[#16161A]">
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-          <span className="h-5 w-[9px] rounded-full bg-[#F7F7F4]" />
-        </div>
-        <h1 className="mb-[38px] mt-[30px] text-[38px] tracking-[-0.02em]">
+    <div
+      data-rakazo-route-ready="true"
+      className="flex min-h-full items-center justify-center bg-[var(--rk-page)] px-6 py-16 text-[var(--rk-ink)]"
+    >
+      <form
+        onSubmit={submit}
+        aria-busy={pending}
+        className="flex w-full max-w-[400px] flex-col items-center"
+      >
+        <BrandMark size={52} />
+        <h1 className="mb-8 mt-6 text-[28px] font-medium tracking-[-0.025em]">
           <Trans>Choose a new password</Trans>
         </h1>
-        {complete ? (
+        {invalidLink ? (
+          <div className="w-full text-center">
+            <p role="alert" className="text-[15px] text-[var(--rk-danger)]">
+              <Trans>This reset link is invalid or expired.</Trans>
+            </p>
+            <Link
+              to="/forgot-password"
+              className="mt-6 inline-flex min-h-11 items-center rounded-[10px] bg-[var(--rk-cream)] px-5 text-sm font-medium text-[var(--rk-cream-ink)]"
+            >
+              <Trans>Request a new link</Trans>
+            </Link>
+            <Link to="/sign-in" className="mt-4 block text-sm">
+              <Trans>Back to sign in</Trans>
+            </Link>
+          </div>
+        ) : complete ? (
           <div role="status" className="w-full text-center">
-            <p className="text-[17px]">
+            <p className="text-[15px]">
               <Trans>Password updated</Trans>
             </p>
             <Link to="/sign-in" className="mt-6 inline-block font-medium">
@@ -324,14 +386,14 @@ export function PasswordResetPage() {
               className="mt-4"
             />
             {error ? (
-              <p role="alert" className="mt-3 w-full text-sm text-[#B91C1C]">
+              <p role="alert" className="mt-3 w-full text-sm text-[var(--rk-danger)]">
                 {error}
               </p>
             ) : null}
             <button
               type="submit"
               disabled={pending || !params.get("token")}
-              className="mt-4 w-full rounded-[13px] bg-[#121215] py-[18px] text-[17px] font-medium text-[#FBFBF9] disabled:opacity-60"
+              className="mt-4 w-full rounded-[10px] bg-[var(--rk-cream)] py-3 text-[15px] font-medium text-[var(--rk-cream-ink)] disabled:opacity-60"
             >
               {pending ? <Trans>Working…</Trans> : <Trans>Reset password</Trans>}
             </button>
@@ -359,7 +421,7 @@ function PasswordField({
   className?: string;
 }) {
   return (
-    <label htmlFor={id} className={`w-full text-[16px] text-[#6E6E68] ${className}`}>
+    <label htmlFor={id} className={`w-full text-[14px] text-[var(--rk-muted)] ${className}`}>
       {label}
       <input
         id={id}
@@ -370,7 +432,7 @@ function PasswordField({
         minLength={8}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-[13px] border border-[#E4E4DE] bg-[#F1F1ED] px-[18px] py-[17px] text-[17px] text-[#1B1B1E] outline-none"
+        className="mt-2 w-full rounded-[10px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-3.5 py-3 text-[15px] text-[var(--rk-ink)] outline-none"
       />
     </label>
   );

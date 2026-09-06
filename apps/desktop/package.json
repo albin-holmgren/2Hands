@@ -1,6 +1,6 @@
 {
   "name": "@rakazo/desktop",
-  "version": "0.1.0",
+  "version": "3.1.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/main.js",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "dev.rakazo.desktop",
-    "productName": "Rakazo",
+    "productName": "2hands",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -70,8 +70,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "elie222",
-        "repo": "rakazo"
+        "owner": "albin-holmgren",
+        "repo": "2Hands"
       }
     ]
   }

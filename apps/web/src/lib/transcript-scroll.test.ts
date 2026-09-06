@@ -35,6 +35,7 @@ describe("transcriptMovedDown", () => {
   it("does not treat an uninitialized baseline as downward movement", () => {
     expect(transcriptMovedDown(null, 920)).toBe(false);
     expect(transcriptMovedDown(950, 920)).toBe(false);
+    expect(transcriptMovedDown(920, 920)).toBe(false);
     expect(transcriptMovedDown(920, 950)).toBe(true);
   });
 });

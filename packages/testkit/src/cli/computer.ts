@@ -2,23 +2,25 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { runProcess } from "./process.js";
+import {
+  canaryDatabaseUrl,
+  computerCanaryEnv,
+  computerCanaryModel,
+} from "./provider-canary-env.js";
 
 async function main() {
-  loadRootEnv();
-  for (const key of ["E2B_API_KEY", "OPENROUTER_API_KEY", "COMPUTER_E2E_MODEL"]) {
-    if (!process.env[key]) throw new Error(`${key} is required`);
-  }
+  computerCanaryModel(process.env);
+  if (!process.env.E2B_API_KEY) throw new Error("E2B_API_KEY is required");
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-computer-e2e-run-"));
-  const database = await new PostgreSqlContainer("postgres:16-alpine").start();
+  const suppliedDatabase = canaryDatabaseUrl(process.env);
+  const database = suppliedDatabase
+    ? undefined
+    : await new PostgreSqlContainer("postgres:16-alpine").withDatabase("computer_e2e_test").start();
+  const databaseUrl = suppliedDatabase ?? database!.getConnectionUri();
   const env = {
-    ...process.env,
-    DATABASE_URL: database.getConnectionUri(),
-    REALTIME_DATABASE_URL: database.getConnectionUri(),
-    RUN_COMPUTER_E2E: "1",
-    VERIFY_PROVIDERS: "1",
+    ...computerCanaryEnv(process.env, databaseUrl),
     COMPOSIO_API_KEY: "",
     WAKEUP_DRIVER: "memory",
     SANDBOX_PROVIDER: "e2b",
@@ -49,7 +51,7 @@ async function main() {
       env,
     );
   } finally {
-    await database.stop().catch(() => undefined);
+    await database?.stop().catch(() => undefined);
     await rm(dataDir, { recursive: true, force: true });
   }
 }

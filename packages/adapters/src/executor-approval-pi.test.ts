@@ -50,6 +50,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
 
 vi.mock("@earendil-works/pi-ai/providers/all", () => ({
   builtinModels: () => ({
+    setProvider: vi.fn(),
     getModel: (_provider: string, modelId: string) =>
       modelId === "approval-pi-model" ? { provider: "test", id: modelId } : undefined,
     streamSimple: () => {

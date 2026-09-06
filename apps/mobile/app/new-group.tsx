@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { BotAvatar } from "../components/bot-avatar";
 import { type MobileBot, rpc } from "../lib/api";
+import { useNativeTheme } from "../lib/theme";
 
 export default function NewGroup() {
+  const native = useNativeTheme();
   const router = useRouter();
   const [bots, setBots] = useState<MobileBot[]>([]);
   const [name, setName] = useState("");
@@ -57,25 +59,25 @@ export default function NewGroup() {
     <>
       <Stack.Screen options={{ title: "New group" }} />
       <ScrollView
-        style={{ flex: 1, backgroundColor: "#050506" }}
+        style={{ flex: 1, backgroundColor: native.page }}
         contentContainerStyle={{ padding: 24 }}
       >
-        <Text style={{ color: "#85858A", fontSize: 14 }}>Name</Text>
+        <Text style={{ color: native.muted, fontSize: 14 }}>Name</Text>
         <TextInput
           value={name}
           onChangeText={setName}
           placeholder="Name this group"
-          placeholderTextColor="#6C6C70"
+          placeholderTextColor={native.muted}
           style={{
             marginTop: 8,
-            backgroundColor: "#1A1A1D",
+            backgroundColor: native.surface2,
             borderRadius: 11,
             padding: 14,
-            color: "#ECECEE",
+            color: native.ink,
             fontSize: 16,
           }}
         />
-        <Text style={{ color: "#85858A", fontSize: 14, marginTop: 20 }}>
+        <Text style={{ color: native.muted, fontSize: 14, marginTop: 20 }}>
           Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})
         </Text>
         {bots.map((bot) => {
@@ -92,12 +94,12 @@ export default function NewGroup() {
               }}
             >
               <BotAvatar color={bot.color} identity={bot.id} size={34} status={bot.status} />
-              <Text style={{ flex: 1, color: "#ECECEE", fontSize: 16 }}>{bot.name}</Text>
-              <Text style={{ color: "#6C6C70" }}>{checked ? "✓" : ""}</Text>
+              <Text style={{ flex: 1, color: native.ink, fontSize: 16 }}>{bot.name}</Text>
+              <Text style={{ color: native.muted }}>{checked ? "✓" : ""}</Text>
             </Pressable>
           );
         })}
-        {error ? <Text style={{ color: "#FF6B6B", marginTop: 12 }}>{error}</Text> : null}
+        {error ? <Text style={{ color: native.danger, marginTop: 12 }}>{error}</Text> : null}
         <Pressable
           onPress={() => void create()}
           disabled={
@@ -108,7 +110,7 @@ export default function NewGroup() {
           }
           style={{
             marginTop: 24,
-            backgroundColor: "#8B5CF6",
+            backgroundColor: native.cream,
             opacity:
               !name.trim() ||
               selected.length < GROUP_MEMBER_MIN ||
@@ -121,7 +123,7 @@ export default function NewGroup() {
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "600" }}>
+          <Text style={{ color: native.creamInk, fontSize: 16, fontWeight: "600" }}>
             {pending ? "Creating…" : "Create group"}
           </Text>
         </Pressable>

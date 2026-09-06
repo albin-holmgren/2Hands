@@ -51,8 +51,8 @@ import {
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
-import { blockedAuthPaths, createAuth } from "@rakazo/auth";
-import { signupPolicyFromEnv } from "@rakazo/core";
+import { blockedAuthPaths, createAuth, resolveSignupPolicy } from "@rakazo/auth";
+import { signupPolicyFromEnv, signupsLocked } from "@rakazo/core";
 import {
   createDb,
   createThreadEvents,
@@ -66,9 +66,16 @@ import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
 import { createMessagingInboundHandler } from "./messaging-inbound.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
+import {
+  canonicalHostRedirect,
+  publicRequestUrl,
+  trustedAuthOrigins,
+  trustedBrowserOrigins,
+} from "./public-origin.js";
 import { createRouter } from "./router.js";
 import { mountStripeWebhook } from "./stripe-webhook.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
+import { mountWebStatic, webDistRoot } from "./web-static.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
 
 export interface AppHandles {
@@ -107,6 +114,7 @@ export async function createApp(
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
+  if (signupsLocked(env.signupsLocked)) env.messagingOpenSignup = false;
   const created = prismaOverride
     ? { prisma: prismaOverride, pool: undefined }
     : createDb(env.databaseUrl);
@@ -225,19 +233,11 @@ export async function createApp(
     baseURL: env.authUrl,
     webOrigin: env.webOrigin,
     signupsEnabled: env.signupsEnabled,
+    signupsLocked: env.signupsLocked,
     signupAllowlist: env.signupAllowlist,
     email,
     onEmailError: (error) => console.error("transactional email delivery failed", error),
-    extraOrigins: [
-      "rakazo://",
-      "2hands://",
-      "exp://",
-      "exp://*",
-      "http://localhost:8081",
-      "http://127.0.0.1:8081",
-      "http://localhost:19006",
-      "http://127.0.0.1:19006",
-    ],
+    extraOrigins: trustedAuthOrigins(env),
     beforeDeleteUser: async (userId) => {
       const bots = await prisma.bot.findMany({
         where: { userId },
@@ -344,6 +344,11 @@ export async function createApp(
     clientInterceptors: [onError((error, { path }) => logUnexpectedRpcError(error, path))],
   });
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    const dest = canonicalHostRedirect(publicRequestUrl(c.req.raw), env.webOrigin);
+    if (dest) return c.redirect(dest, 308);
+    await next();
+  });
   app.use(
     "*",
     cors({
@@ -355,12 +360,15 @@ export async function createApp(
     }),
   );
   mountStripeWebhook(app, prisma);
-  app.get("/api/auth/capabilities", (c) =>
-    c.json({
+  app.get("/api/auth/capabilities", async (c) => {
+    const policy = await resolveSignupPolicy(prisma, env);
+    c.header("cache-control", "no-store");
+    return c.json({
+      signupsEnabled: policy.enabled,
       passwordReset: Boolean(email),
       resetUrl: email ? new URL("/reset-password", env.webOrigin).href : null,
-    }),
-  );
+    });
+  });
   if (localEmailEmulator && env.nodeEnv === "development") {
     app.get(
       "/api/dev/emails",
@@ -437,7 +445,7 @@ export async function createApp(
     c.json({
       ok: true,
       runtime: env.agentRuntime,
-      sandbox: env.sandboxProvider,
+      sandbox: sandbox.describe().id,
       composio: Boolean(stack.composio),
       pipedream: Boolean(pipedream),
       messaging: Boolean(messaging),
@@ -447,6 +455,12 @@ export async function createApp(
       revision: env.gitSha ?? null,
     }),
   );
+
+  const webRoot = env.serveWeb ? webDistRoot(env.webDist) : undefined;
+  if (env.serveWeb && !webRoot) {
+    console.warn("SERVE_WEB is on but apps/web/dist/index.html is missing");
+  }
+  if (webRoot) mountWebStatic(app, webRoot);
 
   return {
     app,
@@ -463,6 +477,7 @@ export async function createApp(
       oauthLogins.abortAll();
       await email?.drain?.();
       await reconciler?.stop();
+      await executor.shutdown();
       await jobs.close();
       await realtime.close();
       await connector.stop();
@@ -475,12 +490,16 @@ export async function createApp(
 
 function isTrustedOrigin(origin: string, env: AppEnv) {
   if (!origin) return true;
-  if (origin === env.webOrigin || origin === env.apiUrl || origin === env.authUrl) return true;
-  if (origin.startsWith("rakazo://") || origin.startsWith("2hands://") || origin.startsWith("exp://"))
+  if (trustedBrowserOrigins(env).includes(origin)) return true;
+  if (
+    origin.startsWith("rakazo://") ||
+    origin.startsWith("2hands://") ||
+    (["development", "test"].includes(env.nodeEnv) && origin.startsWith("exp://"))
+  )
     return true;
   try {
     const host = new URL(origin).hostname;
-    return isLoopbackHost(host);
+    return ["development", "test"].includes(env.nodeEnv) && isLoopbackHost(host);
   } catch {
     return false;
   }

@@ -19,7 +19,8 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { isToolPauseResult } from "./approval-effect.js";
-import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { meteredModelStream } from "./metered-stream.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
 import { registerLocalProvider } from "./pi-local-provider.js";
 import {
@@ -27,8 +28,8 @@ import {
   registerOpenAiCompatibleCatalog,
   registerOpenAiCompatibleRuntime,
 } from "./pi-openai-compatible-provider.js";
-import { registerVercelGatewayProvider } from "./vercel-gateway-provider.js";
 import { textContentArg } from "./tool-text.js";
+import { registerVercelGatewayProvider } from "./vercel-gateway-provider.js";
 
 const running = new Map<string, AbortController>();
 // Built on first use, not at module load: entry points call loadRootEnv() after
@@ -95,19 +96,12 @@ export class PiAgentRuntime implements AgentRuntime {
 
     const work = (async () => {
       try {
-        const provider =
-          request.model.provider === "scripted" ? "openrouter" : request.model.provider;
+        const provider = request.model.provider;
         const envDefaultModel = process.env.PI_DEFAULT_MODEL?.trim();
         const envDefaultProvider = process.env.PI_DEFAULT_PROVIDER?.trim() || "openrouter";
-        const modelId =
-          request.model.id === "scripted"
-            ? envDefaultModel || "deepseek/deepseek-v4-flash-0731"
-            : request.model.id.trim();
+        const modelId = request.model.id.trim();
         const models = modelsForRequest(request, provider);
         let model = models.getModel(provider, modelId);
-        if (!model && provider !== "openrouter" && provider !== OPENAI_COMPATIBLE_PROVIDER_ID) {
-          model = models.getModel("openrouter", modelId);
-        }
         if (
           !model &&
           provider === "openrouter" &&
@@ -117,9 +111,9 @@ export class PiAgentRuntime implements AgentRuntime {
           model = configuredOpenRouterModel(modelId);
         }
         if (!model) {
-          queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
-          queue.push({ type: "done" });
-          return;
+          throw new Error(
+            `MODEL_UNAVAILABLE: Unknown model ${provider}/${modelId}. Choose an available model.`,
+          );
         }
 
         const apiKey = request.model.oauth
@@ -130,7 +124,7 @@ export class PiAgentRuntime implements AgentRuntime {
               // another provider would ship our key to a vendor it was not issued for.
               (request.model.apiKey ??
               (provider === "openrouter" ? process.env.OPENROUTER_API_KEY : undefined));
-        const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
+        const toolDefs = request.tools;
         const nestedAgents = new Set<Agent>();
         const host: ToolHost = {
           queue,
@@ -167,7 +161,13 @@ export class PiAgentRuntime implements AgentRuntime {
           sessionId: `${request.threadId}:${request.botId}`,
           steeringMode: "all",
           streamFn: (m, ctx, options) =>
-            models.streamSimple(m, ctx, reliableStreamOptions(m, options)),
+            meteredModelStream(
+              (model, context, opts) => models.streamSimple(model, context, opts),
+              request,
+              m,
+              ctx,
+              reliableStreamOptions(m, options),
+            ),
           getApiKey: async () => apiKey,
           transformContext: async (messages) => pruneComputerScreenshotContext(messages),
           prepareNextTurnWithContext: async () => {
@@ -740,13 +740,17 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     progress: "starting…",
   });
 
-  const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name),
-  );
+  const childDefs = host.request.tools.filter((tool) => !DELEGATION_TOOL_NAMES.has(tool.name));
   const nestedHost: ToolHost = { ...host, depth: 1 };
   const nested = new Agent({
     streamFn: (m, ctx, options) =>
-      host.models.streamSimple(m, ctx, reliableStreamOptions(m, options)),
+      meteredModelStream(
+        (model, context, opts) => host.models.streamSimple(model, context, opts),
+        host.request,
+        m,
+        ctx,
+        reliableStreamOptions(m, options),
+      ),
     getApiKey: async () => host.apiKey,
     transformContext: async (messages) => pruneComputerScreenshotContext(messages),
     initialState: {

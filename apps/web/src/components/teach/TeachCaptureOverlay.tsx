@@ -1,7 +1,7 @@
 import type { TaughtSkill } from "@rakazo/contracts";
 import { DEFAULT_COMPUTER_SCREEN, mapTeachPointer, teachCaptureKey } from "@rakazo/core";
 import { useEffect, useRef } from "react";
-import { rpc } from "../../lib/rpc";
+import { useWorkspaceRpc } from "../../lib/workspace-context";
 
 export function TeachCaptureOverlay({
   botId,
@@ -16,6 +16,7 @@ export function TeachCaptureOverlay({
   screenWidth?: number;
   screenHeight?: number;
 }) {
+  const rpc = useWorkspaceRpc();
   const rootRef = useRef<HTMLDivElement>(null);
   const inputChainRef = useRef(Promise.resolve());
   const width = screenWidth ?? DEFAULT_COMPUTER_SCREEN.width;

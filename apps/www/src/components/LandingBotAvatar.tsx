@@ -1,33 +1,42 @@
-const AVATAR_BY_COLOR: Record<string, string> = {
-  "#3ec5a8": "/avatars/bot-avatar-teal.svg",
-  "#f5a03c": "/avatars/bot-avatar-orange.svg",
-  "#6a6bf5": "/avatars/bot-avatar-indigo.svg",
-  "#9b5cf6": "/avatars/bot-avatar-violet.svg",
-  "#3b82f6": "/avatars/bot-avatar-blue.svg",
-  "#f2622a": "/avatars/bot-avatar-coral.svg",
-  "#d9508a": "/avatars/bot-avatar-pink.svg",
+type Role = "chief" | "research" | "builder";
+
+// Keep older demos compatible while new surfaces can choose an explicit role.
+const ROLE_BY_COLOR: Record<string, Role> = {
+  "#3ec5a8": "chief",
+  "#6a6bf5": "research",
+  "#9b5cf6": "research",
+  "#3b82f6": "research",
+  "#f5a03c": "builder",
+  "#f2622a": "builder",
+};
+const CHARACTER: Record<Role, string> = {
+  chief: "/characters/pip.svg",
+  research: "/characters/scout.svg",
+  builder: "/characters/kit.svg",
 };
 
 export function LandingBotAvatar({
   color,
+  role,
   size = 38,
   className,
 }: {
-  color: string;
+  color?: string;
+  role?: Role;
   size?: number;
   className?: string;
 }) {
-  const src = AVATAR_BY_COLOR[color.toLowerCase()] ?? "/avatars/bot-avatar-coordinator.svg";
+  const identity = role ?? ROLE_BY_COLOR[color?.toLowerCase() ?? ""] ?? "chief";
 
   return (
     <img
       aria-hidden="true"
       alt=""
-      className={className}
       draggable={false}
+      className={className}
+      src={CHARACTER[identity]}
       height={size}
-      src={src}
-      style={{ width: size, height: size, flex: "none" }}
+      style={{ display: "block", width: size, height: size, flex: "none" }}
       width={size}
     />
   );

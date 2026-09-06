@@ -59,7 +59,20 @@ jobs:
           BETTER_AUTH_SECRET: ci-build-auth-secret-at-least-32-characters
           ENCRYPTION_KEY: ci-build-encryption-key-at-least-32-characters
       - name: Electron smoke
+        env:
+          RAKAZO_ELECTRON_E2E: "1"
         run: xvfb-run --auto-servernum pnpm --filter @rakazo/desktop exec playwright test --config e2e/playwright.config.ts
+      - name: Install browser for marketing verification
+        run: pnpm --filter @rakazo/web exec playwright install chromium
+      - name: Marketing pages and screenshots
+        run: pnpm --filter @rakazo/web exec playwright test --config playwright.marketing.config.ts
+      - name: Upload marketing screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-screenshots
+          path: apps/web/playwright-report-marketing/
+          retention-days: 7
 
   test:
     name: Unit tests
@@ -99,10 +112,16 @@ jobs:
 
   publish-mobile-update:
     name: Publish compatible mobile update
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.MOBILE_RELEASE_ENABLED == 'true'
     needs: [lint, check, build, test, test-integration, test-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      EAS_OWNER: ${{ vars.MOBILE_EAS_OWNER }}
+      EAS_PROJECT_ID: ${{ vars.MOBILE_EAS_PROJECT_ID }}
+      EAS_IOS_BUNDLE_IDENTIFIER: ${{ vars.MOBILE_IOS_BUNDLE_IDENTIFIER }}
+      EAS_ANDROID_PACKAGE: ${{ vars.MOBILE_ANDROID_PACKAGE }}
+      EXPO_PUBLIC_API_URL: ${{ vars.MOBILE_API_URL }}
     concurrency:
       group: mobile-production-update
       cancel-in-progress: false
@@ -204,7 +223,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [[ -z "$EXPO_TOKEN" ]]; then
-            echo "Add an EXPO_TOKEN repository secret with access to the inbox-zero/rakazo Expo project." >&2
+            echo "Add an EXPO_TOKEN repository secret with access to the release operator's Expo project." >&2
             exit 1
           fi
 
@@ -231,6 +250,8 @@ jobs:
       - name: Publish production update
         if: steps.ota.outputs.publish == 'true'
         working-directory: apps/mobile
+        env:
+          TWOHANDS_PRODUCTION_UPDATE: "1"
         run: |
           set -euo pipefail
           head="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
@@ -257,37 +278,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: production
+      group: twohands-production
       cancel-in-progress: false
     environment:
       name: production
-      url: https://app.rakazo.com
+      url: https://app.2hands.ai
     steps:
-      - name: Configure production SSH identity
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.97
+      - name: Deploy verified source with signup controlled
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          test -n "$SSH_PRIVATE_KEY"
-          test -n "$SSH_KNOWN_HOSTS"
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/rakazo-production"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/rakazo-production" "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/rakazo-production" >/dev/null
-
-      - name: Deploy successful main revision
-        env:
-          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
-          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
-        run: |
-          test -n "$SSH_HOST"
-          test -n "$SSH_USER"
-          ssh -F /dev/null \
-            -i "$HOME/.ssh/rakazo-production" \
-            -o BatchMode=yes \
-            -o ConnectTimeout=15 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            "$SSH_USER@$SSH_HOST" deploy-main
+          test -n "$FLY_API_TOKEN"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const config = readFileSync("fly.toml", "utf8");
+            if (!/^  SIGNUPS_LOCKED = "true"$/m.test(config)) {
+              throw new Error("Deployment must retain the signup lock until release gates pass.");
+            }
+          '
+          # API and worker share one persistent volume; do not provision spare or new process groups.
+          flyctl deploy --app 2hands-computers --remote-only --ha=false --update-only --strategy rolling --build-arg "GIT_SHA=$GITHUB_SHA"
+      - name: Verify deployed revision and account recovery
+        run: node infra/fly/verify-deployment.mjs --origin https://app.2hands.ai --revision "$GITHUB_SHA" --mode controlled

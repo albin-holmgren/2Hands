@@ -11,30 +11,30 @@
 }
 
 :root {
-  --page: #fdfdfd;
+  --page: #ffffff;
   --surface: #ffffff;
-  --surface-soft: #f7f7f7;
-  --ink: #242424;
-  --body: #3d3d3d;
-  --muted: #848484;
-  --muted-2: #6d6e70;
-  --line: #efefef;
-  --line-2: #e6e6e6;
-  --blue: #2563eb;
-  --blue-top: #2965ec;
-  --blue-bottom: #5c89f8;
-  --blue-soft: #eff6ff;
-  --blue-soft-2: #d8e9ff;
-  --blue-line: #d6e8fc;
-  --panel: #0b0b0c;
-  --panel-2: #0f0f10;
-  --panel-line: #1b1b1d;
-  --panel-line-2: #232326;
-  --panel-copy: #dfdfe2;
-  --panel-muted: #85858a;
-  --panel-muted-2: #6c6c70;
-  --panel-cream: #f1f1ef;
-  --panel-cream-ink: #1a1a1a;
+  --surface-soft: #f3f2ec;
+  --ink: #141413;
+  --body: #141413;
+  --muted: #5f5e57;
+  --muted-2: #8b8a82;
+  --line: #e6e4da;
+  --line-2: #d0cdc4;
+  --blue: #252529;
+  --blue-top: #252529;
+  --blue-bottom: #3e3e45;
+  --blue-soft: #efede8;
+  --blue-soft-2: #e5e2dc;
+  --blue-line: #d8d4cd;
+  --panel: #ffffff;
+  --panel-2: #f3f2ec;
+  --panel-line: #e6e4da;
+  --panel-line-2: #d0cdc4;
+  --panel-copy: #141413;
+  --panel-muted: #5f5e57;
+  --panel-muted-2: #8b8a82;
+  --panel-cream: #faf9f5;
+  --panel-cream-ink: #141413;
   --success: #30a24b;
   --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.03);
   --shadow-demo: 0 30px 80px -30px rgba(0, 0, 0, 0.35);
@@ -51,7 +51,7 @@ body {
   min-width: 320px;
   background: var(--page);
   color: var(--body);
-  font-family: Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -173,10 +173,10 @@ button {
 }
 
 .brand-lockup__word {
-  font-family: Aeonik, Geist, ui-sans-serif, system-ui, sans-serif;
-  font-size: 21px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
   color: var(--ink);
 }
 
@@ -351,7 +351,7 @@ button {
 .privacy-copy h1 {
   margin: 0;
   color: var(--ink);
-  font-family: Aeonik, Geist, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
@@ -501,7 +501,7 @@ button {
 .comparison-card h3 {
   margin: 0;
   color: var(--ink);
-  font-family: Aeonik, Geist, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -703,7 +703,7 @@ button {
   max-width: 390px;
   margin: 0;
   color: var(--ink);
-  font-family: Aeonik, Geist, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 30px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -798,7 +798,7 @@ button {
   padding: 18px 20px;
   border: 1px solid var(--line-2);
   border-radius: 16px;
-  background: #141416;
+  background: #E5E3E0;
   color: #f4f4f5;
   font: 500 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: pre;
@@ -897,7 +897,7 @@ button {
 
 .stat-value {
   color: var(--ink);
-  font-family: Aeonik, Geist, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
   font-size: 30px;
   letter-spacing: -0.02em;
 }
@@ -1090,7 +1090,7 @@ button {
   margin: 4px 12px 10px;
   border: 1px solid var(--panel-line-2);
   border-radius: 10px;
-  background: #171719;
+  background: #E5E3E0;
   padding: 8px 11px;
   color: var(--panel-muted-2);
   font-size: 13.5px;
@@ -1301,7 +1301,7 @@ button {
 }
 
 .product-demo__panel-toggle[aria-pressed="true"] {
-  background: #232326;
+  background: #E5E3E0;
 }
 
 .product-demo__panel-toggle:hover,
@@ -1404,7 +1404,7 @@ button {
   gap: 12px;
   border: 1px solid var(--panel-line-2);
   border-radius: 999px;
-  background: #131315;
+  background: #EEECE9;
   padding: 8px 10px 8px 16px;
 }
 
@@ -1437,7 +1437,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border-left: 1px solid #141416;
+  border-left: 1px solid #E5E3E0;
   padding: 17px 20px;
 }
 
@@ -1494,15 +1494,15 @@ button {
   padding: 12px;
   background:
     radial-gradient(circle at 18% 20%, rgba(62, 197, 168, 0.12), transparent 42%),
-    linear-gradient(180deg, #151518 0%, #0b0b0d 100%);
+    linear-gradient(180deg, #E5E3E0 0%, #0b0b0d 100%);
 }
 
 .product-demo__window {
   width: 100%;
   overflow: hidden;
-  border: 1px solid #232326;
+  border: 1px solid #E5E3E0;
   border-radius: 10px;
-  background: #121214;
+  background: #EEECE9;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
@@ -1613,7 +1613,7 @@ button {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: #232327;
+  background: #EEECE9;
 }
 
 .product-demo__boot-track div {
@@ -1632,7 +1632,7 @@ button {
   display: flex;
   height: 100%;
   flex-direction: column;
-  background: #050506;
+  background: #F5F3F0;
 }
 
 .product-demo__takeover-bar {
@@ -1640,7 +1640,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid #171719;
+  border-bottom: 1px solid #E5E3E0;
   padding: 14px 18px;
 }
 
@@ -1726,7 +1726,7 @@ button {
 
 .product-demo__routine:hover,
 .product-demo__routine:focus-visible {
-  background: #121214;
+  background: #EEECE9;
 }
 
 .product-demo__routine-icon {
@@ -1761,7 +1761,7 @@ button {
 
 .product-demo__quiet:hover,
 .product-demo__quiet:focus-visible {
-  background: #121214;
+  background: #EEECE9;
   color: #ececee;
 }
 
@@ -1798,7 +1798,7 @@ button {
 
 .product-demo__ghost-btn:hover,
 .product-demo__ghost-btn:focus-visible {
-  background: #17171a;
+  background: #34322D;
 }
 
 .product-demo__ghost-btn:disabled {
@@ -1937,7 +1937,7 @@ button {
 
 .product-demo__add-schedule:hover,
 .product-demo__add-schedule:focus-visible {
-  background: #121214;
+  background: #EEECE9;
   color: #ececee;
 }
 
@@ -2008,7 +2008,7 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid #141416;
+  border-bottom: 1px solid #E5E3E0;
   padding: 10px 0;
   color: #ececee;
   font-size: 14px;
@@ -2052,7 +2052,7 @@ button {
   flex-direction: column;
   overflow: hidden;
   margin-top: 14px;
-  border: 1px solid #232326;
+  border: 1px solid #E5E3E0;
   border-radius: 13px;
 }
 
@@ -2061,7 +2061,7 @@ button {
   align-items: center;
   gap: 14px;
   border: 0;
-  border-bottom: 1px solid #202023;
+  border-bottom: 1px solid #E5E3E0;
   background: transparent;
   padding: 14px 16px;
   color: #ececee;
@@ -2076,7 +2076,7 @@ button {
 
 .product-demo__choice-opts button:hover,
 .product-demo__choice-opts button:focus-visible {
-  background: #222226;
+  background: #EEECE9;
 }
 
 .product-demo__choice-letter {
@@ -2086,7 +2086,7 @@ button {
   flex: none;
   place-items: center;
   border-radius: 6px;
-  background: #232327;
+  background: #EEECE9;
   color: #9a9aa0;
   font-size: 12.5px;
 }
@@ -2096,7 +2096,7 @@ button {
   align-items: center;
   gap: 14px;
   margin-top: 12px;
-  border: 1px solid #202023;
+  border: 1px solid #E5E3E0;
   border-radius: 13px;
   padding: 13px 16px;
   color: #85858a;
@@ -2116,7 +2116,7 @@ button {
 
 .product-demo__choice-own {
   margin-top: 12px;
-  border: 1px solid #232326;
+  border: 1px solid #E5E3E0;
   border-radius: 12px;
   background: #0e0e10;
   padding: 13px 16px;
@@ -2145,6 +2145,12 @@ button {
   color: var(--body);
   font-size: 17px;
   line-height: 1.7;
+}
+
+.privacy-copy h2 {
+  margin-block: 28px 8px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .privacy-copy ul {

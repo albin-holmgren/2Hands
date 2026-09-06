@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useMemo as useThemeMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { rpc } from "../lib/api";
+import { type NativeTheme, useNativeTheme } from "../lib/theme";
 import { speakText } from "../lib/voice";
 
 type VoiceCatalogEntry = {
@@ -33,6 +34,8 @@ type VoiceStatus = {
 type VoiceInfo = { id: string; label: string; description?: string };
 
 export default function VoiceSettings() {
+  const native = useNativeTheme();
+  const styles = useThemeMemo(() => makeStyles(native), [native]);
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
@@ -131,7 +134,7 @@ export default function VoiceSettings() {
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        {loading ? <ActivityIndicator color="#ECECEE" /> : null}
+        {loading ? <ActivityIndicator color={native.ink} /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         <Text style={styles.lede}>
@@ -167,7 +170,7 @@ export default function VoiceSettings() {
               value={apiKey}
               onChangeText={setApiKey}
               placeholder={credential ? "Paste a replacement key" : "Paste your API key"}
-              placeholderTextColor="#6C6C70"
+              placeholderTextColor={native.muted}
               secureTextEntry
               style={styles.input}
               textContentType="none"
@@ -209,52 +212,53 @@ export default function VoiceSettings() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#000" },
-  content: { padding: 20, gap: 10 },
-  lede: { color: "#85858A", fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  error: { color: "#EF4444", marginBottom: 8 },
-  notice: { color: "#4ECB71", marginBottom: 8 },
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#26262A",
-    padding: 14,
-    backgroundColor: "#101012",
-  },
-  cardActive: { borderColor: "#4A4A50", backgroundColor: "#1A1A1D" },
-  cardTitle: { color: "#ECECEE", fontSize: 16 },
-  cardMeta: { color: "#6C6C70", marginTop: 4, fontSize: 12 },
-  help: { color: "#85858A", fontSize: 13.5, lineHeight: 20, marginTop: 8 },
-  input: {
-    marginTop: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#26262A",
-    color: "#ECECEE",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  button: {
-    marginTop: 8,
-    backgroundColor: "#F1F1EF",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  disabled: { opacity: 0.4 },
-  buttonLabel: { color: "#17171A", fontWeight: "600" },
-  voices: { marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: "#26262A" },
-  voiceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#202023",
-  },
-  voiceLabel: { color: "#ECECEE" },
-  check: { color: "#4ECB71" },
-  secondary: { marginTop: 16, alignItems: "center" },
-  secondaryLabel: { color: "#C9C9CE", fontSize: 15 },
-});
+const makeStyles = (native: NativeTheme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: native.page },
+    content: { padding: 20, gap: 10 },
+    lede: { color: native.muted, fontSize: 14, lineHeight: 20, marginBottom: 8 },
+    error: { color: native.danger, marginBottom: 8 },
+    notice: { color: native.successSoft, marginBottom: 8 },
+    card: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: native.hairlineStrong,
+      padding: 14,
+      backgroundColor: native.page,
+    },
+    cardActive: { borderColor: native.hairlineStrong, backgroundColor: native.surface2 },
+    cardTitle: { color: native.ink, fontSize: 16 },
+    cardMeta: { color: native.muted, marginTop: 4, fontSize: 12 },
+    help: { color: native.muted, fontSize: 13.5, lineHeight: 20, marginTop: 8 },
+    input: {
+      marginTop: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: native.hairlineStrong,
+      color: native.ink,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    button: {
+      marginTop: 8,
+      backgroundColor: native.page,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    disabled: { opacity: 0.4 },
+    buttonLabel: { color: native.ink, fontWeight: "600" },
+    voices: { marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: native.hairlineStrong },
+    voiceRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: native.hairlineStrong,
+    },
+    voiceLabel: { color: native.ink },
+    check: { color: native.successSoft },
+    secondary: { marginTop: 16, alignItems: "center" },
+    secondaryLabel: { color: native.muted, fontSize: 15 },
+  });

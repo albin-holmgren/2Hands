@@ -7,6 +7,7 @@ import {
   isLikelyUpdaterRecreateDisconnect,
   recreateWaitTimeoutError,
 } from "../lib/updater-recreate";
+import { useWorkspaceRpc } from "../lib/workspace-context";
 import { BuiButton, SuccessPop } from "./beautiful-ui/primitives";
 
 const RECREATE_POLL_MS = 2_000;
@@ -78,7 +79,7 @@ export function SoftwareUpdatePanel({
       </div>
       {check ? <CheckSummary check={check} /> : null}
       {error ? (
-        <p role="alert" className="text-[12.5px] text-[#EF4444]">
+        <p role="alert" className="text-[12.5px] text-[var(--rk-danger)]">
           {error}
         </p>
       ) : null}
@@ -88,6 +89,7 @@ export function SoftwareUpdatePanel({
 }
 
 export function SoftwareUpdateSection({ isDeploymentOwner }: { isDeploymentOwner: boolean }) {
+  const rpc = useWorkspaceRpc();
   const { t } = useLingui();
   const [status, setStatus] = useState<ServerUpdateStatus | null>(null);
   const [check, setCheck] = useState<ServerUpdateCheck | null>(null);
@@ -128,12 +130,12 @@ export function SoftwareUpdateSection({ isDeploymentOwner }: { isDeploymentOwner
     return (
       <section
         data-testid="software-update-settings"
-        className="mt-5 rounded-[14px] border border-[#26262A] bg-[#101012] px-4 py-4"
+        className="mt-5 rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-4 py-4"
       >
-        <h3 className="text-[15px] font-medium text-[#ECECEE]">
+        <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">
           <Trans>Software update</Trans>
         </h3>
-        <p role="alert" className="mt-3 text-[12.5px] text-[#EF4444]">
+        <p role="alert" className="mt-3 text-[12.5px] text-[var(--rk-danger)]">
           {error}
         </p>
       </section>
@@ -223,9 +225,9 @@ export function SoftwareUpdateSection({ isDeploymentOwner }: { isDeploymentOwner
   return (
     <section
       data-testid="software-update-settings"
-      className="mt-5 rounded-[14px] border border-[#26262A] bg-[#101012] px-4 py-4"
+      className="mt-5 rounded-[14px] border border-[var(--rk-hairline-strong)] bg-[var(--rk-surface)] px-4 py-4"
     >
-      <h3 className="text-[15px] font-medium text-[#ECECEE]">
+      <h3 className="text-[15px] font-medium text-[var(--rk-ink)]">
         <Trans>Software update</Trans>
       </h3>
       <SoftwareUpdatePanel
@@ -243,26 +245,28 @@ export function SoftwareUpdateSection({ isDeploymentOwner }: { isDeploymentOwner
 function CheckSummary({ check }: { check: ServerUpdateCheck }) {
   if (check.status === "up-to-date") {
     return (
-      <p className="text-[12.5px] text-[#6C6C70]">
+      <p className="text-[12.5px] text-[var(--rk-muted-2)]">
         <Trans>Up to date</Trans>
       </p>
     );
   }
   if (check.status === "available") {
     return (
-      <p className="text-[12.5px] text-[#C9C9CE]">
+      <p className="text-[12.5px] text-[var(--rk-body)]">
         <Trans>Update available</Trans>
       </p>
     );
   }
   if (check.status === "dirty") {
     return (
-      <p className="text-[12.5px] text-[#EF4444]">
+      <p className="text-[12.5px] text-[var(--rk-danger)]">
         <Trans>Checkout has local changes. Clean it before updating.</Trans>
       </p>
     );
   }
   return (
-    <p className="text-[12.5px] text-[#EF4444]">{check.reason ?? <Trans>Unavailable</Trans>}</p>
+    <p className="text-[12.5px] text-[var(--rk-danger)]">
+      {check.reason ?? <Trans>Unavailable</Trans>}
+    </p>
   );
 }

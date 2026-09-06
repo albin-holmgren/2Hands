@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("organic avatar path stays still when reduced motion is enabled", async ({ page }) => {
+test("character and activity ring stay still when reduced motion is enabled", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/e2e/fixtures/avatar-motion.html");
 
@@ -8,7 +8,9 @@ test("organic avatar path stays still when reduced motion is enabled", async ({ 
   await expect(avatar).toBeVisible();
   await expect(avatar.locator("animate")).toHaveCount(0);
 
-  const body = avatar.locator(".rakazo-organic-avatar-body-working");
+  const body = avatar.locator("svg > path");
+  const ring = avatar.locator(".rakazo-bot-avatar-ring");
+  await expect(avatar).toHaveAttribute("data-working", "true");
   const snapshot = () =>
     body.evaluate((path: SVGPathElement) => ({
       animationName: getComputedStyle(path).animationName,
@@ -21,4 +23,5 @@ test("organic avatar path stays still when reduced motion is enabled", async ({ 
 
   expect(first.animationName).toBe("none");
   expect(second).toEqual(first);
+  expect(await ring.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });

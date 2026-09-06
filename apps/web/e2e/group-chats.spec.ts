@@ -95,6 +95,8 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
       }),
     });
   });
+  // This assertion checks the robot avatar's spin treatment explicitly.
+  await rpc(page, "preferences/update", { avatarStyle: "robot" });
   await page.reload();
   // Anchor ^ so Now/Recent activity rows ("Bot · Draft team, …") do not match.
   const groupAvatar = page
@@ -118,6 +120,9 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await groupName.fill("Unsaved Draft team name");
   const sidebar = page.locator("aside").first();
   await sidebar.getByRole("button", { name: /^Review team/ }).click();
+  // Each conversation restores its own work pane; a new conversation starts closed.
+  await expect(desktopSettings).toHaveAttribute("data-panel", "closed");
+  await page.getByTestId("bot-settings-trigger").click();
   await expect(groupName).toHaveValue("Review team");
   await sidebar.getByRole("button", { name: /^Draft team/ }).click();
   await expect(groupName).toHaveValue("Draft team");
@@ -126,15 +131,46 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await expect(desktopSettings.getByRole("alert")).toHaveText("Failed to fetch");
   await expect(desktopSettings.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await page.unroute("**/rpc/groups/update");
+
+  let releaseSave!: () => void;
+  let sawSave!: () => void;
+  const saveReleased = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  const saveIntercepted = new Promise<void>((resolve) => {
+    sawSave = resolve;
+  });
+  await page.route("**/rpc/groups/update", async (route) => {
+    sawSave();
+    await saveReleased;
+    await route.continue();
+  });
   await desktopSettings.getByRole("button", { name: "Save", exact: true }).click();
+  await saveIntercepted;
 
   await page
     .getByRole("combobox", { name: "Message Draft team" })
     .fill("@Researcher unfinished draft");
   await sidebar.getByRole("button", { name: /^Review team/ }).click();
   await expect(page.getByRole("combobox", { name: "Message Review team" })).toHaveValue("");
+  await expect(groupName).toHaveValue("Review team");
+  // The saved group is refreshed after the mutation commits. Its late result
+  // must close only that group's settings, leaving the current pane intact.
+  const savedGroupRefreshed = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/threads/get") &&
+      response.request().postData()?.includes(draftGroupId) === true &&
+      response.ok(),
+  );
+  releaseSave();
+  await savedGroupRefreshed;
+  await expect(groupName).toHaveValue("Review team");
+  await page.unroute("**/rpc/groups/update");
   await sidebar.getByRole("button", { name: /^Draft team/ }).click();
-  await expect(page.getByRole("combobox", { name: "Message Draft team" })).toHaveValue("");
+  await expect(desktopSettings).toHaveAttribute("data-panel", "closed");
+  await expect(page.getByRole("combobox", { name: "Message Draft team" })).toHaveValue(
+    "@Researcher unfinished draft",
+  );
 
   const composer = page.getByRole("combobox", { name: "Message Draft team" });
   await composer.fill("@Res");
@@ -235,7 +271,20 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await expect(markdownDialog.getByRole("heading", { name: "Group artifact" })).toBeVisible();
   await markdownDialog.getByRole("button", { name: "Close preview" }).click();
 
+  await page.getByTestId("bot-settings-trigger").click();
+  await expect(desktopSettings).toHaveAttribute("data-panel", "group-settings");
   await page.setViewportSize({ width: 390, height: 844 });
+  // The restored pane becomes a full-width mobile surface; close it before
+  // navigating through the conversation header beneath it.
+  await expect(desktopSettings).toHaveAttribute("data-panel", "group-settings");
+  await expect
+    .poll(async () => Math.round((await desktopSettings.boundingBox())?.width ?? 0))
+    .toBe(390);
+  const closePanel = desktopSettings.getByRole("button", { name: "Close panel" });
+  const closeBounds = await closePanel.boundingBox();
+  expect(closeBounds?.width).toBeGreaterThanOrEqual(44);
+  expect(closeBounds?.height).toBeGreaterThanOrEqual(44);
+  await closePanel.click();
   await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
   expect((await transcript.boundingBox())?.width).toBeGreaterThan(350);
   await page.getByRole("button", { name: "Open navigation" }).click();
@@ -244,7 +293,18 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await page.getByTestId("bot-settings-trigger").click();
   const settings = page.getByTestId("side-panel");
   await expect(settings).toHaveAttribute("data-panel", "group-settings");
-  expect((await settings.boundingBox())?.width).toBeLessThanOrEqual(390);
+  // Wait for the width transition to finish before checking coverage or capturing it.
+  await expect.poll(async () => Math.round((await settings.boundingBox())?.width ?? 0)).toBe(390);
+  await expect
+    .poll(() =>
+      page.getByTestId("composer-bar").evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return element.contains(
+          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+        );
+      }),
+    )
+    .toBe(false);
   await captureScreenshot(page, testInfo, "group-settings-mobile");
 
   await rpc(page, "groups/remove", { groupId: reviewGroup.id });

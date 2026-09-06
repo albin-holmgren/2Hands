@@ -9,6 +9,7 @@ export type PickedAttachment = {
   name: string;
   mimeType: AttachmentMimeType;
   contentBase64: string;
+  fileUri?: string;
   previewUri?: string;
 };
 
@@ -21,6 +22,7 @@ export function filterPickedAttachments(
     mimeType: string | null;
     size: number;
     contentBase64: string;
+    fileUri?: string;
     previewUri?: string;
   }>,
 ): { attachments: PickedAttachment[]; skipped: PickSkip[] } {
@@ -44,6 +46,7 @@ export function filterPickedAttachments(
       name: candidate.name,
       mimeType: candidate.mimeType as AttachmentMimeType,
       contentBase64: candidate.contentBase64,
+      fileUri: candidate.fileUri,
       previewUri: candidate.previewUri,
     });
   }

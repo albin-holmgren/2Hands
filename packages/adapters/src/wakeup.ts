@@ -5,6 +5,7 @@ import {
   type JobPublisher,
   type JobWorkerHost,
 } from "@rakazo/adapter-kit";
+import { postgresPoolLimits } from "@rakazo/core";
 import { makeWorkerUtils, type Runner, run, type WorkerUtils } from "graphile-worker";
 
 export class GraphileJobPublisher implements JobPublisher {
@@ -36,7 +37,11 @@ export class GraphileJobPublisher implements JobPublisher {
 
   private getUtils(): Promise<WorkerUtils> {
     if (this.closed) throw new Error("Background job publisher is closed");
-    this.utils ??= makeWorkerUtils({ connectionString: this.connectionString });
+    const { graphileMaxPoolSize } = postgresPoolLimits(this.connectionString);
+    this.utils ??= makeWorkerUtils({
+      connectionString: this.connectionString,
+      maxPoolSize: graphileMaxPoolSize,
+    });
     return this.utils;
   }
 }
@@ -48,6 +53,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
     private readonly connectionString: string,
     private readonly options: {
       concurrency?: number;
+      maxPoolSize?: number;
       pollInterval?: number;
       noHandleSignals?: boolean;
     } = {},
@@ -61,9 +67,11 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
         async (payload: unknown) => dispatchBackgroundJob(handlers, name, payload),
       ]),
     );
+    const limits = postgresPoolLimits(this.connectionString);
     this.runner = await run({
       connectionString: this.connectionString,
-      concurrency: this.options.concurrency ?? 4,
+      concurrency: this.options.concurrency ?? limits.graphileConcurrency,
+      maxPoolSize: this.options.maxPoolSize ?? limits.graphileMaxPoolSize,
       pollInterval: this.options.pollInterval ?? 500,
       noHandleSignals: this.options.noHandleSignals,
       taskList,

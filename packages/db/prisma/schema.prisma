@@ -15,7 +15,7 @@ model User {
   image                       String?
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
-  avatarStyle                 String                       @default("robot")
+  avatarStyle                 String                       @default("organic")
   sessions                    Session[]
   accounts                    Account[]
   members                     Member[]
@@ -106,7 +106,12 @@ model OrganizationBilling {
   stripeSubscriptionId  String?      @unique
   stripePriceId         String?
   status                String       @default("active")
+  currentPeriodStart    DateTime?
   currentPeriodEnd      DateTime?
+  usageAllowanceStartsAt DateTime?
+  lastProviderEventAt   DateTime?
+  usagePeriods          BillingPeriod[]
+  providerEvents        BillingProviderEvent[]
   computerSecondsUsed   Int          @default(0)
   inputTokensUsed       Int          @default(0)
   outputTokensUsed      Int          @default(0)
@@ -555,6 +560,8 @@ model Run {
   trigger              String
   modelProvider        String?
   modelId              String?
+  modelFunding         String?
+  modelThinkingLevel   String?
   error                String?
   leaseOwner           String?
   leaseFence           Int              @default(0)
@@ -841,6 +848,10 @@ model Computer {
   scopeKey                String                   @unique
   homeKey                 String                   @unique
   homeRevision            String                   @default("empty")
+  billingReservationId    String?
+  billingStartedAt        DateTime?
+  billingCoveredUntil     DateTime?
+  billingRateMicrosPerHour BigInt?
   kind                    String
   providerRef             String?
   state                   String                   @default("stopped")
@@ -1128,4 +1139,59 @@ model AgentConnection {
   @@unique([requesterBotId, targetBotId])
   @@index([targetBotId, status])
   @@map("agent_connections")
+}
+
+
+model BillingPeriod {
+  id              String                @id @default(cuid())
+  organizationId  String
+  billing         OrganizationBilling   @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+  startsAt        DateTime
+  endsAt          DateTime
+  allowanceMicros BigInt
+  spentMicros     BigInt                @default(0)
+  reservedMicros  BigInt                @default(0)
+  createdAt       DateTime              @default(now())
+  reservations    UsageReservation[]
+
+  @@unique([organizationId, startsAt])
+  @@index([organizationId, endsAt])
+  @@map("billing_periods")
+}
+
+model UsageReservation {
+  id              String        @id @default(cuid())
+  organizationId  String
+  periodId        String
+  period          BillingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  spaceId         String
+  userId          String
+  runId           String?
+  operationKey    String
+  kind            String
+  funding         String
+  status          String        @default("reserved")
+  reservedMicros  BigInt
+  settledMicros   BigInt?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  settledAt       DateTime?
+  releasedAt      DateTime?
+
+  @@unique([organizationId, operationKey])
+  @@index([runId, status])
+  @@index([periodId, status])
+  @@map("usage_reservations")
+}
+
+model BillingProviderEvent {
+  id             String              @id
+  organizationId String
+  billing        OrganizationBilling @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+  provider       String
+  occurredAt     DateTime
+  processedAt    DateTime            @default(now())
+
+  @@index([organizationId, occurredAt])
+  @@map("billing_provider_events")
 }

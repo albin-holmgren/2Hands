@@ -121,6 +121,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
 
 vi.mock("@earendil-works/pi-ai/providers/all", () => ({
   builtinModels: () => ({
+    setProvider: vi.fn(),
     getModel: (_provider: string, modelId: string) =>
       modelId === "dispatch-test-model" ? { provider: "test", id: modelId } : undefined,
     streamSimple: () => {

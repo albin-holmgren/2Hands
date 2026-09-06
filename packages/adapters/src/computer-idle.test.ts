@@ -19,6 +19,23 @@ import {
 } from "./e2b-sandbox.js";
 
 describe("sandbox idle", () => {
+  it("keeps checking an unknown provisioning outcome until prepaid coverage expires", async () => {
+    vi.stubEnv("BILLING_ENABLED", "true");
+    try {
+      const harness = idleHarness();
+      Object.assign(harness.computer, {
+        providerRef: null,
+        state: "error",
+        billingCoveredUntil: new Date(Date.now() + 300_000),
+      });
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
+      expect(harness.jobs.enqueue).toHaveBeenCalledOnce();
+      expect(harness.sandbox.stop).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("defaults to ten minutes when SANDBOX_IDLE_MS is unset", () => {
     const previous = process.env.SANDBOX_IDLE_MS;
     delete process.env.SANDBOX_IDLE_MS;

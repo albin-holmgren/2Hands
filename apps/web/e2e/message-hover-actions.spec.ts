@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 
 test("message hover shows Reply and Copy; reply links to parent", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -97,6 +97,32 @@ test("message hover shows Reply and Copy; reply links to parent", async ({ page 
 
   await parentPreview.click();
   await expect(parentRow).toBeInViewport();
+
+  // Incoming work must preserve the reader's jump, including a refresh that
+  // begins before the smooth scroll has left the latest-message threshold.
+  const botId = activeBotId(page);
+  const incomingText = `incoming-after-jump-${stamp}`;
+  const { runId } = await rpc<{ runId: string }>(page, "threads/send", {
+    botId,
+    text: incomingText,
+  });
+  await expect
+    .poll(async () => {
+      const snapshot = await rpc<{
+        run: { id: string } | null;
+        messages: Array<{ runId?: string | null }>;
+      }>(page, "threads/get", { botId });
+      return snapshot.run?.id !== runId && snapshot.messages.some((row) => row.runId === runId);
+    })
+    .toBe(true);
+  const incomingRow = transcript
+    .locator("[data-message-id]")
+    .filter({ hasText: incomingText })
+    .last();
+  await expect(incomingRow).toBeVisible();
+  await expect(parentRow).toBeInViewport();
+  await page.getByRole("button", { name: "Jump to latest" }).click();
+  await expect(incomingRow).toBeInViewport();
 });
 
 test("reply preview jumps to parent outside the loaded page", async ({ page }) => {
@@ -178,8 +204,8 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(offlinePreview).toBeVisible();
   await expect(offlinePreview).toHaveText("Earlier message");
 
-  await page.unroute("**/rpc/bootstrap");
-  await page.unroute("**/rpc/threads/get");
+  // Let in-flight snapshot handlers finish before restoring real pagination.
+  await page.unrouteAll({ behavior: "wait" });
   await offlinePreview.click();
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toContainText(parentText);

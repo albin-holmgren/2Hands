@@ -51,6 +51,19 @@ describe("toComputerStatus", () => {
       }).updateAvailable,
     ).toBe(true);
   });
+
+  it("maps unavailable sandbox kinds to a valid computer status", () => {
+    const status = toComputerStatus("bot-1", {
+      kind: "none",
+      state: "stopped",
+      scope: "team",
+      controlHolder: "none",
+      homeRevision: "empty",
+    });
+    expect(status.kind).toBe("fake");
+    expect(status.updateAvailable).toBe(false);
+    expect(status.state).toBe("stopped");
+  });
 });
 
 describe("executionBlocksUserTakeover", () => {

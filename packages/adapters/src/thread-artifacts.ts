@@ -16,6 +16,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { resolveBotWorkspacePath } from "./computer-support.js";
+import { sandboxProvidesComputers } from "./none-sandbox.js";
 
 export type MaterializedThreadFile = {
   name: string;
@@ -107,6 +108,7 @@ export async function materializeCurrentTurnFiles(
     (block): block is Extract<MessageBlock, { kind: "file" }> => block.kind === "file",
   );
   if (!fileBlocks?.length) return [];
+  if (!sandboxProvidesComputers(deps.sandbox)) return [];
 
   const rows = await deps.prisma.artifact.findMany({
     where: {

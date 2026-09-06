@@ -5,12 +5,23 @@ function slackCard(page: Page) {
   return page.getByRole("group", { name: "Slack connection" });
 }
 
-test("focus choice suggests apps and preserves a completed connection", async ({
+test("optional focus choice suggests apps and preserves a completed connection", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `onboarding-${stamp}@rakazo.test`, "password12", "Robin");
   await completeOnboarding(page);
+  // Seed the optional focus flow on a fresh assistant through the real API;
+  // the hosted starter already has a concise greeting in its own thread.
+  const assistant = await rpc<{ id: string }>(page, "bots/create", {
+    name: "Focus assistant",
+    title: "",
+    description: "",
+    instructions: "",
+    notifyOnFinish: true,
+  });
+  await rpc(page, "onboarding/start", { botId: assistant.id });
+  await page.goto(`/app/${assistant.id}`);
 
   await expect(
     page.getByText("Hey Robin. Fresh start on my side, so I’ll keep this short."),
@@ -19,11 +30,11 @@ test("focus choice suggests apps and preserves a completed connection", async ({
   await page.mouse.move(1, 1);
   await captureScreenshot(page, testInfo, "01-focus-choice");
 
+  const composer = page.getByRole("combobox", { name: /^Message / });
+  const originalComposerName = await composer.getAttribute("aria-label");
   await page.getByRole("button", { name: /Day-to-day work/ }).click();
-  // The focus step suggests apps but must not rename the bot: the name the
-  // user chose during creation ("Chief") is preserved.
-  await expect(page.locator("main").getByText("Chief", { exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
+  // Choosing a focus preserves the assistant's existing name.
+  await expect(composer).toHaveAttribute("aria-label", originalComposerName!);
   await expect(page.getByText("Slack", { exact: true })).toBeVisible();
   await expect(page.getByText("Gmail", { exact: true })).toBeVisible();
   await page

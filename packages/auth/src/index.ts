@@ -1,5 +1,5 @@
 import type { TransactionalEmail, TransactionalEmailProvider } from "@rakazo/adapter-kit";
-import { emailAllowed, parseAllowlist, signupPolicyFromEnv } from "@rakazo/core";
+import { emailAllowed, parseAllowlist, signupPolicyFromEnv, signupsLocked } from "@rakazo/core";
 import { bootstrapUserSpace, type PrismaClient } from "@rakazo/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
@@ -11,6 +11,7 @@ export interface AuthEnv {
   baseURL: string;
   webOrigin: string;
   signupsEnabled: string | undefined;
+  signupsLocked?: string;
   signupAllowlist: string | undefined;
   extraOrigins?: string[];
   email?: TransactionalEmailProvider;
@@ -20,8 +21,9 @@ export interface AuthEnv {
 
 export async function resolveSignupPolicy(
   prisma: Pick<PrismaClient, "deploymentSettings">,
-  env: Pick<AuthEnv, "signupsEnabled" | "signupAllowlist">,
+  env: Pick<AuthEnv, "signupsEnabled" | "signupAllowlist" | "signupsLocked">,
 ): Promise<{ enabled: boolean; allowlist: string[] }> {
+  if (signupsLocked(env.signupsLocked)) return { enabled: false, allowlist: [] };
   const settings = await prisma.deploymentSettings.findUnique({
     where: { id: "default" },
     select: { signupsEnabled: true, signupAllowlist: true, signupPolicyInitialized: true },
@@ -44,6 +46,8 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
       enabled: true,
+      // Applies to new/reset passwords; existing accounts can still sign in.
+      minPasswordLength: 8,
       // Signup policy is mutable deployment state, so the request hook below
       // enforces it instead of freezing an environment value at process start.
       disableSignUp: false,

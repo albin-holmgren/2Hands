@@ -47,13 +47,16 @@ export function embeddableScreenUrl(url: string | null, apiBase: string): string
   if (!url) return null;
   try {
     const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+      return null;
+    }
     const api = new URL(apiBase);
     if (isLocalHostname(parsed.hostname) && !isLocalHostname(api.hostname)) {
       parsed.hostname = api.hostname;
     }
     return parsed.toString();
   } catch {
-    return url;
+    return null;
   }
 }
 
@@ -62,8 +65,10 @@ export function previewPlaceholder(
   booting: boolean,
   name: string,
   mode?: ComputerMode,
+  unavailable = false,
 ): string {
   if (state === "booting" || booting) return "Booting live desktop…";
+  if (state === "running" && unavailable) return "Preview unavailable";
   if (state === "running") return computerLabel(mode, name);
   if (state === "suspended") return "Computer is asleep — take control to wake it";
   if (state === "error") return "Computer failed to boot";

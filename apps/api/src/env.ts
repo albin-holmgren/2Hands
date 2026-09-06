@@ -4,7 +4,9 @@ import {
   resolveEncryptionKey,
   resolveScreenProxySecret,
   resolveSupervisorToken,
+  signupsLocked,
 } from "@rakazo/core";
+import { resolveServeWeb } from "./web-static.js";
 
 export { resolveSandboxProvider } from "@rakazo/adapters";
 
@@ -15,9 +17,11 @@ export interface AppEnv {
   authSecret: string;
   authUrl: string;
   webOrigin: string;
+  trustedWebOrigins?: string[];
   apiUrl: string;
   apiHost: string;
   signupsEnabled: string | undefined;
+  signupsLocked?: string;
   signupAllowlist: string | undefined;
   encryptionKey: string;
   dataDir: string;
@@ -68,6 +72,9 @@ export interface AppEnv {
   updaterToken: string | undefined;
   /** Current application image tag; used for compose manual-upgrade command selection. */
   imageTag: string | undefined;
+  /** Serve apps/web/dist from this process (Fly same-origin). Off for local Vite. */
+  serveWeb: boolean;
+  webDist: string | undefined;
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
@@ -83,9 +90,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     authSecret,
     authUrl: source.BETTER_AUTH_URL ?? source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
     webOrigin: source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
+    trustedWebOrigins: parseTrustedWebOrigins(source.TRUSTED_WEB_ORIGINS),
     apiUrl: source.API_URL ?? "http://127.0.0.1:3100",
     apiHost: source.API_HOST ?? "127.0.0.1",
     signupsEnabled: source.SIGNUPS_ENABLED,
+    signupsLocked: source.SIGNUPS_LOCKED,
     signupAllowlist: source.SIGNUP_ALLOWLIST,
     encryptionKey: resolveEncryptionKey(source),
     dataDir: source.DATA_DIR ?? "./data",
@@ -124,7 +133,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     whatsappVerifyToken: optional(source.WHATSAPP_VERIFY_TOKEN),
     telegramBotToken: optional(source.TELEGRAM_BOT_TOKEN),
     telegramWebhookSecret: optional(source.TELEGRAM_WEBHOOK_SECRET_TOKEN),
-    messagingOpenSignup: source.MESSAGING_OPEN_SIGNUP === "true",
+    messagingOpenSignup:
+      source.MESSAGING_OPEN_SIGNUP === "true" && !signupsLocked(source.SIGNUPS_LOCKED),
     defaultProvider: deploymentModel.provider,
     defaultModel: deploymentModel.model,
     wakeupDriver: source.WAKEUP_DRIVER ?? "graphile",
@@ -138,6 +148,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     updaterUrl,
     updaterToken,
     imageTag: optional(source.RAKAZO_IMAGE_TAG),
+    serveWeb: resolveServeWeb(source),
+    webDist: optional(source.WEB_DIST),
   };
 }
 
@@ -150,4 +162,35 @@ function required(source: NodeJS.ProcessEnv, key: string): string {
 function optional(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function parseTrustedWebOrigins(value: string | undefined): string[] {
+  return [
+    ...new Set(
+      (value ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+        .map((origin) => {
+          let parsed: URL;
+          try {
+            parsed = new URL(origin);
+          } catch {
+            throw new Error("TRUSTED_WEB_ORIGINS must contain comma-separated HTTP(S) origins");
+          }
+          if (
+            !["https:", "http:"].includes(parsed.protocol) ||
+            parsed.origin !== origin ||
+            parsed.hostname.includes("*") ||
+            parsed.username ||
+            parsed.password
+          ) {
+            throw new Error(
+              "TRUSTED_WEB_ORIGINS must contain only complete HTTP(S) origins without paths or credentials",
+            );
+          }
+          return parsed.origin;
+        }),
+    ),
+  ];
 }

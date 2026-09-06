@@ -123,9 +123,27 @@ describeWithDatabase("Composio catalog reconciliation", () => {
     await connectRemote(composio, actor, "SLACK");
     const pending = await createConnection(actor, "SLACK");
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const failure = vi
-      .spyOn(handles.prisma.connection, "findMany")
-      .mockRejectedValueOnce(new Error("simulated reconciliation failure"));
+    const findConnections = handles.prisma.connection.findMany.bind(handles.prisma.connection);
+    const failure = vi.spyOn(handles.prisma.connection, "findMany").mockImplementation((args) => {
+      // Background runs share this Prisma client. Only fail this catalog's query,
+      // so an unrelated worker read cannot consume the injected failure first.
+      if (
+        args?.where?.spaceId === actor.spaceId &&
+        args.where.userId === actor.userId &&
+        args.where.connectorId === "composio"
+      ) {
+        return Promise.reject(new Error("simulated reconciliation failure"));
+      }
+      return findConnections(args);
+    });
+
+    // Exercise the worker-shaped read before the catalog's reconciliation read.
+    await expect(
+      handles.prisma.connection.findMany({
+        where: { userId: actor.userId, spaceId: actor.spaceId },
+        select: { id: true, status: true },
+      }),
+    ).resolves.toEqual([{ id: pending.id, status: "pending" }]);
 
     const catalog = await rpc<Array<{ slug: string; connected: boolean }>>(
       app,

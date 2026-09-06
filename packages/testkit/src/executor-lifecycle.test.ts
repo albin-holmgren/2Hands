@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { runContinueJob } from "@rakazo/adapter-kit";
+import { ScriptedAgentRuntime } from "@rakazo/adapters";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import { createThreadEvents } from "@rakazo/db";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDb, createThreadEvents, organizationIdForSpace, reserveUsage } from "@rakazo/db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 process.env.WAKEUP_DRIVER = "memory";
 process.env.SANDBOX_PROVIDER = "fake";
@@ -331,9 +333,48 @@ describeIntegration("run executor lifecycle", () => {
     });
     expect(userMessages).toHaveLength(2);
     expect(userMessages[0]!.seq).toBeLessThan(userMessages[1]!.seq);
+
+    await handles.executor.continueRun(continuationRunId!, "steering-continuation-worker");
+
+    await expect(
+      handles.prisma.run.findUniqueOrThrow({ where: { id: continuationRunId! } }),
+    ).resolves.toMatchObject({ status: "completed" });
+    expect(await handles.prisma.steeringMessage.count({ where: { botId: seeded.bot.id } })).toBe(0);
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(2);
+    const answer = await handles.prisma.message.findFirstOrThrow({
+      where: { runId: continuationRunId!, role: "bot" },
+      orderBy: { seq: "desc" },
+    });
+    expect(JSON.stringify(answer.blocks)).toContain("Use the revised data.");
+    expect(JSON.stringify(answer.blocks)).toContain("Keep it concise.");
+    expect(JSON.stringify(answer.blocks)).not.toContain("Respond to the user's steering context.");
   });
 
-  it("requeues steering claimed by a failed attempt without duplicating it", async () => {
+  it("uses steering received before a scripted run starts instead of the superseded task", async () => {
+    const seeded = await seedRun("queued-steering", "keep working until I stop");
+    const events = createThreadEvents(handles.prisma);
+    await events.sendUserMessage({
+      spaceId: seeded.me.spaceId,
+      threadId: seeded.thread.id,
+      botId: seeded.bot.id,
+      userId: seeded.me.userId,
+      blocks: [{ kind: "text", text: "ask me which city to use" }],
+      prompt: "ask me which city to use",
+      trigger: "follow_up",
+    });
+
+    await handles.executor.continueRun(seeded.run.id, "queued-steering-worker");
+
+    await expect(
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+    ).resolves.toMatchObject({ status: "waiting_input" });
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
+    const messages = await handles.prisma.message.findMany({ where: { runId: seeded.run.id } });
+    expect(JSON.stringify(messages)).toContain("Which city");
+    await rpc(seeded.cookie, "threads/stop", { botId: seeded.bot.id });
+  });
+
+  it("retains failed steering without automatically retrying it under a new run id", async () => {
     const seeded = await seedRun("steering-failure", "start the analysis", {
       status: "running",
       leaseOwner: "failure-worker",
@@ -378,21 +419,62 @@ describeIntegration("run executor lifecycle", () => {
       error: "provider failed",
     });
     if (!finalized) throw new Error("Expected the failed run to finalize");
-    const continuationRunId = finalized.continuationRunId;
-    expect(continuationRunId).toEqual(expect.any(String));
+    expect(finalized.continuationRunId).toBeNull();
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
     await expect(
-      handles.prisma.run.findUniqueOrThrow({
-        where: { id: continuationRunId! },
-        include: { task: true },
-      }),
-    ).resolves.toMatchObject({
-      status: "queued",
-      trigger: "follow_up",
-      task: { prompt: "Respond to the user's steering context." },
-    });
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+    ).resolves.toMatchObject({ status: "failed", error: "provider failed" });
     await expect(
       handles.prisma.steeringMessage.findFirstOrThrow({ where: { botId: seeded.bot.id } }),
-    ).resolves.toMatchObject({ runId: continuationRunId, claimedAt: null });
+    ).resolves.toMatchObject({ runId: null, claimedAt: null });
+
+    const retry = await events.sendUserMessage({
+      spaceId: seeded.me.spaceId,
+      threadId: seeded.thread.id,
+      botId: seeded.bot.id,
+      userId: seeded.me.userId,
+      blocks: [{ kind: "text", text: "Try again now." }],
+      prompt: "Try again now.",
+      trigger: "follow_up",
+    });
+    await handles.prisma.run.update({
+      where: { id: retry.runId! },
+      data: { status: "running", leaseOwner: "retry-worker", leaseFence: 1 },
+    });
+    const retryAttempt = await handles.prisma.attempt.create({
+      data: { runId: retry.runId!, fence: 1, status: "running" },
+    });
+    await expect(
+      events.claimSteering({
+        threadId: seeded.thread.id,
+        botId: seeded.bot.id,
+        runId: retry.runId!,
+        leaseOwner: "retry-worker",
+        leaseFence: 1,
+        seenIds: [],
+      }),
+    ).resolves.toEqual([expect.objectContaining({ text: "Recover this context." })]);
+    await expect(
+      events.finalizeRun({
+        spaceId: seeded.me.spaceId,
+        threadId: seeded.thread.id,
+        botId: seeded.bot.id,
+        runId: retry.runId!,
+        taskId: retry.taskId!,
+        attemptId: retryAttempt.id,
+        leaseOwner: "retry-worker",
+        leaseFence: 1,
+        outcome: "failed",
+        error: "provider failed again",
+      }),
+    ).resolves.toMatchObject({ continuationRunId: null });
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(2);
+    expect(
+      await handles.prisma.run.count({ where: { threadId: seeded.thread.id, status: "queued" } }),
+    ).toBe(0);
+    await expect(
+      handles.prisma.steeringMessage.findFirstOrThrow({ where: { botId: seeded.bot.id } }),
+    ).resolves.toMatchObject({ runId: null, claimedAt: null });
   });
 
   it("discards pending steering when the user stops active work", async () => {
@@ -532,6 +614,125 @@ describeIntegration("run executor lifecycle", () => {
     expect(first.runIds).toHaveLength(2);
     expect(replay.runIds).toEqual(first.runIds);
     expect(await handles.prisma.run.count({ where: { threadId: thread.id } })).toBe(2);
+  });
+
+  it("shuts down active work and resumes its fenced run without losing model or uncertain charges", async () => {
+    const seeded = await seedRun("shutdown", "keep working until I stop you");
+    const database = createDb(process.env.DATABASE_URL!);
+    let restoreRuntime: (() => void) | undefined;
+    try {
+      const organizationId = await organizationIdForSpace(database.prisma, seeded.me.spaceId);
+      const reservation = await reserveUsage(database.prisma, {
+        organizationId,
+        spaceId: seeded.me.spaceId,
+        userId: seeded.me.userId,
+        runId: seeded.run.id,
+        operationKey: `unknown-shutdown-${stamp}`,
+        kind: "ai",
+        funding: "hosted",
+        amountUsd: 0.25,
+      });
+      const effect = await database.prisma.externalEffect.create({
+        data: {
+          spaceId: seeded.me.spaceId,
+          runId: seeded.run.id,
+          kind: "destination.write",
+          idempotencyKey: `shutdown-effect-${stamp}`,
+          status: "executing",
+          request: { collection: "notes", title: "Pending" },
+        },
+      });
+      await handles.jobs.enqueue(runContinueJob(seeded.run.id));
+      await expect
+        .poll(
+          () =>
+            database.prisma.event.count({
+              where: { runId: seeded.run.id, type: "thread.progress" },
+            }),
+          { timeout: 15_000 },
+        )
+        .toBeGreaterThan(0);
+      const before = await database.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } });
+
+      await handles.stop();
+      const interrupted = await database.prisma.run.findUniqueOrThrow({
+        where: { id: seeded.run.id },
+      });
+      expect(interrupted).toMatchObject({
+        status: "queued",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        completedAt: null,
+        modelProvider: before.modelProvider,
+        modelId: before.modelId,
+        modelFunding: before.modelFunding,
+        modelThinkingLevel: before.modelThinkingLevel,
+      });
+      expect(
+        await database.prisma.attempt.findFirstOrThrow({
+          where: { runId: seeded.run.id },
+          orderBy: { startedAt: "desc" },
+        }),
+      ).toMatchObject({ status: "interrupted" });
+      expect(
+        await database.prisma.computerExecutionLease.count({ where: { runId: seeded.run.id } }),
+      ).toBe(0);
+      expect(
+        await database.prisma.externalEffect.findUniqueOrThrow({ where: { id: effect.id } }),
+      ).toMatchObject({ status: "executing" });
+      expect(
+        await database.prisma.usageReservation.findUniqueOrThrow({ where: { id: reservation.id } }),
+      ).toMatchObject({ status: "reserved", settledMicros: null });
+      expect(
+        await database.prisma.event.count({
+          where: { runId: seeded.run.id, type: { in: ["run.completed", "run.failed"] } },
+        }),
+      ).toBe(0);
+
+      const resumedRuntime = vi
+        .spyOn(ScriptedAgentRuntime.prototype, "run")
+        .mockImplementation(async function* () {
+          yield { type: "done", text: "Resumed after restart." };
+        });
+      restoreRuntime = () => resumedRuntime.mockRestore();
+      const { createApp } = await import("../../../apps/api/src/app.ts");
+      handles = await createApp({
+        databaseUrl: process.env.DATABASE_URL!,
+        dataDir,
+        sandboxProvider: "fake",
+        agentRuntime: "scripted",
+        wakeupDriver: "memory",
+        defaultProvider: "scripted",
+        defaultModel: "scripted",
+      });
+      await handles.executor.continueRun(seeded.run.id, "restarted-worker");
+      await expect
+        .poll(
+          async () =>
+            (
+              await database.prisma.run.findUniqueOrThrow({
+                where: { id: seeded.run.id },
+              })
+            ).status,
+        )
+        .toBe("completed");
+      expect(
+        await database.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      ).toMatchObject({
+        modelProvider: before.modelProvider,
+        modelId: before.modelId,
+        modelFunding: before.modelFunding,
+        modelThinkingLevel: before.modelThinkingLevel,
+        leaseFence: before.leaseFence + 1,
+      });
+      expect(
+        await database.prisma.usageReservation.findUniqueOrThrow({ where: { id: reservation.id } }),
+      ).toMatchObject({ status: "reserved" });
+    } finally {
+      restoreRuntime?.();
+      await database.prisma.$disconnect();
+      await database.pool.end();
+    }
   });
 
   async function seedRun(

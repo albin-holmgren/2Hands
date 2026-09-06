@@ -25,6 +25,12 @@ import {
   summarize,
 } from "../performance-report.js";
 
+if (process.env.RAKAZO_ELECTRON_E2E !== "1") {
+  throw new Error(
+    "Desktop benchmarks repeatedly open visible Electron windows. Set RAKAZO_ELECTRON_E2E=1 explicitly to run them.",
+  );
+}
+process.env.RAKAZO_IGNORE_ENV_FILES = "1";
 loadRootEnv();
 
 const root = path.resolve(import.meta.dirname, "../../../..");
@@ -80,8 +86,8 @@ try {
   const executablePath = await packagedExecutable();
   const benchmark = { executablePath, env: benchmarkEnv };
   const primedProfile = path.join(temporaryRoot, "profile-primed");
-  await prepareAuthenticatedProfile(benchmark, primedProfile);
-  await seedBenchmarkThread(handles.prisma);
+  const benchmarkEmail = await prepareAuthenticatedProfile(benchmark, primedProfile);
+  await seedBenchmarkThread(handles.prisma, benchmarkEmail);
 
   const coldLaunches = [];
   for (let index = 0; index < launchSamples; index += 1) {
@@ -174,10 +180,13 @@ function performanceEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
     WEB_PORT: String(webPort),
     RAKAZO_HOST: "127.0.0.1",
     RAKAZO_WEB_URL: webOrigin,
+    SERVE_WEB: "0",
     RAKAZO_DISABLE_BUNDLED_RENDERER: remoteRenderer ? "1" : "0",
     RAKAZO_DISABLE_WARM_WINDOW: disableWarmWindow ? "1" : "0",
     RAKAZO_PERFORMANCE_ASSET_DELAY_MS: String(assetDelayMs),
     DATA_DIR: path.join(temporaryRoot, "data"),
+    BILLING_ENABLED: "false",
+    SIGNUPS_LOCKED: "false",
     SIGNUPS_ENABLED: "true",
     SIGNUP_ALLOWLIST: "",
     PUBLIC_POSTHOG_KEY: "",
@@ -220,12 +229,14 @@ function startPreview(env: NodeJS.ProcessEnv) {
 
 async function packagedExecutable() {
   const out = path.join(desktopRoot, "out");
-  const candidates = process.platform === "darwin" ? await findNamed(out, "Rakazo.app") : [];
-  if (process.platform === "darwin" && candidates[0]) {
-    return path.join(candidates[0], "Contents/MacOS/Rakazo");
+  const candidates =
+    process.platform === "darwin"
+      ? (await findNamed(out, "2hands.app")).map((app) => path.join(app, "Contents/MacOS/2hands"))
+      : await findNamed(out, process.platform === "win32" ? "2hands.exe" : "2hands");
+  for (const candidate of candidates) {
+    if ((await stat(candidate).catch(() => null))?.isFile()) return candidate;
   }
-  const desktopRequire = createRequire(path.join(desktopRoot, "package.json"));
-  return desktopRequire("electron") as string;
+  throw new Error("Packaged 2hands executable is missing. Run the desktop pack:dir build first.");
 }
 
 async function findNamed(directory: string, name: string): Promise<string[]> {
@@ -256,55 +267,29 @@ async function prepareAuthenticatedProfile(benchmark: BenchmarkContext, profile:
     waitForReady: false,
   });
   try {
-    const stamp = Date.now();
+    const email = `benchmark-${Date.now()}@example.test`;
     await page.goto(`${webOrigin}/sign-up`);
     await page.getByPlaceholder("Your name").fill("Benchmark User");
-    await page.getByPlaceholder("Your email address").fill(`benchmark-${stamp}@rakazo.test`);
+    await page.getByPlaceholder("Your email address").fill(email);
     await page.getByPlaceholder("Password").fill("password12");
     await page.getByRole("button", { name: "Create account" }).click();
-    await page
-      .waitForFunction(() => /^\/(?:onboarding|app)/.test(window.location.pathname), undefined, {
-        timeout: 10_000,
-      })
-      .catch(async (error) => {
-        const message = await page
-          .locator('form p[role="alert"]')
-          .textContent()
-          .catch(() => null);
-        throw new Error(
-          `Benchmark sign-up stayed on ${new URL(page.url()).pathname}${message ? `: ${message}` : ""}`,
-          { cause: error },
-        );
-      });
-    const connectHeading = page.getByRole("heading", { name: "Connect a model" });
-    const createHeading = page.getByRole("heading", { name: "Create your first bot" });
-    const benchmarkBot = page.getByText("Benchmark", { exact: true }).first();
-    await connectHeading.or(createHeading).or(benchmarkBot).waitFor({ timeout: 20_000 });
-    if (await connectHeading.isVisible().catch(() => false)) {
-      await page.getByRole("button", { name: "Skip for now" }).click();
-      await createHeading.or(benchmarkBot).waitFor({ timeout: 20_000 });
-    }
-    if (await createHeading.isVisible().catch(() => false)) {
-      await page.locator("label:has-text('Name') input").fill("Benchmark");
-      await page.getByRole("button", { name: "Continue" }).click();
-      await page.getByText("A bit of everything", { exact: true }).click();
-      await page.getByText("Clear and tight", { exact: true }).click();
-      await page.getByRole("button", { name: "Open Rakazo" }).click();
-    }
+    // The hosted-style scripted fixture opens a ready starter directly.
     await waitForShell(page);
+    return email;
   } finally {
     await app.close();
   }
 }
 
-async function seedBenchmarkThread(prisma: PrismaClient) {
+async function seedBenchmarkThread(prisma: PrismaClient, email: string) {
   const bot = await prisma.bot.findFirst({
-    where: { name: "Benchmark" },
-    select: { thread: { select: { id: true } } },
+    where: { user: { email }, archivedAt: null },
+    select: { id: true, thread: { select: { id: true } } },
   });
-  const threadId = bot?.thread?.id;
-  if (!threadId) throw new Error("Benchmark onboarding did not create a thread");
+  if (!bot?.thread) throw new Error("Benchmark onboarding did not create a thread");
+  const threadId = bot.thread.id;
   await prisma.$transaction([
+    prisma.bot.update({ where: { id: bot.id }, data: { name: "Benchmark" } }),
     prisma.message.deleteMany({ where: { threadId } }),
     prisma.thread.update({
       where: { id: threadId },
@@ -519,7 +504,9 @@ async function measureInteractions(app: ElectronApplication, page: Page) {
   await composer.focus();
   const characterCount = 40;
   await page.evaluate(() => {
-    const target = document.querySelector<HTMLInputElement>('input[placeholder^="Message "]');
+    const target = document.querySelector<HTMLTextAreaElement>(
+      '[data-testid="composer-bar"] [role="combobox"]',
+    );
     if (!target) throw new Error("Composer is missing");
     const samples: number[] = [];
     (window as typeof window & { __rakazoKeyPaintSamples?: number[] }).__rakazoKeyPaintSamples =
@@ -575,7 +562,7 @@ async function measureInteractions(app: ElectronApplication, page: Page) {
   await page.keyboard.press("Enter");
   await page.getByText("still working…").first().waitFor({ timeout: 10_000 });
   const [streamFrameIntervalsMs, streaming] = await Promise.all([streamFrames, streamingMetrics]);
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByTestId("composer-bar").getByRole("button", { name: "Stop", exact: true }).click();
   await page.getByRole("button", { name: "Send" }).waitFor();
 
   await session.detach();
@@ -755,7 +742,7 @@ function environmentFingerprint(versions: { electron?: string; chrome?: string }
 
 async function measureBundles() {
   const web = await directorySize(path.join(webRoot, "dist"));
-  const applications = await findNamed(path.join(desktopRoot, "out"), "Rakazo.app");
+  const applications = await findNamed(path.join(desktopRoot, "out"), "2hands.app");
   const desktop = applications[0] ? await directorySize(applications[0]) : null;
   return { web, desktop };
 }
@@ -819,7 +806,7 @@ function roundedSummary(values: number[]): NumericSummary {
 
 function renderMarkdown(report: PerformanceReport) {
   const summary = report.summary;
-  return `# Rakazo desktop performance — ${report.label}
+  return `# 2hands desktop performance — ${report.label}
 
 - Commit: \`${report.environment.gitSha.slice(0, 12)}\`
 - Platform: ${report.environment.platform}/${report.environment.arch}

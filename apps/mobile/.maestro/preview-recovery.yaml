@@ -1,0 +1,40 @@
+appId: com.rakazo.app
+name: 2hands native unavailable preview recovery
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- tapOn: "Open computer"
+- extendedWaitUntil:
+    visible: "Preview unavailable"
+    timeout: 30000
+- assertVisible: "Retry preview"
+- assertNotVisible: "Error loading page"
+- takeScreenshot: screenshots/preview-unavailable
+- tapOn: "Retry preview"
+- extendedWaitUntil:
+    visible: "Retry preview"
+    timeout: 30000
+- assertVisible: "Preview unavailable"
+- tapOn: "Take control"
+- extendedWaitUntil:
+    visible: "You have control"
+    timeout: 30000
+- assertVisible: "Preview unavailable"
+- assertVisible: "Retry preview"
+- assertVisible: "Release"
+- assertNotVisible: "Error loading page"
+- takeScreenshot: screenshots/preview-unavailable-control
+- tapOn: "Release"
+- extendedWaitUntil:
+    visible: "Take control"
+    timeout: 30000

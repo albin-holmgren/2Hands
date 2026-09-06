@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { useNativeTheme } from "../lib/theme";
 import { BotAvatar } from "./bot-avatar";
 
 export interface GroupAvatarMember {
@@ -16,6 +17,7 @@ export const GroupAvatar = memo(function GroupAvatar({
   members: GroupAvatarMember[];
   size?: number;
 }) {
+  const native = useNativeTheme();
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -23,13 +25,14 @@ export const GroupAvatar = memo(function GroupAvatar({
         style={[
           styles.fallback,
           {
+            backgroundColor: native.surface2,
             width: size,
             height: size,
             borderRadius: size / 2,
           },
         ]}
       >
-        <Text style={[styles.fallbackText, { fontSize: Math.round(size * 0.35) }]}>👥</Text>
+        <Text style={{ color: native.muted, fontSize: Math.round(size * 0.35) }}>👥</Text>
       </View>
     );
   }
@@ -88,12 +91,12 @@ export const GroupAvatar = memo(function GroupAvatar({
             width: miniSize,
             height: miniSize,
             borderRadius: miniSize / 2,
-            backgroundColor: "#202026",
+            backgroundColor: native.surface2,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#E0E0E6", fontSize: 10, fontWeight: "600" }}>
+          <Text style={{ color: native.ink, fontSize: 10, fontWeight: "600" }}>
             +{members.length - 2}
           </Text>
         </View>
@@ -104,11 +107,7 @@ export const GroupAvatar = memo(function GroupAvatar({
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: "#202024",
     alignItems: "center",
     justifyContent: "center",
-  },
-  fallbackText: {
-    color: "#9A9AA2",
   },
 });

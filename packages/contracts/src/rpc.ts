@@ -11,7 +11,10 @@ import {
   ArtifactWithContentSchema,
   AvatarStyleSchema,
   BillingCheckoutInput,
+  BillingPlanChangeStatusSchema,
+  BillingSchedulePlanChangeInput,
   BillingSchema,
+  BillingSetCancelAtPeriodEndInput,
   BotMcpServerSchema,
   BotSchema,
   BotSectionSchema,
@@ -529,6 +532,8 @@ export const appContract = {
     },
   },
   onboarding: {
+    /** Create the default Chief of Staff in an empty space, or return the existing first bot. */
+    ensureChiefOfStaff: oc.output(BotSchema),
     /** Seed the first-run conversational onboarding into the bot's thread. */
     start: oc.input(z.object({ botId: Id })).output(z.object({ ok: z.literal(true) })),
     /** Answer the focus choice; renames the bot and posts the app cards. */
@@ -646,6 +651,14 @@ export const appContract = {
     get: oc.output(BillingSchema),
     checkout: oc.input(BillingCheckoutInput).output(z.object({ url: z.string() })),
     portal: oc.output(z.object({ url: z.string() })),
+    planChangeStatus: oc.output(BillingPlanChangeStatusSchema),
+    schedulePlanChange: oc
+      .input(BillingSchedulePlanChangeInput)
+      .output(BillingPlanChangeStatusSchema),
+    cancelPlanChange: oc.output(BillingPlanChangeStatusSchema),
+    setCancelAtPeriodEnd: oc
+      .input(BillingSetCancelAtPeriodEndInput)
+      .output(BillingPlanChangeStatusSchema),
   },
   search: {
     query: oc.input(z.object({ q: z.string().max(200) })).output(SearchQueryOutputSchema),

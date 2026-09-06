@@ -1,7 +1,78 @@
 import { describe, expect, it, vi } from "vitest";
-import { blockedAuthPaths, passwordResetEmail, resolveSignupPolicy } from "./index.js";
+import { blockedAuthPaths, createAuth, passwordResetEmail, resolveSignupPolicy } from "./index.js";
 
 describe("auth policy", () => {
+  it("rejects real signup requests while the deployment lock is active", async () => {
+    const findUnique = vi.fn().mockRejectedValue(new Error("saved policy must not bypass lock"));
+    const auth = createAuth({ deploymentSettings: { findUnique } } as never, {
+      secret: "deterministic-test-auth-secret-with-more-than-32-characters",
+      baseURL: "http://localhost:3100",
+      webOrigin: "http://localhost:3100",
+      signupsEnabled: "true",
+      signupsLocked: "true",
+      signupAllowlist: undefined,
+    });
+    const response = await auth.handler(
+      new Request("http://localhost:3100/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "locked@example.test",
+          password: "password123",
+          name: "Locked",
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("Registration is closed");
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sign-up/email", { email: "short@example.test", password: "short12", name: "Short" }],
+    ["reset-password", { newPassword: "short12", token: "fake-reset-token" }],
+  ])("enforces the same eight-character minimum at %s", async (path, body) => {
+    const auth = createAuth(
+      { deploymentSettings: { findUnique: vi.fn(async () => null) } } as never,
+      {
+        secret: "deterministic-test-auth-secret-with-more-than-32-characters",
+        baseURL: "http://localhost:3100",
+        webOrigin: "http://localhost:3100",
+        signupsEnabled: "true",
+        signupAllowlist: undefined,
+      },
+    );
+    const response = await auth.handler(
+      new Request(`http://localhost:3100/api/auth/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:3100" },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "PASSWORD_TOO_SHORT" });
+  });
+
+  it("still attempts sign-in for an existing shorter password", async () => {
+    const findFirst = vi.fn(async () => null);
+    const auth = createAuth({ user: { findFirst } } as never, {
+      secret: "deterministic-test-auth-secret-with-more-than-32-characters",
+      baseURL: "http://localhost:3100",
+      webOrigin: "http://localhost:3100",
+      signupsEnabled: "true",
+      signupAllowlist: undefined,
+    });
+    const response = await auth.handler(
+      new Request("http://localhost:3100/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:3100" },
+        body: JSON.stringify({ email: "existing@example.test", password: "old1234" }),
+      }),
+    );
+    expect(response.status).toBe(401);
+    expect(findFirst).toHaveBeenCalled();
+  });
+
   it("blocks invitation and org-creation paths in version 1", () => {
     expect(blockedAuthPaths.some((path) => path.includes("invite"))).toBe(true);
     expect(blockedAuthPaths.some((path) => path.includes("create"))).toBe(true);
@@ -27,6 +98,44 @@ describe("passwordResetEmail", () => {
 });
 
 describe("resolveSignupPolicy", () => {
+  it.each(["true", "1"])(
+    "honors the deployment lock %s before reading saved settings",
+    async (locked) => {
+      const findUnique = vi.fn().mockResolvedValue({
+        signupsEnabled: true,
+        signupAllowlist: "",
+        signupPolicyInitialized: true,
+      });
+      await expect(
+        resolveSignupPolicy({ deploymentSettings: { findUnique } } as never, {
+          signupsEnabled: "true",
+          signupsLocked: locked,
+          signupAllowlist: undefined,
+        }),
+      ).resolves.toEqual({ enabled: false, allowlist: [] });
+      expect(findUnique).not.toHaveBeenCalled();
+    },
+  );
+
+  it("restores the saved policy when the deployment lock is removed", async () => {
+    const prisma = {
+      deploymentSettings: {
+        findUnique: vi.fn().mockResolvedValue({
+          signupsEnabled: true,
+          signupAllowlist: "approved@example.com",
+          signupPolicyInitialized: true,
+        }),
+      },
+    };
+    await expect(
+      resolveSignupPolicy(prisma as never, {
+        signupsEnabled: "false",
+        signupsLocked: "false",
+        signupAllowlist: undefined,
+      }),
+    ).resolves.toEqual({ enabled: true, allowlist: ["approved@example.com"] });
+  });
+
   it("uses environment defaults before deployment settings exist", async () => {
     const prisma = {
       deploymentSettings: { findUnique: vi.fn().mockResolvedValue(null) },

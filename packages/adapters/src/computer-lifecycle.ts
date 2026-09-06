@@ -6,16 +6,23 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { computerSleepJob } from "@rakazo/adapter-kit";
 import { ACTIVE_RUN_STATUSES, screenLeaseId } from "@rakazo/core";
 import { type PrismaClient, parseComputerMode, type ThreadEvents } from "@rakazo/db";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
 import {
+  ensureComputerUsageCoverage,
+  releaseUnusedComputerUsage,
+  settleComputerUsage,
+  suspendComputerForBudget,
+} from "./computer-usage.js";
+import {
   checkpointAndRecordComputerWorkspace,
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
-import { isUnrecoverableSandboxError } from "./e2b-sandbox.js";
+import { isSandboxGoneError, isUnrecoverableSandboxError } from "./e2b-sandbox.js";
 import { resolveAgentHomePath } from "./home.js";
 
 const EXECUTION_LEASE_MS = 5 * 60_000;
@@ -55,37 +62,76 @@ export async function provisionComputer(
   const homePath = resolveAgentHomePath(deps.home, existing.homeKey, deps.dataDir ?? "./data");
   await mkdir(homePath, { recursive: true });
 
-  if (existing.state === "running" && existing.providerRef) {
-    return reconnectComputer(deps, existing, homePath, context);
-  }
   if (existing.state === "booting" || existing.state === "suspending") {
     const ready = await waitForComputerReady(deps.prisma, computerId, context);
     if (ready?.state === "running" && ready.providerRef) {
-      return reconnectComputer(deps, ready, homePath, context);
+      return joinComputerBoot(deps, ready, context);
     }
     existing = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
   }
 
+  // A prior create may still be running even if Stop/reset changed the saved
+  // state before its provider reference arrived. Never spend the same hold twice.
+  if (
+    (!existing.providerRef || existing.state === "booting") &&
+    existing.billingReservationId &&
+    existing.billingCoveredUntil &&
+    existing.billingCoveredUntil.getTime() > Date.now()
+  ) {
+    throw new ComputerBusyError();
+  }
+
+  const bootFence = (existing.executionFence ?? 0) + 1;
+  const expiredUnknownBoot =
+    existing.state === "booting" &&
+    existing.billingCoveredUntil &&
+    existing.billingCoveredUntil.getTime() <= Date.now();
   const claimed = await deps.prisma.computer.updateMany({
     where: {
       id: computerId,
-      state: { in: ["stopped", "suspended", "error"] },
+      state: {
+        in: [
+          "running",
+          "stopped",
+          "suspended",
+          "error",
+          ...(expiredUnknownBoot ? ["booting"] : []),
+        ],
+      },
+      providerRef: existing.providerRef,
+      kind: existing.kind,
+      executionFence: bootFence - 1,
       ...(context.botId ? { bots: { some: { id: context.botId, archivedAt: null } } } : {}),
     },
-    data: { state: "booting" },
+    data: { state: "booting", executionFence: bootFence },
   });
-  if (claimed.count !== 1) throw new ComputerBusyError();
+  if (claimed.count !== 1) {
+    // Boot and reconnect share a computer-wide claim. Team bots must not each
+    // allocate a replacement after observing the same missing provider reference.
+    const ready = await waitForComputerReady(deps.prisma, computerId, context);
+    if (ready.state === "running" && ready.providerRef) {
+      return joinComputerBoot(deps, ready, context);
+    }
+    throw new ComputerBusyError();
+  }
   let provisioned: ComputerRef | undefined;
+  let dispatched = false;
   try {
+    const expiresAt = await ensureComputerUsageCoverage(deps, computerId);
+    if (expiresAt)
+      await deps.jobs.enqueue(computerSleepJob(computerId, new Date(Date.now() + 60_000)));
+    dispatched = true;
     const ref = await deps.sandbox.provision(
       {
         botId: existing.homeKey,
         homePath,
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
+        expiresAt,
       },
       context,
     );
+    ref.expiresAt = expiresAt;
     provisioned = ref;
     await deps.sandbox.prepare(ref, context);
     const replacement =
@@ -108,6 +154,7 @@ export async function provisionComputer(
       where: {
         id: computerId,
         state: "booting",
+        executionFence: bootFence,
         ...(context.botId ? { bots: { some: { id: context.botId, archivedAt: null } } } : {}),
       },
       data: {
@@ -130,14 +177,35 @@ export async function provisionComputer(
     }
     return ref;
   } catch (error) {
-    const rollbackError = provisioned
-      ? await rollbackProvisionedComputer(deps.sandbox, provisioned, context, error)
-      : undefined;
+    const current = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+    const ownsClaim = (current.executionFence ?? bootFence) === bootFence;
+    const unknownCreate =
+      dispatched &&
+      !provisioned &&
+      current.billingReservationId &&
+      current.billingCoveredUntil &&
+      current.billingCoveredUntil.getTime() > Date.now();
+    if (!dispatched && ownsClaim && existing.state === "running" && existing.providerRef) {
+      await suspendComputerForBudget(deps, computerId);
+      throw error;
+    }
+    const rollbackError =
+      provisioned && (ownsClaim || current.providerRef !== provisioned.providerRef)
+        ? await rollbackProvisionedComputer(deps.sandbox, provisioned, context, error)
+        : undefined;
+    if (!dispatched && ownsClaim)
+      await releaseUnusedComputerUsage(
+        deps.prisma,
+        computerId,
+        existing.billingReservationId ?? null,
+      );
+    else if (provisioned && !rollbackError && ownsClaim)
+      await settleComputerUsage(deps.prisma, computerId);
     try {
       await deps.prisma.computer.updateMany({
-        where: { id: computerId, state: "booting" },
+        where: { id: computerId, state: "booting", executionFence: bootFence },
         data: {
-          state: "error",
+          state: unknownCreate ? "booting" : "error",
           ...(rollbackError && provisioned
             ? { providerRef: provisioned.providerRef, kind: provisioned.kind }
             : {}),
@@ -159,33 +227,20 @@ export async function provisionComputer(
   }
 }
 
-async function reconnectComputer(
-  deps: {
-    prisma: PrismaClient;
-    sandbox: SandboxProvider;
-    home: AgentHomeStore;
-    dataDir?: string;
-  },
-  computer: {
-    id: string;
-    homeKey: string;
-    providerRef: string | null;
-    kind: string;
-    scope: string;
-  },
-  homePath: string,
+async function joinComputerBoot(
+  deps: { sandbox: SandboxProvider; prisma: PrismaClient },
+  computer: Parameters<typeof toComputerRef>[0] & { id: string; scope: string },
   context: AdapterContext,
 ): Promise<ComputerRef> {
-  const ref = await deps.sandbox.provision(
-    {
-      botId: computer.homeKey,
-      homePath,
-      providerRef: computer.providerRef ?? undefined,
-      providerKind: computer.kind as ComputerRef["kind"],
-    },
-    context,
-  );
-  await deps.sandbox.prepare(ref, context);
+  if (
+    context.botId &&
+    !(await deps.prisma.bot.findFirst({
+      where: { id: context.botId, computerId: computer.id, archivedAt: null },
+      select: { id: true },
+    }))
+  )
+    throw new ComputerBusyError();
+  const ref = toComputerRef(computer);
   await ensureComputerWorkspaceLayout(
     deps.sandbox,
     ref,
@@ -193,15 +248,6 @@ async function reconnectComputer(
     context.botId,
     context,
   );
-  if (ref.providerRef !== computer.providerRef || ref.kind !== computer.kind) {
-    await deps.prisma.computer.update({
-      where: { id: computer.id },
-      data: {
-        providerRef: ref.providerRef,
-        kind: ref.kind,
-      },
-    });
-  }
   return ref;
 }
 
@@ -419,7 +465,11 @@ export async function replaceComputer(
   if (hasActiveComputerControl(existing)) {
     throw new ComputerBusyError();
   }
-  if (existing.state === "booting" || existing.state === "suspending") {
+  if (
+    (existing.state === "booting" &&
+      !(existing.billingCoveredUntil && existing.billingCoveredUntil.getTime() <= Date.now())) ||
+    existing.state === "suspending"
+  ) {
     throw new ComputerBusyError();
   }
 
@@ -468,8 +518,10 @@ export async function replaceComputer(
       await deps.sandbox.releaseScreen?.(oldRef, context).catch(() => undefined);
       try {
         await deps.sandbox.destroy(oldRef, context);
+        await settleComputerUsage(deps.prisma, computerId);
       } catch (error) {
-        if (mode !== "recover" && !isUnrecoverableSandboxError(error)) throw error;
+        if (!isSandboxGoneError(error)) throw error;
+        await settleComputerUsage(deps.prisma, computerId);
       }
     }
     await deps.prisma.computer.update({
