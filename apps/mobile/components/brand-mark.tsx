@@ -8,18 +8,19 @@ export function BrandMark({ size = 40 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox={brandMark.viewBox} accessible={false}>
       <Defs>
-        {brandMark.gradients.map((colors, index) => (
+        {brandMark.gradients.map((gradient, index) => (
           <LinearGradient
-            key={colors[0]}
+            key={index}
             id={`${id}-${index}`}
-            x1={8}
-            y1={8}
-            x2={56}
-            y2={56}
+            x1={gradient.x1}
+            y1={gradient.y1}
+            x2={gradient.x2}
+            y2={gradient.y2}
             gradientUnits="userSpaceOnUse"
           >
-            <Stop offset={0} stopColor={colors[0]} />
-            <Stop offset={1} stopColor={colors[1]} />
+            {gradient.stops.map(([offset, color]) => (
+              <Stop key={offset} offset={offset} stopColor={color} />
+            ))}
           </LinearGradient>
         ))}
       </Defs>

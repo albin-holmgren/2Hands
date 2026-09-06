@@ -18,8 +18,8 @@ function mark(monochrome?: string) {
     ? ""
     : `<defs>${brandMark.gradients
         .map(
-          ([start, end], i) =>
-            `<linearGradient id="mark-${i}" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient>`,
+          (gradient, i) =>
+            `<linearGradient id="mark-${i}" x1="${gradient.x1}" y1="${gradient.y1}" x2="${gradient.x2}" y2="${gradient.y2}" gradientUnits="userSpaceOnUse">${gradient.stops.map(([offset, color]) => `<stop offset="${offset}" stop-color="${color}"/>`).join("")}</linearGradient>`,
         )
         .join("")}</defs>`;
   return `${defs}${brandMark.paths.map((path, i) => `<path d="${path}" fill="${monochrome ?? `url(#mark-${i})`}"/>`).join("")}`;

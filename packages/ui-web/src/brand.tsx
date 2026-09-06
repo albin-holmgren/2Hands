@@ -23,18 +23,19 @@ export function BrandMark({
       style={{ flex: "none" }}
     >
       <defs>
-        {brandMark.gradients.map(([start, end], index) => (
+        {brandMark.gradients.map((gradient, index) => (
           <linearGradient
             key={index}
             id={`${id}-${index}`}
-            x1="8"
-            y1="8"
-            x2="56"
-            y2="56"
+            x1={gradient.x1}
+            y1={gradient.y1}
+            x2={gradient.x2}
+            y2={gradient.y2}
             gradientUnits="userSpaceOnUse"
           >
-            <stop stopColor={start} />
-            <stop offset="1" stopColor={end} />
+            {gradient.stops.map(([offset, color]) => (
+              <stop key={offset} offset={offset} stopColor={color} />
+            ))}
           </linearGradient>
         ))}
       </defs>
