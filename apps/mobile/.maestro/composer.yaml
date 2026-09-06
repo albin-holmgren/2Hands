@@ -1,5 +1,5 @@
 appId: com.rakazo.app
-name: 2hands native composer and work navigation
+name: 2hands native composer and computer access
 ---
 - launchApp
 - extendedWaitUntil:
@@ -13,7 +13,6 @@ name: 2hands native composer and work navigation
     visible:
       id: "composer-input"
     timeout: 30000
-- assertVisible: "Chat"
 - tapOn:
     id: "composer-input"
 - longPressOn:
@@ -34,6 +33,7 @@ name: 2hands native composer and work navigation
 - assertVisible: "Search models"
 - takeScreenshot: screenshots/composer-models
 - tapOn: "Close models"
+- waitForAnimationToEnd
 - tapOn: "Open computer"
 - extendedWaitUntil:
     visible: "Teach a task"

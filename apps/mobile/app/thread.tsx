@@ -38,6 +38,7 @@ import {
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -598,44 +599,49 @@ function Thread({
   function showBotActions() {
     if (!botId) return;
     const bot = { id: botId, name: name || "Bot" };
-    Alert.alert(bot.name, "Archive keeps everything and can be undone. Delete is permanent.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Clear conversation",
-        style: "destructive",
-        onPress: () => {
-          Alert.alert(
-            "Clear conversation?",
-            "This removes every message and stops current work. The bot, computer, memory, and routines are kept.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Clear",
-                style: "destructive",
-                onPress: clearConversation,
-              },
-            ],
-          );
+    Alert.alert(
+      bot.name,
+      "Archive keeps everything and can be undone. Delete is permanent.",
+      [
+        ...(Platform.OS === "ios" ? [{ text: "Cancel", style: "cancel" as const }] : []),
+        {
+          text: "Clear conversation",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Clear conversation?",
+              "This removes every message and stops current work. The bot, computer, memory, and routines are kept.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Clear",
+                  style: "destructive",
+                  onPress: clearConversation,
+                },
+              ],
+            );
+          },
         },
-      },
-      {
-        text: "Archive",
-        onPress: () =>
-          void rpc("bots/archive", { botId })
-            .then(leaveBot)
-            .catch((error) =>
-              Alert.alert(
-                "Could not archive bot",
-                error instanceof Error ? error.message : "Try again.",
+        {
+          text: "Archive",
+          onPress: () =>
+            void rpc("bots/archive", { botId })
+              .then(leaveBot)
+              .catch((error) =>
+                Alert.alert(
+                  "Could not archive bot",
+                  error instanceof Error ? error.message : "Try again.",
+                ),
               ),
-            ),
-      },
-      {
-        text: "Delete…",
-        style: "destructive",
-        onPress: () => confirmDeleteBot(bot, leaveBot),
-      },
-    ]);
+        },
+        {
+          text: "Delete…",
+          style: "destructive",
+          onPress: () => confirmDeleteBot(bot, leaveBot),
+        },
+      ],
+      { cancelable: true },
+    );
   }
 
   async function refresh() {
@@ -1155,15 +1161,20 @@ function Thread({
   );
 
   function showAttachMenu() {
-    Alert.alert("Attach", undefined, [
-      {
-        text: "Photo library",
-        onPress: () => void addAttachments(pickFromLibrary),
-      },
-      { text: "Camera", onPress: () => void addAttachments(takePhoto) },
-      { text: "File", onPress: () => void addAttachments(pickDocuments) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    Alert.alert(
+      "Attach",
+      undefined,
+      [
+        {
+          text: "Photo library",
+          onPress: () => void addAttachments(pickFromLibrary),
+        },
+        { text: "Camera", onPress: () => void addAttachments(takePhoto) },
+        { text: "File", onPress: () => void addAttachments(pickDocuments) },
+        ...(Platform.OS === "ios" ? [{ text: "Cancel", style: "cancel" as const }] : []),
+      ],
+      { cancelable: true },
+    );
   }
 
   async function addAttachments(
@@ -1449,51 +1460,6 @@ function Thread({
       keyboardVerticalOffset={headerHeight}
       style={{ flex: 1, backgroundColor: native.page, paddingHorizontal: 20 }}
     >
-      {!inGroup ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignSelf: "center",
-            alignItems: "center",
-            marginTop: 4,
-            gap: 4,
-          }}
-        >
-          <View
-            accessibilityRole="tab"
-            accessibilityState={{ selected: true }}
-            style={{
-              minHeight: 44,
-              minWidth: 76,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: radii.control,
-              backgroundColor: native.selected,
-            }}
-          >
-            <Text style={{ color: native.selectedInk, fontSize: 14, fontWeight: "600" }}>Chat</Text>
-          </View>
-          <Link
-            href={{ pathname: "/computer", params: { botId: botId ?? "", name: name ?? "Bot" } }}
-            asChild
-          >
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityLabel="Open computer"
-              accessibilityState={{ selected: false }}
-              style={{
-                minHeight: 44,
-                minWidth: 76,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: radii.control,
-              }}
-            >
-              <Text style={{ color: native.muted, fontSize: 14 }}>Work</Text>
-            </Pressable>
-          </Link>
-        </View>
-      ) : null}
       {error ? <Text style={{ color: native.muted, marginTop: 12 }}>{error}</Text> : null}
       {runError ? <Text style={{ color: native.danger, marginTop: 12 }}>{runError}</Text> : null}
       <View style={{ flex: 1, position: "relative" }}>
@@ -1952,6 +1918,30 @@ function Thread({
             >
               <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
             </Pressable>
+            {!inGroup && botId ? (
+              <Link
+                href={{ pathname: "/computer", params: { botId, name: name ?? "Bot" } }}
+                asChild
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open computer"
+                  style={{
+                    width: 44,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <NativeSymbol
+                    ios="desktopcomputer"
+                    android="desktop-outline"
+                    size={18}
+                    color={native.muted2}
+                  />
+                </Pressable>
+              </Link>
+            ) : null}
             <View style={{ flex: 1, minWidth: 0 }}>
               {!inGroup ? (
                 <BotModelPicker

@@ -52,7 +52,7 @@ name: 2hands native core workflow
 - assertVisible: ${RAKAZO_E2E_MESSAGE}
 - tapOn: ${RAKAZO_E2E_MESSAGE}
 - takeScreenshot: screenshots/conversation
-- tapOn: "Open computer →"
+- tapOn: "Open computer"
 - extendedWaitUntil:
     visible: "Take control"
     timeout: 30000

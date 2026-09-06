@@ -8,7 +8,7 @@ Lovable’s public [brand palette](https://lovablebrand.lovable.app/brand/colors
 
 The bot construction draws on the simple shapes and consistent eyes described in [Grok Bot’s design retrospective](https://x.ai/news/designing-grok-bot). These are original 2hands assets. The design is an interpretation of those principles, not work produced or endorsed by either company.
 
-Lovable’s [mobile documentation](https://docs.lovable.dev/integrations/lovable-mobile-app) describes conversation and preview as the main views, with compact native menus and continuity across devices. For 2hands, that informs the Chat / Work control and a full-width message input above the attachment, model, and send toolbar. Work uses the existing native screen and back navigation. These choices are our adaptation of the documented flow; no authenticated Lovable mobile benchmark was performed.
+Lovable’s [mobile documentation](https://docs.lovable.dev/integrations/lovable-mobile-app) informs the restrained native controls and continuity across devices. The interaction follows [Grok Bot’s mobile conversation flow](https://docs.x.ai/grok-bot/mobile): conversation stays primary, and the computer opens from a contextual button when needed. The message input occupies a full row above the attachment, computer, model, and send toolbar. Computer views retain native back navigation and the conversation’s draft. These choices adapt the documented principles; no authenticated mobile benchmark was performed.
 
 ## Shared decisions
 

@@ -50,9 +50,13 @@ appearance, set the isolated device to night mode, run with `system`, then run w
 night mode stays enabled; inspect the screenshots to verify the explicit preference wins.
 
 `composer.yaml` captures the writing area with the keyboard and model sheet, restores its draft
-after visiting Work, then sends a follow-up while a scripted run is active and stops the run.
+after opening the computer, then sends a follow-up while a scripted run is active and stops the run.
 Use the primary thread link and the scripted fixture runtime: its “Keep working until I stop you”
 prompt deliberately stays active until the Stop control is pressed.
+
+`bot-actions.yaml` checks that Delete is available in the thread menu on both platforms, cancels
+the deletion confirmation, and restarts the app to verify the bot remains. Pass the primary thread
+link and its matching `RAKAZO_E2E_BOT_NAME`; the flow never confirms a deletion.
 
 Run the flows in the light and dark appearance settings from Account. Native UI screenshots require
 an iOS Simulator or Android emulator; web CI screenshots do not represent these screens.

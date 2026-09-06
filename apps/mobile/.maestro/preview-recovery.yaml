@@ -13,7 +13,7 @@ name: 2hands native unavailable preview recovery
     visible:
       id: "composer-input"
     timeout: 30000
-- tapOn: "Open computer →"
+- tapOn: "Open computer"
 - extendedWaitUntil:
     visible: "Preview unavailable"
     timeout: 30000
