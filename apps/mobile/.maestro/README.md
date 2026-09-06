@@ -49,5 +49,10 @@ primary thread link and `RAKAZO_E2E_APPEARANCE=light`, `dark`, or `system`. To v
 appearance, set the isolated device to night mode, run with `system`, then run with `light` while
 night mode stays enabled; inspect the screenshots to verify the explicit preference wins.
 
+`composer.yaml` captures the writing area with the keyboard and model sheet, restores its draft
+after visiting Work, then sends a follow-up while a scripted run is active and stops the run.
+Use the primary thread link and the scripted fixture runtime: its “Keep working until I stop you”
+prompt deliberately stays active until the Stop control is pressed.
+
 Run the flows in the light and dark appearance settings from Account. Native UI screenshots require
 an iOS Simulator or Android emulator; web CI screenshots do not represent these screens.

@@ -168,26 +168,38 @@ test("bots can be reordered by drag or keyboard and keep that order", async ({ p
   await expect.poll(order).toEqual([beta.id, alpha.id, chiefId]);
 });
 
-test("chat composer controls are vertically centered", async ({ page }) => {
+test("composer toolbar is aligned below its full-width input", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `composer-layout-${stamp}@rakazo.test`, "password12", "Composer Layout");
   await completeOnboarding(page);
 
-  const centers = await page.getByTestId("composer-bar").evaluate((composer) =>
-    [
-      '[aria-label="Attach file"]',
-      '[aria-label="Dictate"]',
-      'textarea[name="chat-message"]',
-      '[aria-label="Send"]',
-    ].map((selector) => {
-      const element = composer.querySelector<HTMLElement>(selector);
-      if (!element) throw new Error(`Missing composer control: ${selector}`);
-      const box = element.getBoundingClientRect();
-      return box.top + box.height / 2;
-    }),
-  );
-
-  expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await page.getByTestId("composer-bar").evaluate((composer) => {
+      const bounds = (selector: string) => {
+        const element = composer.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing composer control: ${selector}`);
+        return element.getBoundingClientRect().toJSON();
+      };
+      return {
+        input: bounds('textarea[name="chat-message"]'),
+        controls: [
+          '[aria-label="Attach file"]',
+          '[aria-label="Dictate"]',
+          '[aria-label="Send"]',
+        ].map(bounds),
+      };
+    });
+    const centers = layout.controls.map((box) => box.y + box.height / 2);
+    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
+    expect(layout.input.bottom).toBeLessThan(Math.min(...layout.controls.map((box) => box.y)));
+    if (width === 390) {
+      for (const control of layout.controls) {
+        expect(control.width).toBeGreaterThanOrEqual(44);
+        expect(control.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+  }
 });
 
 test("group chats share every context-menu action", async ({ page }, testInfo) => {

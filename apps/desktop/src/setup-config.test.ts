@@ -143,7 +143,12 @@ describe("startup target", () => {
   });
 
   it("migrates the saved official apex after the app moves to its own subdomain", () => {
-    for (const serverUrl of ["https://2hands.ai", "https://2hands.ai/"]) {
+    for (const serverUrl of [
+      "https://2hands.ai",
+      "https://2hands.ai/",
+      "https://www.2hands.ai",
+      "https://www.2hands.ai/",
+    ]) {
       const old = { mode: "existing", serverUrl } as const;
       expect(parseStoredSetup(JSON.stringify(old))).toEqual({
         ...old,

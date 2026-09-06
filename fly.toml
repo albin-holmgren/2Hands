@@ -10,6 +10,8 @@
 
 app = "2hands-computers"
 primary_region = "arn"
+kill_signal = "SIGTERM"
+kill_timeout = 60
 
 [build]
   dockerfile = "infra/compose/Dockerfile"

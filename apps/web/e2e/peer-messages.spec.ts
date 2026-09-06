@@ -65,8 +65,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
     const chipBox = await chip.boundingBox();
     expect(transcriptBox).not.toBeNull();
     expect(chipBox).not.toBeNull();
-    // Transcript padding is 16px mobile / 28px desktop; centering must fail this assertion.
-    expect(chipBox!.x - transcriptBox!.x).toBeLessThanOrEqual(32);
+    // Messages share a centered reading column. Receipts align with its left edge.
+    const rowBox = await chip.evaluate((element) =>
+      element.closest("[data-message-id]")!.getBoundingClientRect().toJSON(),
+    );
+    expect(Math.abs(chipBox!.x - rowBox.x)).toBeLessThanOrEqual(1);
+    expect(rowBox.width).toBeLessThanOrEqual(800);
     expect(chipBox!.width).toBeLessThan(transcriptBox!.width / 2);
   };
 

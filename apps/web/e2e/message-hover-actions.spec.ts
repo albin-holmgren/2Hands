@@ -204,8 +204,8 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(offlinePreview).toBeVisible();
   await expect(offlinePreview).toHaveText("Earlier message");
 
-  await page.unroute("**/rpc/bootstrap");
-  await page.unroute("**/rpc/threads/get");
+  // Let in-flight snapshot handlers finish before restoring real pagination.
+  await page.unrouteAll({ behavior: "wait" });
   await offlinePreview.click();
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toContainText(parentText);

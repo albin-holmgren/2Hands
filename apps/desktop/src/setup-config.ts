@@ -76,7 +76,7 @@ function parseSavedSetup(value: unknown): DesktopSetup | null {
   const original = (value as { serverUrl: string }).serverUrl.trim();
   // Only a stored official origin is an alias. Explicit environment paths and
   // custom targets remain under the user's control; credentials are never moved.
-  if (/^https:\/\/2hands\.ai\/?$/.test(original)) {
+  if (/^https:\/\/(?:www\.)?2hands\.ai\/?$/.test(original)) {
     return { ...saved, serverUrl: DEFAULT_HOSTED_WEB_URL };
   }
   return saved;

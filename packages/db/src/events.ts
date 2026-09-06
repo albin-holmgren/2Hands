@@ -1003,10 +1003,14 @@ async function finalizeRunOnce(
     } else {
       await tx.steeringMessage.updateMany({
         where: { runId: input.runId },
-        data: { runId: null },
+        data: { runId: null, claimedAt: null },
       });
     }
-    const continuationRunId = await createSteeringContinuation(tx, input);
+    // Failed work remains visible and its input stays durable for the next user
+    // action. Creating a fresh run here would bypass retry limits indefinitely
+    // when a provider or tool keeps failing on the same steering message.
+    const continuationRunId =
+      input.outcome === "completed" ? await createSteeringContinuation(tx, input) : null;
     await tx.bot.update({ where: { id: input.botId }, data: { updatedAt: now } });
     return { threadId: lastEvent.threadId, seq: lastEvent.seq, continuationRunId };
   });

@@ -8,6 +8,8 @@ Lovable’s public [brand palette](https://lovablebrand.lovable.app/brand/colors
 
 The bot construction draws on the simple shapes and consistent eyes described in [Grok Bot’s design retrospective](https://x.ai/news/designing-grok-bot). These are original 2hands assets. The design is an interpretation of those principles, not work produced or endorsed by either company.
 
+Lovable’s [mobile documentation](https://docs.lovable.dev/integrations/lovable-mobile-app) describes conversation and preview as the main views, with compact native menus and continuity across devices. For 2hands, that informs the Chat / Work control and a full-width message input above the attachment, model, and send toolbar. Work uses the existing native screen and back navigation. These choices are our adaptation of the documented flow; no authenticated Lovable mobile benchmark was performed.
+
 ## Shared decisions
 
 | Element | Treatment |
@@ -33,7 +35,7 @@ Dark mode uses neutral charcoal surfaces with readable text and a restrained lil
 - Native rendering: `apps/mobile/components/brand-mark.tsx` and `bot-avatar.tsx`.
 - The existing Beautiful UI ports remain the source for cards, loading, activity, and approval patterns.
 
-The logo consists of two open hands, with simple rounded fingers and inward-facing thumbs. It works in blue/coral and as a single-color silhouette. The character family keeps distinct shapes, steady eyes, and soft blue/lilac/coral shading. Characters are the default on web and native; the saved classic robot preference and custom bot colors remain supported.
+The logo restores the original 2hands gesture: two groups of three rounded strokes, with a raised middle stroke in each. The paired rhythm suggests two hands without detailed anatomy. Each group has one restrained blue or coral gradient; the same geometry also works in a single color. The character family keeps distinct shapes, steady eyes, and soft blue/lilac/coral shading. Characters are the default on web and native; the saved classic robot preference and custom bot colors remain supported.
 
 ## Generated app assets
 

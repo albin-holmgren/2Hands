@@ -30,8 +30,12 @@ DATABASE_URL='postgres://postgres.[ref]:[password]@db.[ref].supabase.co:5432/pos
 
 Fly volumes cannot attach to two Machines. Homes live on `DATA_DIR=/data`. Until object storage is wired, **API and worker must share one Machine** (`infra/fly/start.sh`). Do not scale `api` above 1. Do not add a second process group with its own volume.
 
+The command below updates the existing deployment. Initial provisioning is a separate operator task: `--update-only` intentionally requires an existing Machine for the configured process group. `--ha=false` disables spare creation, and `--strategy rolling` preserves the volume-sharing topology. These flags do not remove extra Machines that an operator has already created; verify the one-Machine inventory before deploying.
+
+The configured database release command still runs in a temporary Machine without a persistent volume. It only needs database access, so this does not start a second API/worker or compete for `/data`; a failed migration stops the deployment. See [Fly's release-command behavior](https://fly.io/docs/reference/configuration/#run-one-off-commands-before-releasing-a-deployment).
+
 ```bash
-fly deploy --app 2hands-computers --build-arg GIT_SHA=$(git rev-parse HEAD)
+fly deploy --app 2hands-computers --ha=false --update-only --strategy rolling --build-arg GIT_SHA=$(git rev-parse HEAD)
 fly secrets set \
   DATABASE_URL=... \
   REALTIME_DATABASE_URL=... \

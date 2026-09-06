@@ -198,7 +198,7 @@ export function GroupSettings({
           type="button"
           aria-label={t`Close panel`}
           onClick={onClose}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)] md:h-8 md:w-8"
+          className="grid h-[44px] w-[44px] shrink-0 place-items-center rounded-lg text-[var(--rk-muted)] hover:bg-[var(--rk-surface-2)] hover:text-[var(--rk-ink)] md:h-8 md:w-8"
         >
           <X size={16} strokeWidth={1.8} />
         </button>

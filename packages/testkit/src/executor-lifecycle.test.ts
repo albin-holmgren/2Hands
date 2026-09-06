@@ -333,9 +333,48 @@ describeIntegration("run executor lifecycle", () => {
     });
     expect(userMessages).toHaveLength(2);
     expect(userMessages[0]!.seq).toBeLessThan(userMessages[1]!.seq);
+
+    await handles.executor.continueRun(continuationRunId!, "steering-continuation-worker");
+
+    await expect(
+      handles.prisma.run.findUniqueOrThrow({ where: { id: continuationRunId! } }),
+    ).resolves.toMatchObject({ status: "completed" });
+    expect(await handles.prisma.steeringMessage.count({ where: { botId: seeded.bot.id } })).toBe(0);
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(2);
+    const answer = await handles.prisma.message.findFirstOrThrow({
+      where: { runId: continuationRunId!, role: "bot" },
+      orderBy: { seq: "desc" },
+    });
+    expect(JSON.stringify(answer.blocks)).toContain("Use the revised data.");
+    expect(JSON.stringify(answer.blocks)).toContain("Keep it concise.");
+    expect(JSON.stringify(answer.blocks)).not.toContain("Respond to the user's steering context.");
   });
 
-  it("requeues steering claimed by a failed attempt without duplicating it", async () => {
+  it("uses steering received before a scripted run starts instead of the superseded task", async () => {
+    const seeded = await seedRun("queued-steering", "keep working until I stop");
+    const events = createThreadEvents(handles.prisma);
+    await events.sendUserMessage({
+      spaceId: seeded.me.spaceId,
+      threadId: seeded.thread.id,
+      botId: seeded.bot.id,
+      userId: seeded.me.userId,
+      blocks: [{ kind: "text", text: "ask me which city to use" }],
+      prompt: "ask me which city to use",
+      trigger: "follow_up",
+    });
+
+    await handles.executor.continueRun(seeded.run.id, "queued-steering-worker");
+
+    await expect(
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+    ).resolves.toMatchObject({ status: "waiting_input" });
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
+    const messages = await handles.prisma.message.findMany({ where: { runId: seeded.run.id } });
+    expect(JSON.stringify(messages)).toContain("Which city");
+    await rpc(seeded.cookie, "threads/stop", { botId: seeded.bot.id });
+  });
+
+  it("retains failed steering without automatically retrying it under a new run id", async () => {
     const seeded = await seedRun("steering-failure", "start the analysis", {
       status: "running",
       leaseOwner: "failure-worker",
@@ -380,21 +419,62 @@ describeIntegration("run executor lifecycle", () => {
       error: "provider failed",
     });
     if (!finalized) throw new Error("Expected the failed run to finalize");
-    const continuationRunId = finalized.continuationRunId;
-    expect(continuationRunId).toEqual(expect.any(String));
+    expect(finalized.continuationRunId).toBeNull();
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
     await expect(
-      handles.prisma.run.findUniqueOrThrow({
-        where: { id: continuationRunId! },
-        include: { task: true },
-      }),
-    ).resolves.toMatchObject({
-      status: "queued",
-      trigger: "follow_up",
-      task: { prompt: "Respond to the user's steering context." },
-    });
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+    ).resolves.toMatchObject({ status: "failed", error: "provider failed" });
     await expect(
       handles.prisma.steeringMessage.findFirstOrThrow({ where: { botId: seeded.bot.id } }),
-    ).resolves.toMatchObject({ runId: continuationRunId, claimedAt: null });
+    ).resolves.toMatchObject({ runId: null, claimedAt: null });
+
+    const retry = await events.sendUserMessage({
+      spaceId: seeded.me.spaceId,
+      threadId: seeded.thread.id,
+      botId: seeded.bot.id,
+      userId: seeded.me.userId,
+      blocks: [{ kind: "text", text: "Try again now." }],
+      prompt: "Try again now.",
+      trigger: "follow_up",
+    });
+    await handles.prisma.run.update({
+      where: { id: retry.runId! },
+      data: { status: "running", leaseOwner: "retry-worker", leaseFence: 1 },
+    });
+    const retryAttempt = await handles.prisma.attempt.create({
+      data: { runId: retry.runId!, fence: 1, status: "running" },
+    });
+    await expect(
+      events.claimSteering({
+        threadId: seeded.thread.id,
+        botId: seeded.bot.id,
+        runId: retry.runId!,
+        leaseOwner: "retry-worker",
+        leaseFence: 1,
+        seenIds: [],
+      }),
+    ).resolves.toEqual([expect.objectContaining({ text: "Recover this context." })]);
+    await expect(
+      events.finalizeRun({
+        spaceId: seeded.me.spaceId,
+        threadId: seeded.thread.id,
+        botId: seeded.bot.id,
+        runId: retry.runId!,
+        taskId: retry.taskId!,
+        attemptId: retryAttempt.id,
+        leaseOwner: "retry-worker",
+        leaseFence: 1,
+        outcome: "failed",
+        error: "provider failed again",
+      }),
+    ).resolves.toMatchObject({ continuationRunId: null });
+    expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(2);
+    expect(
+      await handles.prisma.run.count({ where: { threadId: seeded.thread.id, status: "queued" } }),
+    ).toBe(0);
+    await expect(
+      handles.prisma.steeringMessage.findFirstOrThrow({ where: { botId: seeded.bot.id } }),
+    ).resolves.toMatchObject({ runId: null, claimedAt: null });
   });
 
   it("discards pending steering when the user stops active work", async () => {

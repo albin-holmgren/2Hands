@@ -903,6 +903,133 @@ describe("mobile API authentication", () => {
   });
 });
 
+describe("official hosted endpoint migration", () => {
+  let storage: Map<string, string>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    storage = new Map([
+      ["rakazo.session_token", "old-hosted-token"],
+      ["rakazo.space_id", "old-hosted-space"],
+    ]);
+    vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => storage.get(key) ?? null);
+    vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
+      storage.set(key, value);
+    });
+    vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => {
+      storage.delete(key);
+    });
+  });
+
+  it.each(["https://2hands.ai", "https://www.2hands.ai", "https://2hands.ai/"])(
+    "migrates %s with a durable session, space and draft wipe before using the new origin",
+    async (previous) => {
+      storage.set("rakazo.api_base", previous);
+      const api = await import("./api.js");
+      const drafts = await import("./composer-drafts.js");
+      const clearDrafts = vi.fn(async () => undefined);
+      await drafts.configureComposerDraftStorage({
+        read: async () => null,
+        write: async () => undefined,
+        clear: clearDrafts,
+        restoreAttachment: async () => null,
+      });
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(api.loadApiBase()).resolves.toBe("https://app.2hands.ai");
+      expect(storage.get("rakazo.api_base")).toBe("https://app.2hands.ai");
+      expect(storage.has("rakazo.session_token")).toBe(false);
+      expect(storage.has("rakazo.space_id")).toBe(false);
+      expect(storage.has("rakazo.space_rollback")).toBe(false);
+      expect(api.selectedSpaceId()).toBeNull();
+      await expect(api.authHeaders()).resolves.toEqual({});
+      expect(clearDrafts).toHaveBeenCalledOnce();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      vi.resetModules();
+      const restarted = await import("./api.js");
+      await expect(restarted.loadApiBase()).resolves.toBe("https://app.2hands.ai");
+      await expect(restarted.authHeaders()).resolves.toEqual({});
+    },
+  );
+
+  it.each([
+    "https://selfhost.example.test",
+    "http://127.0.0.1:3100",
+    "https://2hands.ai:8443",
+    "https://2hands.ai/custom",
+    "https://2hands.ai?server=custom",
+    "https://2hands.ai.example.test",
+    "https://2hands.ai@another.example.test",
+  ])("does not migrate a custom saved endpoint (%s)", async (previous) => {
+    storage.set("rakazo.api_base", previous);
+    const api = await import("./api.js");
+    await api.loadApiBase();
+    expect(storage.get("rakazo.api_base")).toBe(previous);
+    expect(storage.get("rakazo.session_token")).toBe("old-hosted-token");
+    expect(storage.get("rakazo.space_id")).toBe("old-hosted-space");
+  });
+
+  it.each(["rakazo.session_token", "rakazo.api_base"])(
+    "keeps the previous endpoint and credentials when %s cannot be changed, then retries",
+    async (blockedKey) => {
+      storage.set("rakazo.api_base", "https://2hands.ai");
+      let blocked = true;
+      vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => {
+        if (blocked && key === blockedKey) throw new Error("Device locked");
+        storage.delete(key);
+      });
+      vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
+        if (blocked && key === blockedKey) throw new Error("Device locked");
+        storage.set(key, value);
+      });
+      const api = await import("./api.js");
+      await expect(api.loadApiBase()).resolves.toBe("https://2hands.ai");
+      expect(storage.get("rakazo.api_base")).toBe("https://2hands.ai");
+      await expect(api.authHeaders()).resolves.toEqual({
+        authorization: "Bearer old-hosted-token",
+        "x-rakazo-space-id": "old-hosted-space",
+      });
+      blocked = false;
+      await expect(api.loadApiBase()).resolves.toBe("https://app.2hands.ai");
+      await expect(api.authHeaders()).resolves.toEqual({});
+    },
+  );
+
+  it("blocks replacement sign-in until migration persistence finishes", async () => {
+    storage.set("rakazo.api_base", "https://2hands.ai");
+    let release!: () => void;
+    let entered!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
+      if (key === "rakazo.api_base") {
+        entered();
+        await paused;
+      }
+      storage.set(key, value);
+    });
+    const api = await import("./api.js");
+    const pending = api.loadApiBase();
+    await started;
+    try {
+      await expect(api.signIn("ada@example.test", "valid-password")).rejects.toThrow(
+        "Wait for the current",
+      );
+      expect(api.currentApiBase()).toBe("https://2hands.ai");
+    } finally {
+      release();
+    }
+    await expect(pending).resolves.toBe("https://app.2hands.ai");
+    await expect(api.authHeaders()).resolves.toEqual({});
+  });
+});
+
 describe("mobile thread subscription", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

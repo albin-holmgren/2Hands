@@ -168,6 +168,7 @@ a {
 }
 .rk-composer > button {
   grid-row: 2;
+  align-self: center;
   border-color: transparent;
   border-radius: 10px;
 }

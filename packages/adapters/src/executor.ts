@@ -1266,7 +1266,41 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let handedOff = false;
         let progressRedactor = createStreamingRedactor(runSecrets);
         const scripted = deps.runtime.describe().capabilities.scripted;
-        const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
+        // The deterministic runtime has no model boundary at which to drain steering.
+        // Claim it before inferring both runtime actions and their file/memory effects,
+        // otherwise a completed follow-up leaves its input pending and queues forever.
+        const initialSteering = scripted
+          ? await deps.events.claimSteering({
+              threadId: thread.id,
+              botId: bot.id,
+              runId,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              seenIds: [],
+            })
+          : [];
+        const newestInput =
+          initialSteering.length > 0 && run.sourceMessageId
+            ? await deps.prisma.message.findFirst({
+                where: {
+                  threadId: thread.id,
+                  id: {
+                    in: [run.sourceMessageId, ...initialSteering.map((item) => item.messageId)],
+                  },
+                },
+                orderBy: { seq: "desc" },
+                select: { id: true },
+              })
+            : null;
+        // A new explicit request after a failure can supersede retained old input.
+        const executionPrompt =
+          initialSteering.length > 0 &&
+          (!newestInput || initialSteering.some((item) => item.messageId === newestInput.id))
+            ? initialSteering.map((item) => item.text).join("\n\n")
+            : task.prompt;
+        const script = scripted
+          ? inferScript(executionPrompt, takeoverResume?.checkpoint)
+          : undefined;
         const flushProgress = async () => {
           if (scripted || !pendingProgress) return;
           await deps.events.append({
@@ -2814,7 +2848,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           currentTurnImages,
         );
         const taskPrompt = expandSkillReferencesInPrompt(
-          [task.prompt, attachedFilesPrompt, missingImagesInstruction].filter(Boolean).join("\n\n"),
+          [executionPrompt, attachedFilesPrompt, missingImagesInstruction]
+            .filter(Boolean)
+            .join("\n\n"),
           agentSkills,
         );
         const invokedSkill = savedSkills.find((skill) =>

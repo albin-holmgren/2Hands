@@ -63,7 +63,7 @@ Use `--workers=2` for browser verification on a busy development machine. Keep d
 
 ## Release gates
 
-### Verification evidence, September 6, 2026
+### Predeployment verification evidence, September 6, 2026
 
 - All 20 package typechecks and all four production builds passed. Lint passed with no errors. The web build still reports a large entry chunk (about 257 KB gzipped); packaged startup needs a separate measurement.
 - CI at `5c2cabc` passed 2,532 unit tests with no failures; 119 opt-in tests were skipped. Database and live-provider verification run separately. The three container image builds also passed; production publication and deployment were not run.
@@ -88,7 +88,7 @@ The deployment's live Stripe catalog was checked against the $20/$60/$200 monthl
 
 The draft PR's automated review integration reported that its review was skipped because its trial had expired. Its successful status is not evidence of a completed code review. Independent agent reviews and CI evidence are recorded separately.
 
-No new image, mobile update, signed installer, or production migration has been published. The live HTTP audit found an older source revision and unavailable email/password recovery. Public registration on that running image was paused through its existing deployment setting and the live signup route was checked to reject registration. New `fly.toml` settings alone had not applied to that image. The new exact-revision HTTP check is documented in [hosting](2hands-hosting.md); it remains separate from live provider and payment journeys.
+At this audit checkpoint, no new image, mobile update, signed installer, or production migration had been published. The live HTTP audit found an older source revision and unavailable email/password recovery. Public registration on that running image was paused through its existing deployment setting and the live signup route was checked to reject registration. New `fly.toml` settings alone had not applied to that image. The new exact-revision HTTP check is documented in [hosting](2hands-hosting.md); it remains separate from live provider and payment journeys. Use the release PR and deployed revision for the subsequent rollout status.
 
 Hosted signup is controlled by `SIGNUPS_LOCKED=true` in `fly.toml`, which overrides previously saved registration settings and messaging signup. Do not unlock public signup until real provider execution, computer expiry/recovery and Stripe test-mode renewal/cancellation/replay are verified against the completed implementation. Run all checks, builds, unit and database tests, Playwright, packaged Electron and native Maestro journeys. Review both themes, narrow layouts, errors, workspaces, model selection and billing screenshots. Attach CI screenshots to a PR, finish automated review and re-run affected journeys before release. Desktop launch tests require an explicit `RAKAZO_ELECTRON_E2E=1`; ordinary checks do not open application windows.
 

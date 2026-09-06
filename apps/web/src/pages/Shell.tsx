@@ -559,6 +559,7 @@ function WorkspaceShell({
     { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
   >(null);
   const [booting, setBooting] = useState(false);
+  const computerBootRequests = useRef(new Map<string, Promise<void>>());
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(cachedView.me !== null);
   const [bootstrapMe, setBootstrapMe] = useState<Me | null | undefined>(cachedView.me ?? undefined);
@@ -2344,7 +2345,24 @@ function WorkspaceShell({
     const needsBoot = force || computer?.state !== "running" || !screenUrl;
     if (overlay && needsBoot) setBooting(true);
     try {
-      if (needsBoot) await rpc.computer.boot({ botId: active.id });
+      // Panel recovery and Open can overlap. Share the boot through its status
+      // refresh so they do not compete for the same server execution lease.
+      let pendingBoot = computerBootRequests.current.get(targetBotId);
+      if (!pendingBoot && needsBoot) {
+        pendingBoot = (async () => {
+          await rpc.computer.boot({ botId: targetBotId });
+          await refreshThread(targetBotId);
+        })();
+        computerBootRequests.current.set(targetBotId, pendingBoot);
+      }
+      if (pendingBoot) {
+        try {
+          await pendingBoot;
+        } finally {
+          if (computerBootRequests.current.get(targetBotId) === pendingBoot)
+            computerBootRequests.current.delete(targetBotId);
+        }
+      }
       if (takeControl) await rpc.computer.takeover({ botId: active.id });
       await refreshThread(active.id);
       if (activeBotId.current === targetBotId) setComputerError(null);
@@ -3289,7 +3307,7 @@ function WorkspaceShell({
                       type="button"
                       aria-label={panel === "settings" ? t`Show computer` : t`Show settings`}
                       onClick={() => setPanel(panel === "settings" ? "computer" : "settings")}
-                      className={`grid h-11 w-11 place-items-center rounded-lg md:h-8 md:w-8 ${
+                      className={`grid h-[44px] w-[44px] shrink-0 place-items-center rounded-lg md:h-8 md:w-8 ${
                         panel === "settings"
                           ? "text-[var(--rk-ink)]"
                           : "text-[var(--rk-muted)] hover:text-[var(--rk-ink)]"
@@ -3302,7 +3320,7 @@ function WorkspaceShell({
                     type="button"
                     aria-label={t`Close panel`}
                     onClick={() => setPanel(null)}
-                    className="grid h-11 w-11 place-items-center rounded-lg md:h-8 md:w-8"
+                    className="grid h-[44px] w-[44px] shrink-0 place-items-center rounded-lg md:h-8 md:w-8"
                   >
                     <X size={16} strokeWidth={1.8} />
                   </button>

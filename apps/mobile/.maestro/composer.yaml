@@ -1,0 +1,61 @@
+appId: com.rakazo.app
+name: 2hands native composer and work navigation
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Switch workspace"
+    timeout: 30000
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 30000
+- assertVisible: "Chat"
+- tapOn:
+    id: "composer-input"
+- eraseText: 10000
+- inputText: "Compare two practical approaches and explain their tradeoffs before making a recommendation."
+- takeScreenshot: screenshots/composer-keyboard
+- hideKeyboard
+- takeScreenshot: screenshots/composer-draft
+- tapOn:
+    id: "composer-model-picker"
+- assertVisible: "Search models"
+- takeScreenshot: screenshots/composer-models
+- tapOn: "Close models"
+- tapOn: "Open computer"
+- extendedWaitUntil:
+    visible: "Teach a task"
+    timeout: 30000
+- takeScreenshot: screenshots/work
+- openLink: ${RAKAZO_E2E_PRIMARY_THREAD_LINK}
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Compare two practical approaches and explain their tradeoffs before making a recommendation."
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- eraseText: 10000
+- inputText: "Keep working until I stop you."
+- tapOn:
+    id: "composer-send"
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: 30000
+- tapOn:
+    id: "composer-input"
+- inputText: "Include a short comparison table."
+- takeScreenshot: screenshots/composer-followup
+- tapOn:
+    id: "composer-send"
+- tapOn: "Stop"
+- extendedWaitUntil:
+    notVisible: "Stop"
+    timeout: 30000
+- hideKeyboard
+- takeScreenshot: screenshots/conversation

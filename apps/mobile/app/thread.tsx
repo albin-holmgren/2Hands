@@ -1448,6 +1448,51 @@ function Thread({
       keyboardVerticalOffset={headerHeight}
       style={{ flex: 1, backgroundColor: native.page, paddingHorizontal: 20 }}
     >
+      {!inGroup ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignSelf: "center",
+            alignItems: "center",
+            marginTop: 4,
+            gap: 4,
+          }}
+        >
+          <View
+            accessibilityRole="tab"
+            accessibilityState={{ selected: true }}
+            style={{
+              minHeight: 44,
+              minWidth: 76,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: radii.control,
+              backgroundColor: native.selected,
+            }}
+          >
+            <Text style={{ color: native.selectedInk, fontSize: 14, fontWeight: "600" }}>Chat</Text>
+          </View>
+          <Link
+            href={{ pathname: "/computer", params: { botId: botId ?? "", name: name ?? "Bot" } }}
+            asChild
+          >
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityLabel="Open computer"
+              accessibilityState={{ selected: false }}
+              style={{
+                minHeight: 44,
+                minWidth: 76,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: radii.control,
+              }}
+            >
+              <Text style={{ color: native.muted, fontSize: 14 }}>Work</Text>
+            </Pressable>
+          </Link>
+        </View>
+      ) : null}
       {error ? <Text style={{ color: native.muted, marginTop: 12 }}>{error}</Text> : null}
       {runError ? <Text style={{ color: native.danger, marginTop: 12 }}>{runError}</Text> : null}
       <View style={{ flex: 1, position: "relative" }}>
@@ -1755,27 +1800,11 @@ function Thread({
         >
           <View
             style={{
-              flexDirection: "row",
-              gap: 4,
-              alignItems: "flex-end",
+              minHeight: 52,
             }}
           >
-            <Pressable
-              accessibilityLabel="Attach file"
-              onPress={showAttachMenu}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 16,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
-            </Pressable>
             <View
               style={{
-                flex: 1,
                 flexDirection: "row",
                 flexWrap: "wrap",
                 alignItems: "center",
@@ -1907,24 +1936,33 @@ function Thread({
                 }}
               />
             </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send"
-              testID="composer-send"
-              disabled={sending || !canSend}
-              onPress={() => void send()}
+              accessibilityLabel="Attach file"
+              onPress={showAttachMenu}
               style={{
-                backgroundColor: native.cream,
-                borderRadius: 22,
                 width: 44,
                 height: 44,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: sending || !canSend ? 0.5 : 1,
               }}
             >
-              <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color={native.creamInk} />
+              <NativeSymbol ios="plus" android="add" size={18} color={native.muted2} />
             </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              {!inGroup ? (
+                <BotModelPicker
+                  botId={botId ?? ""}
+                  onUpdate={(bot) =>
+                    setMentionBots((current) =>
+                      current.map((entry) => (entry.id === bot.id ? { ...entry, ...bot } : entry)),
+                    )
+                  }
+                />
+              ) : null}
+            </View>
             {working ? (
               <Pressable
                 accessibilityLabel="Stop"
@@ -1944,40 +1982,25 @@ function Thread({
                 <NativeSymbol ios="stop.fill" android="stop" size={15} color={native.muted} />
               </Pressable>
             ) : null}
-          </View>
-          {!inGroup ? (
-            <View
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send"
+              testID="composer-send"
+              disabled={sending || !canSend}
+              onPress={() => void send()}
               style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
+                backgroundColor: native.cream,
+                borderRadius: 22,
+                width: 44,
+                height: 44,
                 alignItems: "center",
-                gap: 12,
+                justifyContent: "center",
+                opacity: sending || !canSend ? 0.5 : 1,
               }}
             >
-              <BotModelPicker
-                botId={botId ?? ""}
-                onUpdate={(bot) =>
-                  setMentionBots((current) =>
-                    current.map((entry) => (entry.id === bot.id ? { ...entry, ...bot } : entry)),
-                  )
-                }
-              />
-              <Link
-                href={{
-                  pathname: "/computer",
-                  params: { botId: botId ?? "", name: name ?? "Bot" },
-                }}
-                asChild
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  style={{ minHeight: 44, justifyContent: "center" }}
-                >
-                  <Text style={{ color: native.muted, fontSize: 14 }}>Open computer →</Text>
-                </Pressable>
-              </Link>
-            </View>
-          ) : null}
+              <NativeSymbol ios="arrow.up" android="arrow-up" size={18} color={native.creamInk} />
+            </Pressable>
+          </View>
         </View>
       </View>
       {markdownPreview && artifactTarget ? (

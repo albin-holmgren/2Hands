@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import type {
   BillingPlanChangeStatus,
   Bot,
+  ComputerStatus,
   Me,
   ModelCatalogEntry,
   ThreadSnapshot,
@@ -50,6 +51,7 @@ async function fixture(
     paid = false,
     pastDue = false,
     computerAvailable = false,
+    computer,
     deploymentOwner = false,
   }: {
     exhausted?: boolean;
@@ -59,6 +61,7 @@ async function fixture(
     paid?: boolean;
     pastDue?: boolean;
     computerAvailable?: boolean;
+    computer?: ComputerStatus;
     deploymentOwner?: boolean;
   } = {},
 ) {
@@ -159,6 +162,7 @@ async function fixture(
         threadId: currentBot.threadId,
         cursor: 2,
         olderCursor: null,
+        computer,
         messages: [
           {
             id: `user-${currentBot.id}`,
@@ -374,6 +378,65 @@ test("server owners can disclose computer setup guidance", async ({ page }) => {
   await hint.getByText("Server setup", { exact: true }).click();
   await expect(hint).toContainText("Configure a computer provider on the server");
   await expect(page.getByTestId("computer-preview-open")).toHaveCount(0);
+});
+
+test("Open waits for the computer screen already recovering in its panel", async ({ page }) => {
+  await fixture(page, {
+    computerAvailable: true,
+    failed: true,
+    computer: {
+      botId: "chief",
+      state: "running",
+      mode: "team",
+      kind: "fake",
+      controlHolder: "bot",
+      controlBotId: null,
+      takeoverRequested: false,
+      busyBotName: null,
+      screenAvailable: false,
+      screenWidth: 1280,
+      screenHeight: 800,
+      homeRevision: null,
+      updateAvailable: false,
+    },
+  });
+  let releaseBoot = () => {};
+  const bootGate = new Promise<void>((resolve) => {
+    releaseBoot = resolve;
+  });
+  let bootRequests = 0;
+  let takeoverRequests = 0;
+  await page.route("**/rpc/computer/boot", async (route) => {
+    bootRequests += 1;
+    if (bootRequests > 1) {
+      // An overlapping manual boot cannot acquire the server's execution lease.
+      await route.fulfill({
+        status: 409,
+        json: { code: "CONFLICT", message: "Computer is busy" },
+      });
+      return;
+    }
+    await bootGate;
+    await route.fulfill({ json: { json: null } });
+  });
+  await page.route("**/rpc/computer/takeover", (route) => {
+    takeoverRequests += 1;
+    return route.fulfill({ json: { json: null } });
+  });
+  try {
+    await page.goto("/app/chief?space=personal");
+    await page.getByRole("button", { name: "Agent computer" }).click();
+    await expect.poll(() => bootRequests).toBe(1);
+    await page.getByTestId("computer-preview-open").click();
+    releaseBoot();
+    await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+    expect(bootRequests).toBe(1);
+    expect(takeoverRequests).toBe(1);
+    await expect(page.getByRole("alert").filter({ hasText: "Computer is busy" })).toHaveCount(0);
+  } finally {
+    releaseBoot();
+    await page.unrouteAll({ behavior: "wait" });
+  }
 });
 
 test("workspace switches preserve drafts, attachments, running work and renderer identity", async ({

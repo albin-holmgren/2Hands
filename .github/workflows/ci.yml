@@ -304,6 +304,7 @@ jobs:
               throw new Error("Deployment must retain the signup lock until release gates pass.");
             }
           '
-          flyctl deploy --app 2hands-computers --remote-only --build-arg "GIT_SHA=$GITHUB_SHA"
+          # API and worker share one persistent volume; do not provision spare or new process groups.
+          flyctl deploy --app 2hands-computers --remote-only --ha=false --update-only --strategy rolling --build-arg "GIT_SHA=$GITHUB_SHA"
       - name: Verify deployed revision and account recovery
         run: node infra/fly/verify-deployment.mjs --origin https://app.2hands.ai --revision "$GITHUB_SHA" --mode controlled

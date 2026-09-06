@@ -67,12 +67,16 @@ export function currentApiBase() {
 
 export async function loadApiBase() {
   let apiBase = defaultApiBase();
+  let migrateHostedOrigin = false;
   try {
     const stored = await SecureStore.getItemAsync(ENDPOINT_KEY);
     if (stored) {
       const parsed = normalizeApiBase(stored);
       if (parsed.ok) {
         apiBase = parsed.url;
+        // Match the saved value before normalization: custom ports, paths and
+        // lookalike hosts must never opt into the official hostname migration.
+        migrateHostedOrigin = /^https:\/\/(?:www\.)?2hands\.ai\/?$/.test(stored);
       }
     }
   } catch {
@@ -85,6 +89,11 @@ export async function loadApiBase() {
     if (!storedSpace) await recoverSpaceRollback(cachedApiBase);
   } catch {
     // Keep any in-memory selection when SecureStore is temporarily unavailable.
+  }
+  if (migrateHostedOrigin) {
+    // Reuse the same credential/draft wipe and rollback as an explicit server
+    // change. A cross-origin redirect cannot carry the old bearer safely.
+    await saveApiBase("https://app.2hands.ai");
   }
   return cachedApiBase;
 }

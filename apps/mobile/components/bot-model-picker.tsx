@@ -135,7 +135,7 @@ export function BotModelPicker({
           flexShrink: 1,
         }}
       >
-        <Text numberOfLines={1} style={{ color: native.ink, fontSize: 14 }}>
+        <Text numberOfLines={1} style={{ color: native.ink, fontSize: 14, flexShrink: 1 }}>
           {modelLabel}
           {bot?.thinkingLevel ? ` · ${bot.thinkingLevel}` : ""} ⌄
         </Text>

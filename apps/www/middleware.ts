@@ -17,6 +17,9 @@ export default function middleware(request: Request): Response {
   if (request.method !== "GET" && request.method !== "HEAD") return next();
 
   const { pathname } = new URL(request.url);
+  // These routes belong to Fly. Content negotiation must not intercept the
+  // compatibility rewrites before Vercel forwards the request.
+  if (/^\/(?:api|rpc|novnc|health)(?:\/|$)/.test(pathname)) return next();
   const acceptHeader = request.headers.get("accept");
   const representation = negotiateRepresentation(acceptHeader);
   const markdown = getMarkdownDocument(pathname);
