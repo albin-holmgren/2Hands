@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "yaml": "^2.8.3"
   }
 }
