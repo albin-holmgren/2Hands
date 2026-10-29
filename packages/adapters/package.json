@@ -39,7 +39,7 @@
     "sendblue": "3.16.1",
     "sharp": "^0.35.3",
     "shell-quote": "1.10.0",
-    "undici": "^7.22.0",
+    "undici": "^7.30.1",
     "zod": "^4.2.0"
   },
   "devDependencies": {
